@@ -13,15 +13,21 @@
 
 3. Create a `.env` file with your Auth0 credentials:
    ```bash
-   # For dev environment
-   DEVELOPMENT_CLIENT_ID=your_dev_client_id
-   DEVELOPMENT_CLIENT_SECRET=your_dev_client_secret
-   # Dev API endpoint: tunnus-dev.almamedia.net
+      # Authentication credentials
+      CLIENT_ID=your_client_id_here
+      CLIENT_SECRET=your_client_secret_here
 
-   # For prod environment
-   CLIENT_ID=your_prod_client_id
-   CLIENT_SECRET=your_prod_client_secret
-   # Prod API endpoint: tunnus.almamedia.fi
+      # Development credentials
+      DEVELOPMENT_CLIENT_ID=your_client_id_here
+      DEVELOPMENT_CLIENT_SECRET=your_client_secret_here
+
+      # URLs
+      URL=your_custom_domain_here
+      DEV_URL=your_dev_custom_domain_here
+
+      AUTH0_DOMAIN=your_auth0_domain_here
+      DEV_AUTH0_DOMAIN=your_dev_auth0_domain_here
+
    ```
 
 
@@ -34,16 +40,14 @@
 
 5. Run the script:
    ```bash
-   python delete.py ids.csv [env]
+    python delete.py ids.csv [env]
    ```
    Parameters:
    - `ids.csv`: Path to your file containing user IDs
    - `[env]`: Optional environment parameter
-     - `dev` (default): Uses development credentials and API
+     - `dev` (optional, will default to this if not specified): Uses development credentials and API
      - `prod`: Uses production credentials and API
 
    The script will:
-   - Validate your input file and environment
    - Obtain an Auth0 access token
    - Delete users one by one with a half second delay between requests
-   - Print status messages for each deletion attempt
