@@ -103,6 +103,14 @@ def main():
     try:
         check_env_file()
         input_file, env = validate_args()
+
+        # Add warning for production environment
+        if env == "prod":
+            confirmation = input("\n⚠️  WARNING: You are about to delete users in PRODUCTION environment!\nAre you sure you want to continue? (yes/no): ")
+            if confirmation.lower() != "yes":
+                sys.exit("Operation cancelled by user.")
+            print("\nProceeding with production deletion...\n")
+
         token = get_access_token(env)
         user_ids = read_user_ids(input_file)
         base_url = get_base_url(env)
