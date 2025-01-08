@@ -1,5 +1,16 @@
 # How to use
 
-1. `pip install -r requirements.txt`
-2. fill user_ids into `ids.csv`(1 per line!)
-3. run `python delete.py ids.csv <TOKEN>`
+1. Create and activate virtual environment:
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Fill user_ids into `ids.csv` (1 per line!)
+4. Run the script:
+   ```bash
+   python delete.py ids.csv <TOKEN>
+   ```
