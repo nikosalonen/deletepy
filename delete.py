@@ -35,7 +35,7 @@ def get_access_token(env: str = "dev") -> str:
     config = env_config[env]
     client_id = os.getenv(config["client_id"])
     client_secret = os.getenv(config["client_secret"])
-    domain = config["domain"]
+    domain = os.getenv("AUTH0_DOMAIN" if env == "prod" else "DEV_AUTH0_DOMAIN")
 
     url = f"https://{domain}/oauth/token"
     payload = {
@@ -69,8 +69,8 @@ def read_user_ids(filepath: str) -> List[str]:
 def get_base_url(env: str = "dev") -> str:
     """Get base URL based on environment."""
     urls = {
-        "prod": "https://tunnus.almamedia.fi",
-        "dev": "https://tunnus-dev.almamedia.net"
+        "prod": os.getenv("URL"),
+        "dev": os.getenv("DEV_URL")
     }
     if env not in urls:
         sys.exit("Environment must be either 'dev' or 'prod'")
