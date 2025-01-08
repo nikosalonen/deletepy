@@ -12,5 +12,8 @@
 3. Fill user_ids into `ids.csv` (1 per line!)
 4. Run the script:
    ```bash
-   python delete.py ids.csv <TOKEN>
+   python delete.py ids.csv <TOKEN> <ENV>
    ```
+   where:
+   - `<TOKEN>` is your access token
+   - `<ENV>` is either "dev" or "prod"
