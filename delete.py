@@ -20,12 +20,14 @@ def get_access_token(env: str = "dev") -> str:
         "prod": {
             "client_id": "CLIENT_ID",
             "client_secret": "CLIENT_SECRET",
-            "domain": "almamedia.eu.auth0.com"
+            "auth0_domain": os.getenv("AUTH0_DOMAIN"),
+            "api_url": os.getenv("URL")
         },
         "dev": {
             "client_id": "DEVELOPMENT_CLIENT_ID",
             "client_secret": "DEVELOPMENT_CLIENT_SECRET",
-            "domain": "almamedia-dev.eu.auth0.com"
+            "auth0_domain": os.getenv("DEV_AUTH0_DOMAIN"),
+            "api_url": os.getenv("DEV_URL")
         }
     }
 
@@ -35,7 +37,7 @@ def get_access_token(env: str = "dev") -> str:
     config = env_config[env]
     client_id = os.getenv(config["client_id"])
     client_secret = os.getenv(config["client_secret"])
-    domain = os.getenv("AUTH0_DOMAIN" if env == "prod" else "DEV_AUTH0_DOMAIN")
+    domain = config["auth0_domain"]
 
     url = f"https://{domain}/oauth/token"
     payload = {
@@ -68,13 +70,19 @@ def read_user_ids(filepath: str) -> List[str]:
 
 def get_base_url(env: str = "dev") -> str:
     """Get base URL based on environment."""
-    urls = {
-        "prod": os.getenv("URL"),
-        "dev": os.getenv("DEV_URL")
+    env_config = {
+        "prod": {
+            "auth0_domain": os.getenv("AUTH0_DOMAIN")
+        },
+        "dev": {
+            "auth0_domain": os.getenv("DEV_AUTH0_DOMAIN")
+        }
     }
-    if env not in urls:
-        sys.exit("Environment must be either 'dev' or 'prod'")
-    return urls[env]
+
+    if env not in env_config:
+        raise ValueError("Environment must be either 'dev' or 'prod'")
+
+    return f"https://{env_config[env]['auth0_domain']}"
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
     """Delete user from Auth0."""
