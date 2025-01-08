@@ -4,6 +4,12 @@ import time
 from typing import List, Tuple
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+
+def check_env_file():
+    """Check if .env file exists"""
+    if not Path('.env').is_file():
+        sys.exit("Error: .env file not found. Please create a .env file with your credentials.")
 
 def get_access_token(env: str = "dev") -> str:
     """Get access token from Auth0 using client credentials."""
@@ -87,6 +93,7 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
 
 def main():
     try:
+        check_env_file()
         input_file, env = validate_args()
         token = get_access_token(env)
         user_ids = read_user_ids(input_file)
