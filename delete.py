@@ -1,7 +1,7 @@
 import requests
 import sys
 import time
-from typing import List
+from typing import List, Tuple
 import os
 from dotenv import load_dotenv
 
@@ -9,14 +9,27 @@ def get_access_token(env: str = "dev") -> str:
     """Get access token from Auth0 using client credentials."""
     load_dotenv()
 
-    if env == "prod":
-        client_id = os.getenv("CLIENT_ID")
-        client_secret = os.getenv("CLIENT_SECRET")
-        domain = "almamedia.eu.auth0.com"
-    else:
-        client_id = os.getenv("DEVELOPMENT_CLIENT_ID")
-        client_secret = os.getenv("DEVELOPMENT_CLIENT_SECRET")
-        domain = "almamedia-dev.eu.auth0.com"
+    # Map environment to config values
+    env_config = {
+        "prod": {
+            "client_id": "CLIENT_ID",
+            "client_secret": "CLIENT_SECRET",
+            "domain": "almamedia.eu.auth0.com"
+        },
+        "dev": {
+            "client_id": "DEVELOPMENT_CLIENT_ID",
+            "client_secret": "DEVELOPMENT_CLIENT_SECRET",
+            "domain": "almamedia-dev.eu.auth0.com"
+        }
+    }
+
+    if env not in env_config:
+        raise ValueError("Environment must be either 'dev' or 'prod'")
+
+    config = env_config[env]
+    client_id = os.getenv(config["client_id"])
+    client_secret = os.getenv(config["client_secret"])
+    domain = config["domain"]
 
     url = f"https://{domain}/oauth/token"
     payload = {
@@ -29,7 +42,7 @@ def get_access_token(env: str = "dev") -> str:
     response.raise_for_status()
     return response.json()["access_token"]
 
-def validate_args() -> tuple[str, str]:
+def validate_args() -> Tuple[str, str]:
     """Validate command line arguments and return input file path and environment."""
     if len(sys.argv) < 2:
         sys.exit("Usage: python delete.py <ids_file> [env]")
@@ -39,17 +52,23 @@ def validate_args() -> tuple[str, str]:
 
 def read_user_ids(filepath: str) -> List[str]:
     """Read user IDs from file."""
-    with open(filepath, 'r') as f:
-        return [line.strip() for line in f]
+    try:
+        with open(filepath, 'r') as f:
+            return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        sys.exit(f"Error: File {filepath} not found")
+    except IOError as e:
+        sys.exit(f"Error reading file: {e}")
 
 def get_base_url(env: str = "dev") -> str:
     """Get base URL based on environment."""
-    if env == "prod":
-        return "https://tunnus.almamedia.fi"
-    elif env == "dev":
-        return "https://tunnus-dev.almamedia.net"
-    else:
+    urls = {
+        "prod": "https://tunnus.almamedia.fi",
+        "dev": "https://tunnus-dev.almamedia.net"
+    }
+    if env not in urls:
         sys.exit("Environment must be either 'dev' or 'prod'")
+    return urls[env]
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
     """Delete user from Auth0."""
@@ -59,18 +78,25 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
-    response = requests.delete(url, headers=headers)
-    print(response.text)
+    try:
+        response = requests.delete(url, headers=headers)
+        response.raise_for_status()
+        print(f"Successfully deleted user {user_id}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error deleting user {user_id}: {e}")
 
 def main():
-    input_file, env = validate_args()
-    token = get_access_token(env)
-    user_ids = read_user_ids(input_file)
-    base_url = get_base_url(env)
+    try:
+        input_file, env = validate_args()
+        token = get_access_token(env)
+        user_ids = read_user_ids(input_file)
+        base_url = get_base_url(env)
 
-    for user_id in user_ids:
-        delete_user(user_id, token, base_url)
-        time.sleep(1)
+        for user_id in user_ids:
+            delete_user(user_id, token, base_url)
+            time.sleep(1)
+    except Exception as e:
+        sys.exit(f"An unexpected error occurred: {e}")
 
 if __name__ == "__main__":
     main()
