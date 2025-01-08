@@ -94,7 +94,7 @@ def main():
 
         for user_id in user_ids:
             delete_user(user_id, token, base_url)
-            time.sleep(1)
+            time.sleep(0.5)
     except Exception as e:
         sys.exit(f"An unexpected error occurred: {e}")
 
