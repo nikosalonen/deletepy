@@ -50,19 +50,24 @@ def get_access_token(env: str = "dev") -> str:
     response.raise_for_status()
     return response.json()["access_token"]
 
-def validate_args() -> Tuple[str, str, bool]:
-    """Validate command line arguments and return input file path, environment, and block flag."""
+def validate_args() -> Tuple[str, str, bool, bool]:
+    """Validate command line arguments and return input file path, environment, block flag, and delete flag."""
     if len(sys.argv) < 2:
-        sys.exit("Usage: python delete.py <ids_file> [env] [--block]")
+        sys.exit("Usage: python delete.py <ids_file> [env] [--block|--delete]")
     input_file = sys.argv[1]
     env = "dev"
     block = False
+    delete = False
     for arg in sys.argv[2:]:
         if arg == "--block":
             block = True
+        elif arg == "--delete":
+            delete = True
         elif arg in ("dev", "prod"):
             env = arg
-    return input_file, env, block
+    if not (block or delete):
+        sys.exit("Error: You must specify either --block or --delete.")
+    return input_file, env, block, delete
 
 def read_user_ids(filepath: str) -> List[str]:
     """Read user IDs from file."""
@@ -142,17 +147,76 @@ def get_user_id_from_email(email: str, token: str, base_url: str) -> str:
         print(f"Error fetching user_id for email {email}: {e}")
         return None
 
+def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
+    """Fetch all Auth0 sessions for a user and revoke them one by one (requires Enterprise plan and delete:sessions scope)."""
+    list_url = f"{base_url}/api/v2/users/{user_id}/sessions"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.get(list_url, headers=headers)
+        if response.status_code != 200:
+            print(f"Failed to fetch sessions for user {user_id}: {response.status_code} {response.text}")
+            return
+        sessions = response.json().get("sessions", [])
+        if not sessions:
+            print(f"No sessions found for user {user_id}")
+            return
+        for session in sessions:
+            session_id = session.get("id")
+            if not session_id:
+                continue
+            del_url = f"{base_url}/api/v2/sessions/{session_id}"
+            del_resp = requests.delete(del_url, headers=headers)
+            if del_resp.status_code in (202, 204):
+                print(f"Revoked session {session_id} for user {user_id}")
+            else:
+                print(f"Failed to revoke session {session_id} for user {user_id}: {del_resp.status_code} {del_resp.text}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error revoking sessions for user {user_id}: {e}")
+
+def revoke_user_refresh_tokens(user_id: str, token: str, base_url: str) -> None:
+    """Fetch all refresh tokens for a user and revoke them one by one (requires Enterprise plan and delete:refresh_tokens scope)."""
+    list_url = f"{base_url}/api/v2/users/{user_id}/refresh-tokens"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.get(list_url, headers=headers)
+        if response.status_code != 200:
+            print(f"Failed to fetch refresh tokens for user {user_id}: {response.status_code} {response.text}")
+            return
+        tokens = response.json().get("refresh_tokens", [])
+        if not tokens:
+            print(f"No refresh tokens found for user {user_id}")
+            return
+        for token_info in tokens:
+            token_id = token_info.get("id")
+            if not token_id:
+                continue
+            del_url = f"{base_url}/api/v2/refresh-tokens/{token_id}"
+            del_resp = requests.delete(del_url, headers=headers)
+            if del_resp.status_code in (202, 204):
+                print(f"Revoked refresh token {token_id} for user {user_id}")
+            else:
+                print(f"Failed to revoke refresh token {token_id} for user {user_id}: {del_resp.status_code} {del_resp.text}")
+    except requests.exceptions.RequestException as e:
+        print(f"Error revoking refresh tokens for user {user_id}: {e}")
+
 def main():
     try:
         check_env_file()
-        input_file, env, block = validate_args()
+        input_file, env, block, delete = validate_args()
 
         # Add warning for production environment
         if env == "prod":
-            confirmation = input("\n⚠️  WARNING: You are about to {} users in PRODUCTION environment!\nAre you sure you want to continue? (yes/no): ".format("block" if block else "delete"))
+            action = "block" if block else "delete"
+            confirmation = input(f"\n⚠️  WARNING: You are about to {action} users in PRODUCTION environment!\nAre you sure you want to continue? (yes/no): ")
             if confirmation.lower() != "yes":
                 sys.exit("Operation cancelled by user.")
-            print(f"\nProceeding with production {'blocking' if block else 'deletion'}...\n")
+            print(f"\nProceeding with production {action}...\n")
 
         token = get_access_token(env)
         user_ids = read_user_ids(input_file)
@@ -168,8 +232,11 @@ def main():
                 user_id = user
             if block:
                 block_user(user_id, token, base_url)
-            else:
+            elif delete:
                 delete_user(user_id, token, base_url)
+            # Revoke sessions and refresh tokens after block or delete
+            revoke_user_sessions(user_id, token, base_url)
+            revoke_user_refresh_tokens(user_id, token, base_url)
             time.sleep(0.5)
     except Exception as e:
         sys.exit(f"An unexpected error occurred: {e}")
