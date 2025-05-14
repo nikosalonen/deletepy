@@ -9,19 +9,53 @@ from delete import (
 )
 import requests
 
-def test_validate_args_with_file_only(monkeypatch):
-    test_args = ['script.py', 'users.txt']
+def test_validate_args_block(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--block']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env = validate_args()
+    input_file, env, block, delete = validate_args()
     assert input_file == 'users.txt'
     assert env == 'dev'
+    assert block is True
+    assert delete is False
+
+def test_validate_args_delete(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--delete']
+    monkeypatch.setattr('sys.argv', test_args)
+    input_file, env, block, delete = validate_args()
+    assert input_file == 'users.txt'
+    assert env == 'dev'
+    assert block is False
+    assert delete is True
+
+def test_validate_args_block_and_delete(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--block', '--delete']
+    monkeypatch.setattr('sys.argv', test_args)
+    input_file, env, block, delete = validate_args()
+    assert input_file == 'users.txt'
+    assert env == 'dev'
+    assert block is True
+    assert delete is True
+
+def test_validate_args_neither(monkeypatch):
+    test_args = ['script.py', 'users.txt']
+    monkeypatch.setattr('sys.argv', test_args)
+    with pytest.raises(SystemExit):
+        validate_args()
+
+def test_validate_args_invalid_flag(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--foo']
+    monkeypatch.setattr('sys.argv', test_args)
+    with pytest.raises(SystemExit):
+        validate_args()
 
 def test_validate_args_with_env(monkeypatch):
-    test_args = ['script.py', 'users.txt', 'prod']
+    test_args = ['script.py', 'users.txt', 'prod', '--block']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env = validate_args()
+    input_file, env, block, delete = validate_args()
     assert input_file == 'users.txt'
     assert env == 'prod'
+    assert block is True
+    assert delete is False
 
 def test_validate_args_no_args(monkeypatch):
     test_args = ['script.py']
@@ -40,14 +74,14 @@ def test_get_base_url_dev(mock_getenv):
     mock_getenv.return_value = 'test-domain.com'
     result = get_base_url('dev')
     assert result == 'https://test-domain.com'
-    mock_getenv.assert_called_with('DEV_AUTH0_DOMAIN')
+    mock_getenv.assert_any_call('DEV_AUTH0_DOMAIN')
 
 @patch('os.getenv')
 def test_get_base_url_prod(mock_getenv):
     mock_getenv.return_value = 'prod-domain.com'
     result = get_base_url('prod')
     assert result == 'https://prod-domain.com'
-    mock_getenv.assert_called_with('AUTH0_DOMAIN')
+    mock_getenv.assert_any_call('AUTH0_DOMAIN')
 
 def test_get_base_url_invalid():
     with pytest.raises(ValueError):
