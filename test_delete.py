@@ -12,29 +12,50 @@ import requests
 def test_validate_args_block(monkeypatch):
     test_args = ['script.py', 'users.txt', '--block']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env, block, delete = validate_args()
+    input_file, env, block, delete, revoke_grants_only = validate_args()
     assert input_file == 'users.txt'
     assert env == 'dev'
     assert block is True
     assert delete is False
+    assert revoke_grants_only is False
 
 def test_validate_args_delete(monkeypatch):
     test_args = ['script.py', 'users.txt', '--delete']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env, block, delete = validate_args()
+    input_file, env, block, delete, revoke_grants_only = validate_args()
     assert input_file == 'users.txt'
     assert env == 'dev'
     assert block is False
     assert delete is True
+    assert revoke_grants_only is False
+
+def test_validate_args_revoke_grants_only(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--revoke-grants-only']
+    monkeypatch.setattr('sys.argv', test_args)
+    input_file, env, block, delete, revoke_grants_only = validate_args()
+    assert input_file == 'users.txt'
+    assert env == 'dev'
+    assert block is False
+    assert delete is False
+    assert revoke_grants_only is True
 
 def test_validate_args_block_and_delete(monkeypatch):
     test_args = ['script.py', 'users.txt', '--block', '--delete']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env, block, delete = validate_args()
-    assert input_file == 'users.txt'
-    assert env == 'dev'
-    assert block is True
-    assert delete is True
+    with pytest.raises(SystemExit):
+        validate_args()
+
+def test_validate_args_block_and_revoke(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--block', '--revoke-grants-only']
+    monkeypatch.setattr('sys.argv', test_args)
+    with pytest.raises(SystemExit):
+        validate_args()
+
+def test_validate_args_delete_and_revoke(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--delete', '--revoke-grants-only']
+    monkeypatch.setattr('sys.argv', test_args)
+    with pytest.raises(SystemExit):
+        validate_args()
 
 def test_validate_args_neither(monkeypatch):
     test_args = ['script.py', 'users.txt']
@@ -51,11 +72,12 @@ def test_validate_args_invalid_flag(monkeypatch):
 def test_validate_args_with_env(monkeypatch):
     test_args = ['script.py', 'users.txt', 'prod', '--block']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env, block, delete = validate_args()
+    input_file, env, block, delete, revoke_grants_only = validate_args()
     assert input_file == 'users.txt'
     assert env == 'prod'
     assert block is True
     assert delete is False
+    assert revoke_grants_only is False
 
 def test_validate_args_no_args(monkeypatch):
     test_args = ['script.py']
