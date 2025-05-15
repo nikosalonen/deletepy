@@ -176,34 +176,21 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
     except requests.exceptions.RequestException as e:
         print(f"Error revoking sessions for user {user_id}: {e}")
 
-def revoke_user_refresh_tokens(user_id: str, token: str, base_url: str) -> None:
-    """Fetch all refresh tokens for a user and revoke them one by one (requires Enterprise plan and delete:refresh_tokens scope)."""
-    list_url = f"{base_url}/api/v2/users/{user_id}/refresh-tokens"
+def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
+    """Revoke all application grants (authorized applications) for a user in one call."""
+    grants_url = f"{base_url}/api/v2/grants?user_id={user_id}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
     }
     try:
-        response = requests.get(list_url, headers=headers)
-        if response.status_code != 200:
-            print(f"Failed to fetch refresh tokens for user {user_id}: {response.status_code} {response.text}")
-            return
-        tokens = response.json().get("refresh_tokens", [])
-        if not tokens:
-            print(f"No refresh tokens found for user {user_id}")
-            return
-        for token_info in tokens:
-            token_id = token_info.get("id")
-            if not token_id:
-                continue
-            del_url = f"{base_url}/api/v2/refresh-tokens/{token_id}"
-            del_resp = requests.delete(del_url, headers=headers)
-            if del_resp.status_code in (202, 204):
-                print(f"Revoked refresh token {token_id} for user {user_id}")
-            else:
-                print(f"Failed to revoke refresh token {token_id} for user {user_id}: {del_resp.status_code} {del_resp.text}")
+        response = requests.delete(grants_url, headers=headers)
+        if response.status_code in (204, 200):
+            print(f"Revoked all application grants for user {user_id}")
+        else:
+            print(f"Failed to revoke grants for user {user_id}: {response.status_code} {response.text}")
     except requests.exceptions.RequestException as e:
-        print(f"Error revoking refresh tokens for user {user_id}: {e}")
+        print(f"Error revoking grants for user {user_id}: {e}")
 
 def main():
     try:
@@ -234,9 +221,9 @@ def main():
                 block_user(user_id, token, base_url)
             elif delete:
                 delete_user(user_id, token, base_url)
-            # Revoke sessions and refresh tokens after block or delete
+            # Revoke sessions (for full logout) and application grants (which also revokes all refresh tokens)
             revoke_user_sessions(user_id, token, base_url)
-            revoke_user_refresh_tokens(user_id, token, base_url)
+            revoke_user_grants(user_id, token, base_url)
             time.sleep(0.5)
     except Exception as e:
         sys.exit(f"An unexpected error occurred: {e}")
