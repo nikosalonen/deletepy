@@ -50,24 +50,29 @@ def get_access_token(env: str = "dev") -> str:
     response.raise_for_status()
     return response.json()["access_token"]
 
-def validate_args() -> Tuple[str, str, bool, bool]:
-    """Validate command line arguments and return input file path, environment, block flag, and delete flag."""
+def validate_args() -> Tuple[str, str, bool, bool, bool]:
+    """Validate command line arguments and return input file path, environment, block flag, delete flag, and revoke_grants_only flag."""
     if len(sys.argv) < 2:
-        sys.exit("Usage: python delete.py <ids_file> [env] [--block|--delete]")
+        sys.exit("Usage: python delete.py <ids_file> [env] [--block|--delete|--revoke-grants-only]")
     input_file = sys.argv[1]
     env = "dev"
     block = False
     delete = False
+    revoke_grants_only = False
     for arg in sys.argv[2:]:
         if arg == "--block":
             block = True
         elif arg == "--delete":
             delete = True
+        elif arg == "--revoke-grants-only":
+            revoke_grants_only = True
         elif arg in ("dev", "prod"):
             env = arg
-    if not (block or delete):
-        sys.exit("Error: You must specify either --block or --delete.")
-    return input_file, env, block, delete
+    if not (block or delete or revoke_grants_only):
+        sys.exit("Error: You must specify either --block, --delete, or --revoke-grants-only.")
+    if sum([block, delete, revoke_grants_only]) > 1:
+        sys.exit("Error: Only one of --block, --delete, or --revoke-grants-only can be specified.")
+    return input_file, env, block, delete, revoke_grants_only
 
 def read_user_ids(filepath: str) -> List[str]:
     """Read user IDs from file."""
@@ -173,6 +178,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
                 print(f"Revoked session {session_id} for user {user_id}")
             else:
                 print(f"Failed to revoke session {session_id} for user {user_id}: {del_resp.status_code} {del_resp.text}")
+            time.sleep(0.5)
     except requests.exceptions.RequestException as e:
         print(f"Error revoking sessions for user {user_id}: {e}")
 
@@ -189,18 +195,24 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
             print(f"Revoked all application grants for user {user_id}")
         else:
             print(f"Failed to revoke grants for user {user_id}: {response.status_code} {response.text}")
+        time.sleep(0.5)
     except requests.exceptions.RequestException as e:
         print(f"Error revoking grants for user {user_id}: {e}")
 
 def main():
     try:
         check_env_file()
-        input_file, env, block, delete = validate_args()
+        input_file, env, block, delete, revoke_grants_only = validate_args()
 
         # Add warning for production environment
         if env == "prod":
-            action = "block" if block else "delete"
-            confirmation = input(f"\n⚠️  WARNING: You are about to {action} users in PRODUCTION environment!\nAre you sure you want to continue? (yes/no): ")
+            if block:
+                action = "block"
+            elif delete:
+                action = "delete"
+            elif revoke_grants_only:
+                action = "revoke all grants"
+            confirmation = input(f"\n⚠️  WARNING: You are about to {action} for users in PRODUCTION environment!\nAre you sure you want to continue? (yes/no): ")
             if confirmation.lower() != "yes":
                 sys.exit("Operation cancelled by user.")
             print(f"\nProceeding with production {action}...\n")
@@ -217,13 +229,22 @@ def main():
                     continue
             else:
                 user_id = user
-            if block:
-                block_user(user_id, token, base_url)
-            elif delete:
-                delete_user(user_id, token, base_url)
-            # Revoke sessions (for full logout) and application grants (which also revokes all refresh tokens)
-            revoke_user_sessions(user_id, token, base_url)
-            revoke_user_grants(user_id, token, base_url)
+            if revoke_grants_only:
+                # Only revoke sessions and application grants
+                revoke_user_sessions(user_id, token, base_url)
+                time.sleep(0.5)
+                revoke_user_grants(user_id, token, base_url)
+                time.sleep(0.5)
+            else:
+                if block:
+                    block_user(user_id, token, base_url)
+                elif delete:
+                    delete_user(user_id, token, base_url)
+                # Revoke sessions (for full logout) and application grants (which also revokes all refresh tokens)
+                revoke_user_sessions(user_id, token, base_url)
+                time.sleep(0.5)
+                revoke_user_grants(user_id, token, base_url)
+                time.sleep(0.5)
             time.sleep(0.5)
     except Exception as e:
         sys.exit(f"An unexpected error occurred: {e}")
