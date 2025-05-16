@@ -80,6 +80,31 @@ def check_domains_for_emails(emails):
             status.append("ALLOWED")
         print(f"{email} ({domain}): {', '.join(status)}")
 
+def check_domains_status_for_emails(emails):
+    cache = load_cache()
+    results = {}
+    for email in emails:
+        domain = extract_domain(email)
+        if not domain:
+            results[email] = ["INVALID"]
+            continue
+        if domain == "privaterelay.appleid.com":
+            results[email] = ["IGNORED"]
+            continue
+        result = check_domain(domain, cache)
+        if not result:
+            results[email] = ["ERROR"]
+            continue
+        status = []
+        if result.get("blocked"):
+            status.append("BLOCKED")
+        if result.get("unresolvable"):
+            status.append("UNRESOLVABLE")
+        if not status:
+            status.append("ALLOWED")
+        results[email] = status
+    return results
+
 # CLI usage
 if __name__ == "__main__":
     if len(sys.argv) < 2:

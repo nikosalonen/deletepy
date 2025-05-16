@@ -294,16 +294,16 @@ def main():
             print(f"{YELLOW}Proceeding with production {action}...{RESET}")
 
         if check_domains:
-            from email_domain_checker import check_domains_for_emails
+            from email_domain_checker import check_domains_status_for_emails
             user_ids = read_user_ids(input_file)
             emails = []
+            input_to_email = {}
             for idx, u in enumerate(user_ids):
                 print(f"{CYAN}Processing entry {idx+1}/{len(user_ids)}: {u}{RESET}")
                 if "@" in u and "." in u:
                     emails.append(u)
+                    input_to_email[u] = u
                 else:
-                    # If it looks like an Auth0 user_id, try to fetch email
-                    # Heuristic: Auth0 user_id often starts with 'auth0|' or 'google-oauth2|' or similar
                     if '|' in u:
                         token = get_access_token(env)
                         base_url = get_base_url(env)
@@ -319,6 +319,7 @@ def main():
                                 email = user_data.get("email")
                                 if email:
                                     emails.append(email)
+                                    input_to_email[u] = email
                                 else:
                                     print(f"{YELLOW}No email found for user_id {u}{RESET}")
                             else:
@@ -329,7 +330,49 @@ def main():
             if not emails:
                 print(f"{YELLOW}No valid emails found in input file.{RESET}")
                 return
-            check_domains_for_emails(emails)
+            print(f"{CYAN}Checking domains for {len(emails)} emails...{RESET}")
+            domain_results = check_domains_status_for_emails(emails)
+            blocked = []
+            for orig, email in input_to_email.items():
+                status = domain_results.get(email, [])
+                if "BLOCKED" in status:
+                    blocked.append((orig, email, status))
+            # Print stats
+            print(f"\n{CYAN}Domain check complete.{RESET}")
+            print(f"Total entries checked: {len(user_ids)}")
+            print(f"Total emails checked: {len(emails)}")
+            print(f"Blocked accounts: {len(blocked)}")
+            if blocked:
+                print(f"\n{RED}Blocked users (input -> resolved email -> status):{RESET}")
+                for orig, email, status in blocked:
+                    print(f"{orig} -> {email} -> {', '.join(status)}")
+            else:
+                print(f"{GREEN}No blocked domains found.{RESET}")
+            # Prompt
+            if blocked:
+                confirm = input(f"\n{YELLOW}Proceed to block and revoke for these {len(blocked)} users? (yes/no): {RESET}")
+                if confirm.strip().lower() == "yes":
+                    token = get_access_token(env)
+                    base_url = get_base_url(env)
+                    for orig, email, status in blocked:
+                        # Determine user_id
+                        if "@" in orig and "." in orig:
+                            # Need to fetch user_id from email
+                            user_id = get_user_id_from_email(orig, token, base_url)
+                            if not user_id:
+                                print(f"{YELLOW}Could not resolve user_id for email {orig}{RESET}")
+                                continue
+                        else:
+                            user_id = orig
+                        print(f"{YELLOW}Blocking and revoking for user_id: {user_id} (email: {email}){RESET}")
+                        block_user(user_id, token, base_url)
+                        revoke_user_sessions(user_id, token, base_url)
+                        time.sleep(0.5)
+                        revoke_user_grants(user_id, token, base_url)
+                        time.sleep(0.5)
+                    print(f"{GREEN}Done blocking and revoking for all blocked users.{RESET}")
+                else:
+                    print(f"{YELLOW}Operation cancelled. No users were blocked or revoked.{RESET}")
             return
 
         token = get_access_token(env)
