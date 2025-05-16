@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, call
 from delete import (
     validate_args,
     read_user_ids,
@@ -9,35 +9,111 @@ from delete import (
 )
 import requests
 
+# --- Argument Parsing Tests ---
+
 def test_validate_args_block(monkeypatch):
     test_args = ['script.py', 'users.txt', '--block']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env, block, delete, revoke_grants_only = validate_args()
+    input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains = validate_args()
     assert input_file == 'users.txt'
     assert env == 'dev'
     assert block is True
     assert delete is False
     assert revoke_grants_only is False
+    assert check_unblocked is False
+    assert check_domains is False
+
+def test_validate_args_check_unblocked(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--check-unblocked']
+    monkeypatch.setattr('sys.argv', test_args)
+    input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains = validate_args()
+    assert check_unblocked is True
+    assert not any([block, delete, revoke_grants_only, check_domains])
+
+def test_validate_args_check_domains(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--check-domains']
+    monkeypatch.setattr('sys.argv', test_args)
+    input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains = validate_args()
+    assert check_domains is True
+    assert not any([block, delete, revoke_grants_only, check_unblocked])
+
+def test_validate_args_mutual_exclusive(monkeypatch):
+    # block + check-unblocked
+    test_args = ['script.py', 'users.txt', '--block', '--check-unblocked']
+    monkeypatch.setattr('sys.argv', test_args)
+    with pytest.raises(SystemExit):
+        validate_args()
+    # check-domains + check-unblocked
+    test_args = ['script.py', 'users.txt', '--check-domains', '--check-unblocked']
+    monkeypatch.setattr('sys.argv', test_args)
+    with pytest.raises(SystemExit):
+        validate_args()
+    # block + check-domains
+    test_args = ['script.py', 'users.txt', '--block', '--check-domains']
+    monkeypatch.setattr('sys.argv', test_args)
+    with pytest.raises(SystemExit):
+        validate_args()
+
+def test_validate_args_no_flag(monkeypatch):
+    test_args = ['script.py', 'users.txt']
+    monkeypatch.setattr('sys.argv', test_args)
+    with pytest.raises(SystemExit):
+        validate_args()
+
+# --- File Truncation Helper Test ---
+
+def truncate_files_if_written(wrote_checked_domains_results, wrote_user_id_to_email):
+    # Helper function to mimic the finally block logic
+    if wrote_checked_domains_results:
+        with open("checked_domains_results.json", "w"):
+            pass
+    if wrote_user_id_to_email:
+        with open("user_id_to_email.json", "w"):
+            pass
+
+def test_truncate_files_if_written():
+    with patch("builtins.open", mock_open()) as m:
+        truncate_files_if_written(True, True)
+        assert m.call_count == 2
+        m.assert_has_calls([
+            call("checked_domains_results.json", "w"),
+            call("user_id_to_email.json", "w")
+        ], any_order=True)
+    with patch("builtins.open", mock_open()) as m:
+        truncate_files_if_written(True, False)
+        m.assert_called_once_with("checked_domains_results.json", "w")
+    with patch("builtins.open", mock_open()) as m:
+        truncate_files_if_written(False, True)
+        m.assert_called_once_with("user_id_to_email.json", "w")
+    with patch("builtins.open", mock_open()) as m:
+        truncate_files_if_written(False, False)
+        m.assert_not_called()
+
+# --- Existing tests (unchanged, except for validate_args unpacking) ---
 
 def test_validate_args_delete(monkeypatch):
     test_args = ['script.py', 'users.txt', '--delete']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env, block, delete, revoke_grants_only = validate_args()
+    input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains = validate_args()
     assert input_file == 'users.txt'
     assert env == 'dev'
     assert block is False
     assert delete is True
     assert revoke_grants_only is False
+    assert check_unblocked is False
+    assert check_domains is False
 
 def test_validate_args_revoke_grants_only(monkeypatch):
     test_args = ['script.py', 'users.txt', '--revoke-grants-only']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env, block, delete, revoke_grants_only = validate_args()
+    input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains = validate_args()
     assert input_file == 'users.txt'
     assert env == 'dev'
     assert block is False
     assert delete is False
     assert revoke_grants_only is True
+    assert check_unblocked is False
+    assert check_domains is False
 
 def test_validate_args_block_and_delete(monkeypatch):
     test_args = ['script.py', 'users.txt', '--block', '--delete']
@@ -57,12 +133,6 @@ def test_validate_args_delete_and_revoke(monkeypatch):
     with pytest.raises(SystemExit):
         validate_args()
 
-def test_validate_args_neither(monkeypatch):
-    test_args = ['script.py', 'users.txt']
-    monkeypatch.setattr('sys.argv', test_args)
-    with pytest.raises(SystemExit):
-        validate_args()
-
 def test_validate_args_invalid_flag(monkeypatch):
     test_args = ['script.py', 'users.txt', '--foo']
     monkeypatch.setattr('sys.argv', test_args)
@@ -72,12 +142,14 @@ def test_validate_args_invalid_flag(monkeypatch):
 def test_validate_args_with_env(monkeypatch):
     test_args = ['script.py', 'users.txt', 'prod', '--block']
     monkeypatch.setattr('sys.argv', test_args)
-    input_file, env, block, delete, revoke_grants_only = validate_args()
+    input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains = validate_args()
     assert input_file == 'users.txt'
     assert env == 'prod'
     assert block is True
     assert delete is False
     assert revoke_grants_only is False
+    assert check_unblocked is False
+    assert check_domains is False
 
 def test_validate_args_no_args(monkeypatch):
     test_args = ['script.py']
