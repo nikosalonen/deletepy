@@ -325,12 +325,18 @@ def main():
                 if u in checked_results:
                     continue
                 print(f"{CYAN}Processing entry {idx+1}/{len(user_ids)}: {u}{RESET}")
-                if "@" in u and "." in u:
+                if "@" in u:
+                    # Email
                     emails.append(u)
                     input_to_email[u] = u
                     to_process.append(u)
+                elif "." in u:
+                    # Plain domain
+                    emails.append(u)  # treat as domain for checker
+                    input_to_email[u] = u
+                    to_process.append(u)
                 else:
-                    # Check if already resolved
+                    # Try to resolve user_id to email
                     if u in user_id_to_email_map:
                         email = user_id_to_email_map[u]
                         emails.append(email)
@@ -370,23 +376,23 @@ def main():
                             print(f"{YELLOW}Error fetching user for user_id {u}: {e}{RESET}")
                         time.sleep(0.2)
             if not to_process:
-                print(f"{YELLOW}No new valid emails found in input file to check.{RESET}")
+                print(f"{YELLOW}No new valid emails or domains found in input file to check.{RESET}")
                 # Print summary of already checked
                 if checked_results:
                     print(f"{CYAN}All entries already checked. Summary from {results_file}:{RESET}")
                     blocked = [(orig, v["email"], v["status"]) for orig, v in checked_results.items() if "BLOCKED" in v["status"]]
                     print(f"Blocked accounts: {len(blocked)}")
                 return
-            print(f"{CYAN}Checking domains for {len(to_process)} new emails...{RESET}")
-            # Build email list for new entries
+            print(f"{CYAN}Checking domains for {len(to_process)} new emails/domains...{RESET}")
+            # Build email/domain list for new entries
             emails_to_check = [input_to_email[u] for u in to_process]
             domain_results = check_domains_status_for_emails(emails_to_check)
             blocked = []
-            # Save results as we go
-            for orig in to_process:
-                email = input_to_email[orig]
-                status = domain_results.get(email, [])
-                checked_results[orig] = {"email": email, "status": status}
+            # Save results as we go, and remove non-blocked from lists immediately
+            for orig in to_process[:]:  # iterate over a copy since we may remove
+                email_or_domain = input_to_email[orig]
+                status = domain_results.get(email_or_domain, [])
+                checked_results[orig] = {"email": email_or_domain, "status": status}
                 # Save after each
                 try:
                     with open(results_file, "w") as f:
@@ -395,11 +401,15 @@ def main():
                 except Exception as e:
                     print(f"{YELLOW}Warning: Could not save results file: {e}{RESET}")
                 if "BLOCKED" in status:
-                    blocked.append((orig, email, status))
+                    blocked.append((orig, email_or_domain, status))
+                else:
+                    # Remove from lists if not blocked
+                    to_process.remove(orig)
+                    emails_to_check.remove(email_or_domain)
             # Print stats
             print(f"\n{CYAN}Domain check complete.{RESET}")
-            print(f"Total entries checked this run: {len(to_process)}")
-            print(f"Total emails checked this run: {len(emails_to_check)}")
+            print(f"Total entries checked this run: {len(to_process) + len([k for k in checked_results if k not in to_process])}")
+            print(f"Total emails/domains checked this run: {len(emails_to_check) + len([k for k in checked_results if k not in to_process])}")
             print(f"Blocked accounts this run: {len(blocked)}")
             # Final flush of checked_domains_results.json
             try:
@@ -409,7 +419,7 @@ def main():
             except Exception as e:
                 print(f"{YELLOW}Warning: Could not flush results file at end: {e}{RESET}")
             if blocked:
-                print(f"\n{RED}Blocked users (input -> resolved email -> status):{RESET}")
+                print(f"\n{RED}Blocked users (input -> resolved email/domain -> status):{RESET}")
                 for orig, email, status in blocked:
                     print(f"{orig} -> {email} -> {', '.join(status)}")
             else:
@@ -422,7 +432,7 @@ def main():
                     base_url = get_base_url(env)
                     for orig, email, status in blocked:
                         # Determine user_id
-                        if "@" in orig and "." in orig:
+                        if "@" in orig:
                             # Need to fetch user_id from email
                             user_id = get_user_id_from_email(orig, token, base_url)
                             if not user_id:
@@ -430,7 +440,7 @@ def main():
                                 continue
                         else:
                             user_id = orig
-                        print(f"{YELLOW}Blocking and revoking for user_id: {user_id} (email: {email}){RESET}")
+                        print(f"{YELLOW}Blocking and revoking for user_id: {user_id} (email/domain: {email}){RESET}")
                         block_user(user_id, token, base_url)
                         revoke_user_sessions(user_id, token, base_url)
                         time.sleep(0.2)
