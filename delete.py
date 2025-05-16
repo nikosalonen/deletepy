@@ -268,6 +268,8 @@ def check_unblocked_users(user_ids, token, base_url):
         print(f"{YELLOW}All users are blocked or could not be checked.{RESET}")
 
 def main():
+    wrote_checked_domains_results = False
+    wrote_user_id_to_email = False
     try:
         check_env_file()
         input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains = validate_args()
@@ -366,6 +368,7 @@ def main():
                                         with open(user_id_map_file, "w") as f:
                                             json.dump(user_id_to_email_map, f, indent=2)
                                             f.flush()
+                                        wrote_user_id_to_email = True
                                     except Exception as e:
                                         print(f"{YELLOW}Warning: Could not save user_id_to_email mapping: {e}{RESET}")
                                 else:
@@ -398,6 +401,7 @@ def main():
                     with open(results_file, "w") as f:
                         json.dump(checked_results, f, indent=2)
                         f.flush()
+                    wrote_checked_domains_results = True
                 except Exception as e:
                     print(f"{YELLOW}Warning: Could not save results file: {e}{RESET}")
                 if "BLOCKED" in status:
@@ -416,6 +420,7 @@ def main():
                 with open(results_file, "w") as f:
                     json.dump(checked_results, f, indent=2)
                     f.flush()
+                wrote_checked_domains_results = True
             except Exception as e:
                 print(f"{YELLOW}Warning: Could not flush results file at end: {e}{RESET}")
             if blocked:
@@ -497,6 +502,20 @@ def main():
         handle_shutdown(None, None)
     except Exception as e:
         sys.exit(f"An unexpected error occurred: {e}")
+    finally:
+        # Only truncate if files were written during this run
+        if wrote_checked_domains_results:
+            try:
+                with open("checked_domains_results.json", "w"):
+                    pass
+            except Exception as e:
+                print(f"{YELLOW}Warning: Could not truncate checked_domains_results.json: {e}{RESET}")
+        if wrote_user_id_to_email:
+            try:
+                with open("user_id_to_email.json", "w"):
+                    pass
+            except Exception as e:
+                print(f"{YELLOW}Warning: Could not truncate user_id_to_email.json: {e}{RESET}")
 
 if __name__ == "__main__":
     main()
