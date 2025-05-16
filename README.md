@@ -1,6 +1,6 @@
 # Auth0 User Management Tool
 
-A Python script for managing Auth0 users, supporting both development and production environments. This tool can delete or block users, revoke their sessions, and revoke all authorized applications (grants).
+A Python script for managing Auth0 users, supporting both development and production environments. This tool can delete or block users, revoke their sessions, revoke all authorized applications (grants), check user block status, and check email domains for block status.
 
 ## Features
 
@@ -12,6 +12,9 @@ A Python script for managing Auth0 users, supporting both development and produc
 - Rate limiting with 0.5s delay between requests
 - Production environment safety confirmation
 - **New:** Option to only revoke all grants (and sessions) without deleting or blocking users
+- **New:** Check which users are not blocked (`--check-unblocked`)
+- **New:** Check email domains for block status and optionally block/revoke users with blocked domains (`--check-domains`)
+- **New:** Input file can be prepared from a CSV using `cleanup_csv.py`
 
 ## Prerequisites
 
@@ -52,9 +55,19 @@ A Python script for managing Auth0 users, supporting both development and produc
 
    There's also a `.env.example` file that you can use as a template.
 
+## Preparing Input Files
+
+If you have a CSV file (e.g., `ids.csv`) with columns like `ip,userId,userName,user_name_prefix,user_name_suffix`, use the provided `cleanup_csv.py` script to extract a single column of user IDs or emails:
+
+```bash
+python cleanup_csv.py
+```
+
+This will overwrite `ids.csv` with a single column (no header) suitable for use as input to `delete.py`.
+
 ## Usage
 
-1. Prepare a text file (e.g., `users.txt`) containing Auth0 user IDs or email addresses:
+1. Prepare a text file (e.g., `users.txt` or cleaned `ids.csv`) containing Auth0 user IDs or email addresses:
    - One ID or email per line
    - No headers or additional columns
    - Example:
@@ -65,7 +78,7 @@ A Python script for managing Auth0 users, supporting both development and produc
 
 2. Run the script:
    ```bash
-   python delete.py users.txt [env] [--block|--delete|--revoke-grants-only]
+   python delete.py users.txt [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains]
    ```
 
    Parameters:
@@ -77,8 +90,10 @@ A Python script for managing Auth0 users, supporting both development and produc
      - `--block`: Block users instead of deleting them
      - `--delete`: Delete users from Auth0
      - `--revoke-grants-only`: Only revoke all application grants (authorized applications) and sessions for each user, without blocking or deleting
+     - `--check-unblocked`: Check which users are not blocked (prints unblocked user IDs)
+     - `--check-domains`: Check email domains for block status. If blocked domains are found, you will be prompted to block and revoke for those users.
 
-   **Note:** You must specify exactly one of `--block`, `--delete`, or `--revoke-grants-only`. Using more than one will result in an error.
+   **Note:** You must specify exactly one of the action flags above. Using more than one will result in an error.
 
    The script will:
    - Validate the environment and input file
@@ -91,6 +106,13 @@ A Python script for managing Auth0 users, supporting both development and produc
        - Block or delete the user
      - Revoke all user sessions (if supported by your Auth0 plan)
      - Revoke all application grants (authorized applications) for the user
+
+### Domain Checking Workflow (`--check-domains`)
+
+- The script will check the domain of each email/user in the input file.
+- Results are saved to `checked_domains_results.json` and user ID to email mappings to `user_id_to_email.json` during the run.
+- If blocked domains are found, you will be prompted to confirm blocking and revoking for those users.
+- At the end of the run, if these files were written to, they will be emptied (truncated).
 
 ## Notes
 
@@ -106,6 +128,7 @@ A Python script for managing Auth0 users, supporting both development and produc
 - Production operations require explicit confirmation
 - Rate limiting is implemented to prevent API throttling
 - All operations are logged to the console
+- Temporary files `checked_domains_results.json` and `user_id_to_email.json` are emptied at the end of the run if used
 
 ## Testing
 
