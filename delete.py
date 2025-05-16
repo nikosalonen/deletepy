@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 import signal
+import json
 
 # ANSI color codes
 RESET = "\033[0m"
@@ -210,7 +211,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
                 print(f"{GREEN}Revoked session {CYAN}{session_id}{GREEN} for user {CYAN}{user_id}{GREEN}{RESET}")
             else:
                 print(f"{YELLOW}Failed to revoke session {CYAN}{session_id}{YELLOW} for user {CYAN}{user_id}{YELLOW}: {YELLOW}{del_resp.status_code}{YELLOW} {del_resp.text}{RESET}")
-            time.sleep(0.5)
+            time.sleep(0.2)
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error revoking sessions for user {CYAN}{user_id}{RED}: {e}{RESET}")
 
@@ -227,7 +228,7 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
             print(f"{GREEN}Revoked all application grants for user {CYAN}{user_id}{GREEN}{RESET}")
         else:
             print(f"{YELLOW}Failed to revoke grants for user {CYAN}{user_id}{YELLOW}: {YELLOW}{response.status_code}{YELLOW} {response.text}{RESET}")
-        time.sleep(0.5)
+        time.sleep(0.2)
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error revoking grants for user {CYAN}{user_id}{RED}: {e}{RESET}")
 
@@ -258,7 +259,7 @@ def check_unblocked_users(user_ids, token, base_url):
         sys.stdout.write(f"\r{CYAN}Checking users... {spinner[spin_idx % len(spinner)]} ({idx+1}/{len(user_ids)}){RESET}")
         sys.stdout.flush()
         spin_idx += 1
-        time.sleep(0.5)
+        time.sleep(0.2)
     print()  # Newline after spinner
     if unblocked:
         msg = "The following user IDs are NOT blocked:\n" + "\n".join(f"{CYAN}{uid}{RESET}" for uid in unblocked)
@@ -298,12 +299,44 @@ def main():
             user_ids = read_user_ids(input_file)
             emails = []
             input_to_email = {}
+            results_file = "checked_domains_results.json"
+            user_id_map_file = "user_id_to_email.json"
+            # Load previous results if available
+            if os.path.exists(results_file):
+                try:
+                    with open(results_file, "r") as f:
+                        checked_results = json.load(f)
+                except Exception:
+                    checked_results = {}
+            else:
+                checked_results = {}
+            # Load user_id to email mapping if available
+            if os.path.exists(user_id_map_file):
+                try:
+                    with open(user_id_map_file, "r") as f:
+                        user_id_to_email_map = json.load(f)
+                except Exception:
+                    user_id_to_email_map = {}
+            else:
+                user_id_to_email_map = {}
+            # Build list of inputs to process (skip already checked)
+            to_process = []
             for idx, u in enumerate(user_ids):
+                if u in checked_results:
+                    continue
                 print(f"{CYAN}Processing entry {idx+1}/{len(user_ids)}: {u}{RESET}")
                 if "@" in u and "." in u:
                     emails.append(u)
                     input_to_email[u] = u
+                    to_process.append(u)
                 else:
+                    # Check if already resolved
+                    if u in user_id_to_email_map:
+                        email = user_id_to_email_map[u]
+                        emails.append(email)
+                        input_to_email[u] = email
+                        to_process.append(u)
+                        continue
                     if '|' in u:
                         token = get_access_token(env)
                         base_url = get_base_url(env)
@@ -320,34 +353,67 @@ def main():
                                 if email:
                                     emails.append(email)
                                     input_to_email[u] = email
+                                    to_process.append(u)
+                                    # Save mapping after each successful fetch
+                                    user_id_to_email_map[u] = email
+                                    try:
+                                        with open(user_id_map_file, "w") as f:
+                                            json.dump(user_id_to_email_map, f, indent=2)
+                                            f.flush()
+                                    except Exception as e:
+                                        print(f"{YELLOW}Warning: Could not save user_id_to_email mapping: {e}{RESET}")
                                 else:
                                     print(f"{YELLOW}No email found for user_id {u}{RESET}")
                             else:
                                 print(f"{YELLOW}Failed to fetch user for user_id {u}: {resp.status_code} {resp.text}{RESET}")
                         except Exception as e:
                             print(f"{YELLOW}Error fetching user for user_id {u}: {e}{RESET}")
-                        time.sleep(0.5)
-            if not emails:
-                print(f"{YELLOW}No valid emails found in input file.{RESET}")
+                        time.sleep(0.2)
+            if not to_process:
+                print(f"{YELLOW}No new valid emails found in input file to check.{RESET}")
+                # Print summary of already checked
+                if checked_results:
+                    print(f"{CYAN}All entries already checked. Summary from {results_file}:{RESET}")
+                    blocked = [(orig, v["email"], v["status"]) for orig, v in checked_results.items() if "BLOCKED" in v["status"]]
+                    print(f"Blocked accounts: {len(blocked)}")
                 return
-            print(f"{CYAN}Checking domains for {len(emails)} emails...{RESET}")
-            domain_results = check_domains_status_for_emails(emails)
+            print(f"{CYAN}Checking domains for {len(to_process)} new emails...{RESET}")
+            # Build email list for new entries
+            emails_to_check = [input_to_email[u] for u in to_process]
+            domain_results = check_domains_status_for_emails(emails_to_check)
             blocked = []
-            for orig, email in input_to_email.items():
+            # Save results as we go
+            for orig in to_process:
+                email = input_to_email[orig]
                 status = domain_results.get(email, [])
+                checked_results[orig] = {"email": email, "status": status}
+                # Save after each
+                try:
+                    with open(results_file, "w") as f:
+                        json.dump(checked_results, f, indent=2)
+                        f.flush()
+                except Exception as e:
+                    print(f"{YELLOW}Warning: Could not save results file: {e}{RESET}")
                 if "BLOCKED" in status:
                     blocked.append((orig, email, status))
             # Print stats
             print(f"\n{CYAN}Domain check complete.{RESET}")
-            print(f"Total entries checked: {len(user_ids)}")
-            print(f"Total emails checked: {len(emails)}")
-            print(f"Blocked accounts: {len(blocked)}")
+            print(f"Total entries checked this run: {len(to_process)}")
+            print(f"Total emails checked this run: {len(emails_to_check)}")
+            print(f"Blocked accounts this run: {len(blocked)}")
+            # Final flush of checked_domains_results.json
+            try:
+                with open(results_file, "w") as f:
+                    json.dump(checked_results, f, indent=2)
+                    f.flush()
+            except Exception as e:
+                print(f"{YELLOW}Warning: Could not flush results file at end: {e}{RESET}")
             if blocked:
                 print(f"\n{RED}Blocked users (input -> resolved email -> status):{RESET}")
                 for orig, email, status in blocked:
                     print(f"{orig} -> {email} -> {', '.join(status)}")
             else:
-                print(f"{GREEN}No blocked domains found.{RESET}")
+                print(f"{GREEN}No blocked domains found in this run.{RESET}")
             # Prompt
             if blocked:
                 confirm = input(f"\n{YELLOW}Proceed to block and revoke for these {len(blocked)} users? (yes/no): {RESET}")
@@ -367,9 +433,9 @@ def main():
                         print(f"{YELLOW}Blocking and revoking for user_id: {user_id} (email: {email}){RESET}")
                         block_user(user_id, token, base_url)
                         revoke_user_sessions(user_id, token, base_url)
-                        time.sleep(0.5)
+                        time.sleep(0.2)
                         revoke_user_grants(user_id, token, base_url)
-                        time.sleep(0.5)
+                        time.sleep(0.2)
                     print(f"{GREEN}Done blocking and revoking for all blocked users.{RESET}")
                 else:
                     print(f"{YELLOW}Operation cancelled. No users were blocked or revoked.{RESET}")
@@ -403,9 +469,9 @@ def main():
             if revoke_grants_only:
                 # Only revoke sessions and application grants
                 revoke_user_sessions(user_id, token, base_url)
-                time.sleep(0.5)
+                time.sleep(0.2)
                 revoke_user_grants(user_id, token, base_url)
-                time.sleep(0.5)
+                time.sleep(0.2)
             else:
                 if block:
                     block_user(user_id, token, base_url)
@@ -413,10 +479,10 @@ def main():
                     delete_user(user_id, token, base_url)
                 # Revoke sessions (for full logout) and application grants (which also revokes all refresh tokens)
                 revoke_user_sessions(user_id, token, base_url)
-                time.sleep(0.5)
+                time.sleep(0.2)
                 revoke_user_grants(user_id, token, base_url)
-                time.sleep(0.5)
-            time.sleep(0.5)
+                time.sleep(0.2)
+            time.sleep(0.2)
     except KeyboardInterrupt:
         handle_shutdown(None, None)
     except Exception as e:
