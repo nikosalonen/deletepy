@@ -20,7 +20,7 @@ RESET = "\033[0m"
 
 def extract_domain(email):
     if "@" not in email:
-        return None
+        return email
     return email.split("@")[-1].lower()
 
 def load_cache():
