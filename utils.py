@@ -1,7 +1,7 @@
 import sys
 import signal
 import argparse
-from typing import List, Tuple, Generator
+from typing import List, Generator
 
 # ANSI color codes
 RESET = "\033[0m"
