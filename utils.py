@@ -26,14 +26,25 @@ def handle_shutdown(signum, frame):
 signal.signal(signal.SIGINT, handle_shutdown)
 
 def read_user_ids(filepath: str) -> List[str]:
-    """Read user IDs from file."""
+    """Read user IDs from file.
+    
+    Args:
+        filepath: Path to the file containing user IDs
+        
+    Returns:
+        List[str]: List of user IDs read from the file
+        
+    Raises:
+        FileNotFoundError: If the specified file does not exist
+        IOError: If there is an error reading the file
+    """
     try:
         with open(filepath, 'r') as f:
             return [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
-        sys.exit(f"Error: File {filepath} not found")
+        raise FileNotFoundError(f"Error: File {filepath} not found")
     except IOError as e:
-        sys.exit(f"Error reading file: {e}")
+        raise IOError(f"Error reading file: {e}")
 
 def validate_args() -> Tuple[str, str, bool, bool, bool, bool, bool]:
     """Validate command line arguments and return input file path, environment, and operation flags."""
