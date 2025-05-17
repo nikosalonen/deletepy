@@ -11,7 +11,7 @@ from user_operations import (
     get_user_email,
     revoke_user_sessions
 )
-from email_domain_checker import check_domains_for_emails
+from email_domain_checker import check_domains_status_for_emails
 
 def show_progress(current: int, total: int, operation: str) -> None:
     """Show progress indicator for bulk operations.
@@ -81,8 +81,56 @@ def main():
         if operation == "check-unblocked":
             check_unblocked_users(user_ids, token, base_url)
         elif operation == "check-domains":
-            emails = [get_user_email(user_id, token, base_url) for user_id in user_ids]
-            check_domains_for_emails(emails)
+            print("\nFetching user emails...")
+            emails = []
+            for idx, user_id in enumerate(user_ids, 1):
+                show_progress(idx, total_users, "Fetching emails")
+                email = get_user_email(user_id, token, base_url)
+                if email:
+                    emails.append(email)
+            print("\n")  # Clear progress line
+
+            if not emails:
+                print("No valid emails found to check.")
+                sys.exit(0)
+
+            print(f"\nChecking {len(emails)} email domains...")
+            results = check_domains_status_for_emails(emails)
+
+            # Print summary
+            blocked = [email for email, status in results.items() if "BLOCKED" in status]
+            unresolvable = [email for email, status in results.items() if "UNRESOLVABLE" in status]
+            allowed = [email for email, status in results.items() if "ALLOWED" in status]
+            ignored = [email for email, status in results.items() if "IGNORED" in status]
+            invalid = [email for email, status in results.items() if "INVALID" in status]
+            error = [email for email, status in results.items() if "ERROR" in status]
+
+            print("\nDomain Check Summary:")
+            print(f"Total emails checked: {len(emails)}")
+            if blocked:
+                print(f"\nBlocked domains ({len(blocked)}):")
+                for email in blocked:
+                    print(f"  {email}")
+            if unresolvable:
+                print(f"\nUnresolvable domains ({len(unresolvable)}):")
+                for email in unresolvable:
+                    print(f"  {email}")
+            if allowed:
+                print(f"\nAllowed domains ({len(allowed)}):")
+                for email in allowed:
+                    print(f"  {email}")
+            if ignored:
+                print(f"\nIgnored domains ({len(ignored)}):")
+                for email in ignored:
+                    print(f"  {email}")
+            if invalid:
+                print(f"\nInvalid emails ({len(invalid)}):")
+                for email in invalid:
+                    print(f"  {email}")
+            if error:
+                print(f"\nErrors checking domains ({len(error)}):")
+                for email in error:
+                    print(f"  {email}")
         else:
             # Process users one by one for other operations
             operation_display = {
