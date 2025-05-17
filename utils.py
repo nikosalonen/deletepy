@@ -138,3 +138,16 @@ def validate_args() -> argparse.Namespace:
     
     args = parser.parse_args()
     return args 
+
+def show_progress(current: int, total: int, operation: str) -> None:
+    """Show progress indicator for bulk operations.
+    
+    Args:
+        current: Current item number
+        total: Total number of items
+        operation: Operation being performed
+    """
+    spinner = ['|', '/', '-', '\\']
+    spin_idx = (current - 1) % len(spinner)
+    sys.stdout.write(f"\r{operation}... {spinner[spin_idx]} ({current}/{total})")
+    sys.stdout.flush() 
