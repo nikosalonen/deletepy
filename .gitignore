@@ -3,3 +3,6 @@ __pycache__/
 .DS_Store
 domain_cache.json
 venv/
+*.json
+*.csv
+*.txt
