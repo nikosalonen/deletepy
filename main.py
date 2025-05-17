@@ -12,6 +12,19 @@ from user_operations import (
 )
 from email_domain_checker import check_domains_for_emails
 
+def show_progress(current: int, total: int, operation: str) -> None:
+    """Show progress indicator for bulk operations.
+    
+    Args:
+        current: Current item number
+        total: Total number of items
+        operation: Operation being performed
+    """
+    spinner = ['|', '/', '-', '\\']
+    spin_idx = (current - 1) % len(spinner)
+    sys.stdout.write(f"\r{operation}... {spinner[spin_idx]} ({current}/{total})")
+    sys.stdout.flush()
+
 def main():
     """Main entry point for the application."""
     try:
@@ -30,6 +43,7 @@ def main():
         
         # Read user IDs from file
         user_ids = read_user_ids(input_file)
+        total_users = len(user_ids)
         
         # Process users based on operation
         if operation == "check-unblocked":
@@ -38,10 +52,13 @@ def main():
         elif operation == "check-domains":
             # Collect emails for all users
             emails = []
-            for user_id in user_ids:
+            print(f"\nCollecting emails for {total_users} users...")
+            for idx, user_id in enumerate(user_ids, 1):
+                show_progress(idx, total_users, "Collecting emails")
                 email = get_user_email(user_id, token, base_url)
                 if email:
                     emails.append(email)
+            print("\n")  # Clear progress line
             
             if emails:
                 print(f"\nChecking domains for {len(emails)} users...\n")
@@ -50,13 +67,22 @@ def main():
                 print("No valid email addresses found for the provided user IDs.")
         else:
             # Process users one by one for other operations
-            for user_id in user_ids:
+            operation_display = {
+                "block": "Blocking users",
+                "delete": "Deleting users",
+                "revoke-grants-only": "Revoking grants"
+            }.get(operation, "Processing users")
+            
+            print(f"\n{operation_display}...")
+            for idx, user_id in enumerate(user_ids, 1):
+                show_progress(idx, total_users, operation_display)
                 if operation == "block":
                     block_user(user_id, token, base_url)
                 elif operation == "delete":
                     delete_user(user_id, token, base_url)
                 elif operation == "revoke-grants-only":
                     revoke_user_grants(user_id, token, base_url)
+            print("\n")  # Clear progress line
 
     except FileNotFoundError as e:
         print(f"Error: {str(e)}")
