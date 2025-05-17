@@ -8,7 +8,8 @@ from user_operations import (
     block_user,
     revoke_user_grants,
     check_unblocked_users,
-    get_user_email
+    get_user_email,
+    revoke_user_sessions
 )
 from email_domain_checker import check_domains_for_emails
 
@@ -62,49 +63,32 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
 def main():
     """Main entry point for the application."""
     try:
-        # Check for .env file
-        check_env_file()
-
-        # Validate command line arguments
+        # Validate arguments
         args = validate_args()
         input_file = args.input_file
         env = args.env
         operation = args.operation
 
-        # Get access token and base URL
-        token = get_access_token(env)
+        # Check environment configuration
+        check_env_file(env)
         base_url = get_base_url(env)
+        token = get_access_token(env)
 
-        # Read user IDs from file using generator
+        # Read user IDs from file
         user_ids = list(read_user_ids_generator(input_file))
         total_users = len(user_ids)
 
-        # Process users based on operation
         if operation == "check-unblocked":
-            # Process all users at once for unblocked check
             check_unblocked_users(user_ids, token, base_url)
         elif operation == "check-domains":
-            # Collect emails for all users
-            emails = []
-            print(f"\nCollecting emails for {total_users} users...")
-            for idx, user_id in enumerate(user_ids, 1):
-                show_progress(idx, total_users, "Collecting emails")
-                email = get_user_email(user_id, token, base_url)
-                if email:
-                    emails.append(email)
-            print("\n")  # Clear progress line
-
-            if emails:
-                print(f"\nChecking domains for {len(emails)} users...\n")
-                check_domains_for_emails(emails)
-            else:
-                print("No valid email addresses found for the provided user IDs.")
+            emails = [get_user_email(user_id, token, base_url) for user_id in user_ids]
+            check_domains_for_emails(emails)
         else:
             # Process users one by one for other operations
             operation_display = {
                 "block": "Blocking users",
                 "delete": "Deleting users",
-                "revoke-grants-only": "Revoking grants"
+                "revoke-grants-only": "Revoking grants and sessions"
             }.get(operation, "Processing users")
 
             # Request confirmation for production environment
@@ -120,6 +104,8 @@ def main():
                 elif operation == "delete":
                     delete_user(user_id, token, base_url)
                 elif operation == "revoke-grants-only":
+                    # First revoke sessions, then grants
+                    revoke_user_sessions(user_id, token, base_url)
                     revoke_user_grants(user_id, token, base_url)
             print("\n")  # Clear progress line
 
