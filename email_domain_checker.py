@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 from urllib.parse import urlparse
 import json
+from utils import show_progress
 
 # Load .env
 load_dotenv()
@@ -83,7 +84,10 @@ def check_domains_for_emails(emails):
 def check_domains_status_for_emails(emails):
     cache = load_cache()
     results = {}
-    for email in emails:
+    total_emails = len(emails)
+    
+    for idx, email in enumerate(emails, 1):
+        show_progress(idx, total_emails, "Checking domains")
         domain = extract_domain(email)
         if not domain:
             results[email] = ["INVALID"]
@@ -103,6 +107,8 @@ def check_domains_status_for_emails(emails):
         if not status:
             status.append("ALLOWED")
         results[email] = status
+    
+    print("\n")  # Clear progress line
     return results
 
 # CLI usage

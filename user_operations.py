@@ -2,7 +2,7 @@ import requests
 import time
 import sys
 from urllib.parse import quote
-from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested
+from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested, show_progress
 
 # Rate limiting constant (seconds between API calls)
 API_RATE_LIMIT = 0.2
@@ -128,9 +128,9 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
         base_url: Auth0 API base URL
     """
     unblocked = []
-    spinner = ['|', '/', '-', '\\']
-    spin_idx = 0
-    for idx, user_id in enumerate(user_ids):
+    total_users = len(user_ids)
+    
+    for idx, user_id in enumerate(user_ids, 1):
         if shutdown_requested:
             break
         url = f"{base_url}/api/v2/users/{quote(user_id)}"
@@ -144,14 +144,12 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
             user_data = response.json()
             if not user_data.get("blocked", False):
                 unblocked.append(user_id)
-            # Update spinner
-            sys.stdout.write(f"\rChecking users... {spinner[spin_idx]} ({idx + 1}/{len(user_ids)})")
-            sys.stdout.flush()
-            spin_idx = (spin_idx + 1) % len(spinner)
+            show_progress(idx, total_users, "Checking users")
             time.sleep(API_RATE_LIMIT)
         except requests.exceptions.RequestException:
             continue
-    print("\n")  # Clear spinner line
+    
+    print("\n")  # Clear progress line
     if unblocked:
         print(f"{YELLOW}Found {len(unblocked)} unblocked users:{RESET}")
         for user_id in unblocked:
