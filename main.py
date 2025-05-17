@@ -19,7 +19,10 @@ def main():
         check_env_file()
         
         # Validate command line arguments
-        input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains = validate_args()
+        args = validate_args()
+        input_file = args.input_file
+        env = args.env
+        operation = args.operation
         
         # Get access token and base URL
         token = get_access_token(env)
@@ -28,11 +31,11 @@ def main():
         # Read user IDs from file
         user_ids = read_user_ids(input_file)
         
-        # Process users based on operation flags
-        if check_unblocked:
+        # Process users based on operation
+        if operation == "check-unblocked":
             # Process all users at once for unblocked check
             check_unblocked_users(user_ids, token, base_url)
-        elif check_domains:
+        elif operation == "check-domains":
             # Collect emails for all users
             emails = []
             for user_id in user_ids:
@@ -48,11 +51,11 @@ def main():
         else:
             # Process users one by one for other operations
             for user_id in user_ids:
-                if block:
+                if operation == "block":
                     block_user(user_id, token, base_url)
-                elif delete:
+                elif operation == "delete":
                     delete_user(user_id, token, base_url)
-                elif revoke_grants_only:
+                elif operation == "revoke-grants-only":
                     revoke_user_grants(user_id, token, base_url)
 
     except FileNotFoundError as e:
