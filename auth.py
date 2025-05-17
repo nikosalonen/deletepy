@@ -52,4 +52,4 @@ def get_access_token(env: str = "dev") -> str:
             raise AuthConfigError("Access token not found in Auth0 response")
         return json_response["access_token"]
     except ValueError as e:
-        raise AuthConfigError(f"Invalid JSON response from Auth0: {str(e)}")
+        raise AuthConfigError(f"Invalid JSON response from Auth0: {str(e)}") from e

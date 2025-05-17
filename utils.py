@@ -68,9 +68,9 @@ def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
                 if line:  # Skip empty lines
                     yield line
     except FileNotFoundError:
-        raise FileNotFoundError(f"Error: File {filepath} not found")
+        raise FileNotFoundError(f"Error: File {filepath} not found") from None
     except IOError as e:
-        raise IOError(f"Error reading file: {e}")
+        raise IOError(f"Error reading file: {e}") from e
 
 def validate_args() -> argparse.Namespace:
     """Parse and validate command line arguments.
