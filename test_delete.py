@@ -1,7 +1,8 @@
 import pytest
 from unittest.mock import patch, mock_open
 import sys
-from main import validate_args, read_user_ids
+from main import validate_args
+from utils import read_user_ids_generator
 
 # --- Argument Parsing Tests ---
 
@@ -123,5 +124,61 @@ def test_validate_args_no_args(monkeypatch):
 def test_read_user_ids():
     test_content = "user1\nuser2\nuser3"
     with patch('builtins.open', mock_open(read_data=test_content)):
-        result = read_user_ids('dummy.txt')
+        result = list(read_user_ids_generator('dummy.txt'))
         assert result == ['user1', 'user2', 'user3']
+
+# --- Main Functionality Tests ---
+
+def test_main_block_operation(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--block']
+    monkeypatch.setattr('sys.argv', test_args)
+    with patch('main.block_user') as mock_block:
+        mock_block.return_value = True
+        from main import main
+        main()
+        mock_block.assert_called()
+
+def test_main_delete_operation(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--delete']
+    monkeypatch.setattr('sys.argv', test_args)
+    with patch('main.delete_user') as mock_delete:
+        mock_delete.return_value = True
+        from main import main
+        main()
+        mock_delete.assert_called()
+
+def test_main_revoke_grants_operation(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--revoke-grants-only']
+    monkeypatch.setattr('sys.argv', test_args)
+    with patch('main.revoke_user_grants') as mock_revoke:
+        mock_revoke.return_value = True
+        from main import main
+        main()
+        mock_revoke.assert_called()
+
+def test_main_check_unblocked_operation(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--check-unblocked']
+    monkeypatch.setattr('sys.argv', test_args)
+    with patch('main.check_unblocked_users') as mock_check:
+        mock_check.return_value = True
+        from main import main
+        main()
+        mock_check.assert_called()
+
+def test_main_check_domains_operation(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--check-domains']
+    monkeypatch.setattr('sys.argv', test_args)
+    with patch('main.check_domains') as mock_check:
+        mock_check.return_value = True
+        from main import main
+        main()
+        mock_check.assert_called()
+
+def test_main_error_handling(monkeypatch):
+    test_args = ['script.py', 'users.txt', '--block']
+    monkeypatch.setattr('sys.argv', test_args)
+    with patch('main.block_user') as mock_block:
+        mock_block.side_effect = Exception("Test error")
+        from main import main
+        with pytest.raises(SystemExit):
+            main()
