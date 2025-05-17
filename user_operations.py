@@ -10,6 +10,10 @@ API_RATE_LIMIT = 0.2
 def delete_user(user_id: str, token: str, base_url: str) -> None:
     """Delete user from Auth0."""
     print(f"{YELLOW}Deleting user: {CYAN}{user_id}{YELLOW}{RESET}")
+    
+    # First revoke all sessions
+    revoke_user_sessions(user_id, token, base_url)
+    
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -26,6 +30,10 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
 def block_user(user_id: str, token: str, base_url: str) -> None:
     """Block user in Auth0."""
     print(f"{YELLOW}Blocking user: {CYAN}{user_id}{YELLOW}{RESET}")
+    
+    # First revoke all sessions
+    revoke_user_sessions(user_id, token, base_url)
+    
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
