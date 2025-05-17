@@ -13,7 +13,7 @@ A Python script for managing Auth0 users, supporting both development and produc
 - Input can be either Auth0 user IDs or email addresses
 - Rate limiting with 0.5s delay between requests
 - Production environment safety confirmation
-- **New:** Option to only revoke all grants (and sessions) without deleting or blocking users
+- **New:** Option to revoke all grants and sessions without deleting or blocking users (`--revoke-grants-only`)
 - **New:** Check which users are not blocked (`--check-unblocked`)
 - **New:** Check email domains for block status and optionally block/revoke users with blocked domains (`--check-domains`)
 - **New:** Input file can be prepared from a CSV using `cleanup_csv.py`
@@ -104,7 +104,7 @@ This will overwrite `ids.csv` with a single column (no header) suitable for use 
    - **Action flag (required, choose one):**
      - `--block`: Block users instead of deleting them
      - `--delete`: Delete users from Auth0
-     - `--revoke-grants-only`: Only revoke all application grants (authorized applications) and sessions for each user, without blocking or deleting
+     - `--revoke-grants-only`: Revoke all application grants (authorized applications) and sessions for each user, without blocking or deleting
      - `--check-unblocked`: Check which users are not blocked (prints unblocked user IDs)
      - `--check-domains`: Check email domains for block status. If blocked domains are found, you will be prompted to block and revoke for those users.
 
