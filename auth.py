@@ -29,11 +29,11 @@ def get_access_token(env: str = "dev") -> str:
     
     # Validate required environment variables
     if not client_id:
-        raise AuthConfigError(f"Missing required environment variable: {config['client_id']}")
+        raise AuthConfigError("Missing Auth0 Client ID. Please set the AUTH0_CLIENT_ID environment variable.")
     if not client_secret:
-        raise AuthConfigError(f"Missing required environment variable: {config['client_secret']}")
+        raise AuthConfigError("Missing Auth0 Client Secret. Please set the AUTH0_CLIENT_SECRET environment variable.")
     if not domain:
-        raise AuthConfigError("Missing required configuration: auth0_domain")
+        raise AuthConfigError("Missing Auth0 Domain. Please set the AUTH0_DOMAIN environment variable.")
 
     url = f"https://{domain}/oauth/token"
     payload = {
