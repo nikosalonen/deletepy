@@ -26,19 +26,22 @@ def main():
         user_ids = read_user_ids(input_file)
         
         # Process users based on operation flags
-        for user_id in user_ids:
-            if block:
-                block_user(user_id, token, base_url)
-            elif delete:
-                delete_user(user_id, token, base_url)
-            elif revoke_grants_only:
-                revoke_user_grants(user_id, token, base_url)
-            elif check_unblocked:
-                check_unblocked_users([user_id], token, base_url)
-            elif check_domains:
-                # TODO: Implement domain checking functionality
-                print("Domain checking functionality not implemented yet")
-                break
+        if check_unblocked:
+            # Process all users at once for unblocked check
+            check_unblocked_users(user_ids, token, base_url)
+        else:
+            # Process users one by one for other operations
+            for user_id in user_ids:
+                if block:
+                    block_user(user_id, token, base_url)
+                elif delete:
+                    delete_user(user_id, token, base_url)
+                elif revoke_grants_only:
+                    revoke_user_grants(user_id, token, base_url)
+                elif check_domains:
+                    # TODO: Implement domain checking functionality
+                    print("Domain checking functionality not implemented yet")
+                    break
 
     except FileNotFoundError as e:
         print(f"Error: {str(e)}")
