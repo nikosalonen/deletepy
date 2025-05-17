@@ -105,8 +105,14 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error revoking grants for user {CYAN}{user_id}{RED}: {e}{RESET}")
 
-def check_unblocked_users(user_ids, token, base_url):
-    """Print user IDs that are not blocked, with a progress indicator."""
+def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
+    """Print user IDs that are not blocked, with a progress indicator.
+    
+    Args:
+        user_ids: List of Auth0 user IDs to check
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+    """
     unblocked = []
     spinner = ['|', '/', '-', '\\']
     spin_idx = 0
