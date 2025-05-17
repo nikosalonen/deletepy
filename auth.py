@@ -3,6 +3,9 @@ import requests
 from dotenv import load_dotenv
 from config import get_env_config
 
+# API timeout in seconds
+API_TIMEOUT = 5
+
 class AuthConfigError(Exception):
     """Exception raised for authentication configuration errors."""
     pass
@@ -42,6 +45,6 @@ def get_access_token(env: str = "dev") -> str:
         "audience": f"https://{domain}/api/v2/",
         "grant_type": "client_credentials"
     }
-    response = requests.post(url, json=payload)
+    response = requests.post(url, json=payload, timeout=API_TIMEOUT)
     response.raise_for_status()
     return response.json()["access_token"] 

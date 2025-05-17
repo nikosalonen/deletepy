@@ -6,6 +6,8 @@ from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested
 
 # Rate limiting constant (seconds between API calls)
 API_RATE_LIMIT = 0.2
+# API timeout in seconds
+API_TIMEOUT = 30
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
     """Delete user from Auth0."""
@@ -20,7 +22,7 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
         "Content-Type": "application/json"
     }
     try:
-        response = requests.delete(url, headers=headers)
+        response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
         print(f"{GREEN}Successfully deleted user {CYAN}{user_id}{GREEN}{RESET}")
         time.sleep(API_RATE_LIMIT)
@@ -41,7 +43,7 @@ def block_user(user_id: str, token: str, base_url: str) -> None:
     }
     payload = {"blocked": True}
     try:
-        response = requests.patch(url, headers=headers, json=payload)
+        response = requests.patch(url, headers=headers, json=payload, timeout=API_TIMEOUT)
         response.raise_for_status()
         print(f"{GREEN}Successfully blocked user {CYAN}{user_id}{GREEN}{RESET}")
         time.sleep(API_RATE_LIMIT)
@@ -57,7 +59,7 @@ def get_user_id_from_email(email: str, token: str, base_url: str) -> str:
     }
     params = {"email": email}
     try:
-        response = requests.get(url, headers=headers, params=params)
+        response = requests.get(url, headers=headers, params=params, timeout=API_TIMEOUT)
         response.raise_for_status()
         users = response.json()
         time.sleep(API_RATE_LIMIT)
@@ -78,7 +80,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
         "Content-Type": "application/json"
     }
     try:
-        response = requests.get(list_url, headers=headers)
+        response = requests.get(list_url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
         sessions = response.json().get("sessions", [])
         if not sessions:
@@ -91,7 +93,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
             if not session_id:
                 continue
             del_url = f"{base_url}/api/v2/sessions/{session_id}"
-            del_resp = requests.delete(del_url, headers=headers)
+            del_resp = requests.delete(del_url, headers=headers, timeout=API_TIMEOUT)
             time.sleep(API_RATE_LIMIT)
             try:
                 del_resp.raise_for_status()
@@ -109,7 +111,7 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
         "Content-Type": "application/json"
     }
     try:
-        response = requests.delete(grants_url, headers=headers)
+        response = requests.delete(grants_url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
         print(f"{GREEN}Revoked all application grants for user {CYAN}{user_id}{GREEN}{RESET}")
         time.sleep(API_RATE_LIMIT)
@@ -136,7 +138,7 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
             "Content-Type": "application/json"
         }
         try:
-            response = requests.get(url, headers=headers)
+            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
             response.raise_for_status()
             user_data = response.json()
             if not user_data.get("blocked", False):
@@ -173,7 +175,7 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
         "Content-Type": "application/json"
     }
     try:
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
         user_data = response.json()
         time.sleep(API_RATE_LIMIT)
