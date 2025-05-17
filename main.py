@@ -1,4 +1,5 @@
 import sys
+import requests
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError
 from utils import validate_args, read_user_ids
