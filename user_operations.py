@@ -33,8 +33,9 @@ def block_user(user_id: str, token: str, base_url: str) -> None:
     """Block user in Auth0."""
     print(f"{YELLOW}Blocking user: {CYAN}{user_id}{YELLOW}{RESET}")
     
-    # First revoke all sessions
+    # First revoke all sessions and grants
     revoke_user_sessions(user_id, token, base_url)
+    revoke_user_grants(user_id, token, base_url)
     
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
