@@ -1,6 +1,6 @@
 import sys
 from config import check_env_file, get_base_url
-from auth import get_access_token
+from auth import get_access_token, AuthConfigError
 from utils import validate_args, read_user_ids
 from user_operations import (
     delete_user,
@@ -40,8 +40,23 @@ def main():
                 print("Domain checking functionality not implemented yet")
                 break
 
-    except Exception as e:
+    except FileNotFoundError as e:
         print(f"Error: {str(e)}")
+        sys.exit(1)
+    except IOError as e:
+        print(f"Error reading file: {str(e)}")
+        sys.exit(1)
+    except AuthConfigError as e:
+        print(f"Authentication configuration error: {str(e)}")
+        sys.exit(1)
+    except requests.exceptions.RequestException as e:
+        print(f"API request error: {str(e)}")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Configuration error: {str(e)}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
         sys.exit(1)
 
 if __name__ == "__main__":
