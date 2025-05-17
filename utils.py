@@ -1,5 +1,6 @@
 import sys
 import signal
+import argparse
 from typing import List, Tuple
 
 # ANSI color codes
@@ -46,37 +47,69 @@ def read_user_ids(filepath: str) -> List[str]:
     except IOError as e:
         raise IOError(f"Error reading file: {e}")
 
-def validate_args() -> Tuple[str, str, bool, bool, bool, bool, bool]:
-    """Validate command line arguments and return input file path, environment, and operation flags."""
-    if len(sys.argv) < 2:
-        sys.exit("Usage: python main.py <ids_file> [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains]")
+def validate_args() -> argparse.Namespace:
+    """Parse and validate command line arguments.
     
-    input_file = sys.argv[1]
-    env = "dev"
-    block = False
-    delete = False
-    revoke_grants_only = False
-    check_unblocked = False
-    check_domains = False
+    Returns:
+        argparse.Namespace: Parsed arguments containing:
+            - input_file: Path to the file containing user IDs
+            - env: Environment to run in ('dev' or 'prod')
+            - operation: The operation to perform (block/delete/revoke-grants-only/check-unblocked/check-domains)
+    """
+    parser = argparse.ArgumentParser(
+        description="Process user operations based on IDs from a file.",
+        usage="python main.py <ids_file> [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains]"
+    )
     
-    for arg in sys.argv[2:]:
-        if arg == "--block":
-            block = True
-        elif arg == "--delete":
-            delete = True
-        elif arg == "--revoke-grants-only":
-            revoke_grants_only = True
-        elif arg == "--check-unblocked":
-            check_unblocked = True
-        elif arg == "--check-domains":
-            check_domains = True
-        elif arg in ("dev", "prod"):
-            env = arg
+    parser.add_argument(
+        "input_file",
+        help="Path to the file containing user IDs"
+    )
     
-    flags = [block, delete, revoke_grants_only, check_unblocked, check_domains]
-    if not any(flags):
-        sys.exit("Error: You must specify one of --block, --delete, --revoke-grants-only, --check-unblocked, or --check-domains.")
-    if sum(flags) > 1:
-        sys.exit("Error: Only one of --block, --delete, --revoke-grants-only, --check-unblocked, or --check-domains can be specified.")
+    parser.add_argument(
+        "env",
+        nargs="?",
+        choices=["dev", "prod"],
+        default="dev",
+        help="Environment to run in (default: dev)"
+    )
     
-    return input_file, env, block, delete, revoke_grants_only, check_unblocked, check_domains 
+    operation_group = parser.add_mutually_exclusive_group(required=True)
+    operation_group.add_argument(
+        "--block",
+        action="store_const",
+        const="block",
+        dest="operation",
+        help="Block the specified users"
+    )
+    operation_group.add_argument(
+        "--delete",
+        action="store_const",
+        const="delete",
+        dest="operation",
+        help="Delete the specified users"
+    )
+    operation_group.add_argument(
+        "--revoke-grants-only",
+        action="store_const",
+        const="revoke-grants-only",
+        dest="operation",
+        help="Revoke grants for the specified users"
+    )
+    operation_group.add_argument(
+        "--check-unblocked",
+        action="store_const",
+        const="check-unblocked",
+        dest="operation",
+        help="Check if specified users are unblocked"
+    )
+    operation_group.add_argument(
+        "--check-domains",
+        action="store_const",
+        const="check-domains",
+        dest="operation",
+        help="Check domains for the specified users"
+    )
+    
+    args = parser.parse_args()
+    return args 
