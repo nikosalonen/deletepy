@@ -2,7 +2,7 @@ import sys
 import requests
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError
-from utils import validate_args, read_user_ids
+from utils import validate_args, read_user_ids_generator
 from user_operations import (
     delete_user,
     block_user,
@@ -41,8 +41,8 @@ def main():
         token = get_access_token(env)
         base_url = get_base_url(env)
         
-        # Read user IDs from file
-        user_ids = read_user_ids(input_file)
+        # Read user IDs from file using generator
+        user_ids = list(read_user_ids_generator(input_file))
         total_users = len(user_ids)
         
         # Process users based on operation
