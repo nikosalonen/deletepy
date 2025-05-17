@@ -38,16 +38,16 @@ def get_env_config(env: str = "dev"):
     """
     env_config = {
         "prod": {
-            "client_id": "CLIENT_ID",
-            "client_secret": "CLIENT_SECRET",
-            "auth0_domain": os.getenv("AUTH0_DOMAIN"),
-            "api_url": os.getenv("URL")
+            "client_id": "AUTH0_CLIENT_ID",
+            "client_secret": "AUTH0_CLIENT_SECRET",
+            "auth0_domain": "AUTH0_DOMAIN",
+            "api_url": "URL"
         },
         "dev": {
-            "client_id": "DEVELOPMENT_CLIENT_ID",
-            "client_secret": "DEVELOPMENT_CLIENT_SECRET",
-            "auth0_domain": os.getenv("DEV_AUTH0_DOMAIN"),
-            "api_url": os.getenv("DEV_URL")
+            "client_id": "DEV_AUTH0_CLIENT_ID",
+            "client_secret": "DEV_AUTH0_CLIENT_SECRET",
+            "auth0_domain": "DEV_AUTH0_DOMAIN",
+            "api_url": "DEV_URL"
         }
     }
 
