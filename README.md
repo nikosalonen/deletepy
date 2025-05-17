@@ -1,5 +1,7 @@
 # Auth0 User Management Tool
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/nikosalonen/deletepy?utm_source=oss&utm_medium=github&utm_campaign=nikosalonen%2Fdeletepy&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 A Python script for managing Auth0 users, supporting both development and production environments. This tool can delete or block users, revoke their sessions, revoke all authorized applications (grants), check user block status, and check email domains for block status.
 
 ## Features
