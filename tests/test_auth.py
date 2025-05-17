@@ -3,17 +3,6 @@ from unittest.mock import patch, MagicMock
 from auth import get_access_token, AuthConfigError
 
 @pytest.fixture
-def mock_response():
-    response = MagicMock()
-    response.raise_for_status = MagicMock()
-    return response
-
-@pytest.fixture
-def mock_requests():
-    with patch('auth.requests') as mock:
-        yield mock
-
-@pytest.fixture
 def mock_config():
     with patch('auth.get_env_config') as mock:
         mock.return_value = {
