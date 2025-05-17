@@ -2,6 +2,7 @@ import pytest
 import os
 import tempfile
 from utils import read_user_ids, read_user_ids_generator, validate_args
+from unittest.mock import patch
 
 def test_read_user_ids():
     # Create a temporary file with test data
@@ -66,18 +67,53 @@ def test_validate_args():
 
     # Test with valid arguments
     import sys
-    sys.argv = ['script.py', 'test.txt', 'dev', '--block']
+    original_argv = sys.argv.copy()
+    try:
+        sys.argv = ['script.py', 'test.txt', 'dev', '--block']
+        args = validate_args()
+        assert args.input_file == 'test.txt'
+        assert args.env == 'dev'
+        assert args.operation == 'block'
+
+        # Test with invalid environment
+        sys.argv = ['script.py', 'test.txt', 'invalid_env', '--block']
+        with pytest.raises(SystemExit):
+            validate_args()
+
+        # Test with missing operation
+        sys.argv = ['script.py', 'test.txt', 'dev']
+        with pytest.raises(SystemExit):
+            validate_args()
+    finally:
+        sys.argv = original_argv
+
+@pytest.mark.parametrize("flag,expected_operation", [
+    ("--block", "block"),
+    ("--delete", "delete"),
+    ("--revoke-grants-only", "revoke-grants-only"),
+    ("--check-unblocked", "check-unblocked"),
+    ("--check-domains", "check-domains")
+])
+def test_validate_args_operations(monkeypatch, flag, expected_operation):
+    """Test that validate_args correctly parses all supported operation flags."""
+    # Set up test arguments
+    test_args = ['script.py', 'test.txt', 'dev', flag]
+    monkeypatch.setattr('sys.argv', test_args)
+
+    # Parse arguments
     args = validate_args()
+
+    # Verify the operation was parsed correctly
     assert args.input_file == 'test.txt'
     assert args.env == 'dev'
-    assert args.operation == 'block'
+    assert args.operation == expected_operation
 
-    # Test with invalid environment
-    sys.argv = ['script.py', 'test.txt', 'invalid_env', '--block']
-    with pytest.raises(SystemExit):
-        validate_args()
+@pytest.fixture
+def mock_requests(request):
+    """Create a mock requests module.
 
-    # Test with missing operation
-    sys.argv = ['script.py', 'test.txt', 'dev']
-    with pytest.raises(SystemExit):
-        validate_args()
+    This fixture automatically determines which module to patch based on the test module name.
+    """
+    module_name = request.module.__name__.replace('test_', '')
+    with patch(f'{module_name}.requests') as mock:
+        yield mock
