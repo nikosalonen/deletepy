@@ -11,6 +11,11 @@ from email_domain_checker import (
     check_domains_status_for_emails
 )
 
+@pytest.fixture(autouse=True)
+def mock_api_key():
+    with patch('email_domain_checker.API_KEY', 'test_key'):
+        yield
+
 def test_extract_domain():
     assert extract_domain("test@example.com") == "example.com"
     assert extract_domain("test@sub.example.com") == "sub.example.com"
@@ -52,10 +57,9 @@ def test_check_domain(mock_get, tmp_path):
     mock_get.return_value = mock_response
 
     # Test with API key
-    with patch('email_domain_checker.API_KEY', 'test_key'):
-        result = check_domain("example.com", {})
-        assert result == {"blocked": True}
-        mock_get.assert_called_once()
+    result = check_domain("example.com", {})
+    assert result == {"blocked": True}
+    mock_get.assert_called_once()
 
     # Test with cached result
     cache = {"example.com": {"blocked": False}}
@@ -69,20 +73,22 @@ def test_check_domains_for_emails(mock_check_domain):
     mock_check_domain.reset_mock()
     mock_check_domain.return_value = {"blocked": True}
 
-    with patch('email_domain_checker.API_KEY', 'test_key'):
-        with patch('email_domain_checker.load_cache') as mock_load_cache:
-            mock_load_cache.return_value = {}  # Start with empty cache
-            emails = ["test@example.com", "test@privaterelay.appleid.com"]
-            check_domains_for_emails(emails)
-            mock_check_domain.assert_called_once_with("example.com", {})
+    with patch('email_domain_checker.load_cache') as mock_load_cache:
+        mock_load_cache.return_value = {}  # Start with empty cache
+        emails = ["test@example.com", "test@privaterelay.appleid.com"]
+        check_domains_for_emails(emails)
+        # The first call should be with empty cache
+        mock_check_domain.assert_called_once()
+        args, kwargs = mock_check_domain.call_args
+        assert args[0] == "example.com"
+        assert args[1] == {}
 
 @patch('email_domain_checker.check_domain')
 def test_check_domains_status_for_emails(mock_check_domain):
     mock_check_domain.return_value = {"blocked": True}
 
-    with patch('email_domain_checker.API_KEY', 'test_key'):
-        emails = ["test@example.com", "test@privaterelay.appleid.com"]
-        results = check_domains_status_for_emails(emails)
-        assert "test@example.com" in results
-        assert "test@privaterelay.appleid.com" in results
-        assert results["test@privaterelay.appleid.com"] == ["IGNORED"]
+    emails = ["test@example.com", "test@privaterelay.appleid.com"]
+    results = check_domains_status_for_emails(emails)
+    assert "test@example.com" in results
+    assert "test@privaterelay.appleid.com" in results
+    assert results["test@privaterelay.appleid.com"] == ["IGNORED"]
