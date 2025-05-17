@@ -70,7 +70,7 @@ def main():
         operation = args.operation
 
         # Check environment configuration
-        check_env_file(env)
+        check_env_file()
         base_url = get_base_url(env)
         token = get_access_token(env)
 
