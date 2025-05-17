@@ -41,6 +41,10 @@ def save_cache(cache):
         print(f"Warning: Could not save cache: {e}")
 
 def check_domain(domain, cache):
+    if not API_KEY:
+        print("Warning: ISTEMPMAIL_API_KEY not found in .env")
+        return None
+        
     if domain in cache:
         print(f"[CACHE] Domain {domain} found in cache.")
         return cache[domain]
@@ -57,6 +61,10 @@ def check_domain(domain, cache):
         return None
 
 def check_domains_for_emails(emails):
+    if not API_KEY:
+        print("Warning: ISTEMPMAIL_API_KEY not found in .env")
+        return
+        
     cache = load_cache()
     total = len(emails)
     for idx, email in enumerate(emails):
@@ -82,6 +90,10 @@ def check_domains_for_emails(emails):
         print(f"{email} ({domain}): {', '.join(status)}")
 
 def check_domains_status_for_emails(emails):
+    if not API_KEY:
+        print("Warning: ISTEMPMAIL_API_KEY not found in .env")
+        return {}
+        
     cache = load_cache()
     results = {}
     total_emails = len(emails)
@@ -113,6 +125,8 @@ def check_domains_status_for_emails(emails):
 
 # CLI usage
 if __name__ == "__main__":
+    if not API_KEY:
+        sys.exit("Error: ISTEMPMAIL_API_KEY not found in .env")
     if len(sys.argv) < 2:
         print("Usage: python email_domain_checker.py <email1> [<email2> ...]")
         sys.exit(1)
