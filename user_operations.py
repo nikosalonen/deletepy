@@ -71,10 +71,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
     }
     try:
         response = requests.get(list_url, headers=headers)
-        time.sleep(API_RATE_LIMIT)
-        if response.status_code != 200:
-            print(f"{YELLOW}Failed to fetch sessions for user {CYAN}{user_id}{YELLOW}: {YELLOW}{response.status_code}{YELLOW} {response.text}{YELLOW}{RESET}")
-            return
+        response.raise_for_status()
         sessions = response.json().get("sessions", [])
         if not sessions:
             print(f"{YELLOW}No sessions found for user {CYAN}{user_id}{YELLOW}{RESET}")
@@ -88,10 +85,11 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
             del_url = f"{base_url}/api/v2/sessions/{session_id}"
             del_resp = requests.delete(del_url, headers=headers)
             time.sleep(API_RATE_LIMIT)
-            if del_resp.status_code in (202, 204):
+            try:
+                del_resp.raise_for_status()
                 print(f"{GREEN}Revoked session {CYAN}{session_id}{GREEN} for user {CYAN}{user_id}{GREEN}{RESET}")
-            else:
-                print(f"{YELLOW}Failed to revoke session {CYAN}{session_id}{YELLOW} for user {CYAN}{user_id}{YELLOW}: {YELLOW}{del_resp.status_code}{YELLOW} {del_resp.text}{RESET}")
+            except requests.exceptions.RequestException as e:
+                print(f"{YELLOW}Failed to revoke session {CYAN}{session_id}{YELLOW} for user {CYAN}{user_id}{YELLOW}: {e}{RESET}")
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error revoking sessions for user {CYAN}{user_id}{RED}: {e}{RESET}")
 
@@ -104,11 +102,9 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
     }
     try:
         response = requests.delete(grants_url, headers=headers)
+        response.raise_for_status()
+        print(f"{GREEN}Revoked all application grants for user {CYAN}{user_id}{GREEN}{RESET}")
         time.sleep(API_RATE_LIMIT)
-        if response.status_code in (204, 200):
-            print(f"{GREEN}Revoked all application grants for user {CYAN}{user_id}{GREEN}{RESET}")
-        else:
-            print(f"{YELLOW}Failed to revoke grants for user {CYAN}{user_id}{YELLOW}: {YELLOW}{response.status_code}{YELLOW} {response.text}{RESET}")
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error revoking grants for user {CYAN}{user_id}{RED}: {e}{RESET}")
 
@@ -133,9 +129,7 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
         }
         try:
             response = requests.get(url, headers=headers)
-            time.sleep(API_RATE_LIMIT)
-            if response.status_code != 200:
-                continue
+            response.raise_for_status()
             user_data = response.json()
             if not user_data.get("blocked", False):
                 unblocked.append(user_id)
@@ -143,6 +137,7 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
             sys.stdout.write(f"\rChecking users... {spinner[spin_idx]} ({idx + 1}/{len(user_ids)})")
             sys.stdout.flush()
             spin_idx = (spin_idx + 1) % len(spinner)
+            time.sleep(API_RATE_LIMIT)
         except requests.exceptions.RequestException:
             continue
     print("\n")  # Clear spinner line
