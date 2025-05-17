@@ -1,7 +1,7 @@
 import sys
 import signal
 import argparse
-from typing import List, Tuple
+from typing import List, Tuple, Generator
 
 # ANSI color codes
 RESET = "\033[0m"
@@ -41,7 +41,32 @@ def read_user_ids(filepath: str) -> List[str]:
     """
     try:
         with open(filepath, 'r') as f:
+            # Use a generator expression to read line by line
             return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        raise FileNotFoundError(f"Error: File {filepath} not found")
+    except IOError as e:
+        raise IOError(f"Error reading file: {e}")
+
+def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
+    """Read user IDs from file using a generator pattern.
+    
+    Args:
+        filepath: Path to the file containing user IDs
+        
+    Yields:
+        str: User ID from the file
+        
+    Raises:
+        FileNotFoundError: If the specified file does not exist
+        IOError: If there is an error reading the file
+    """
+    try:
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line:  # Skip empty lines
+                    yield line
     except FileNotFoundError:
         raise FileNotFoundError(f"Error: File {filepath} not found")
     except IOError as e:
