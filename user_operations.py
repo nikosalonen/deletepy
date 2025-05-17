@@ -137,4 +137,29 @@ def check_unblocked_users(user_ids, token, base_url):
         for user_id in unblocked:
             print(f"{CYAN}{user_id}{RESET}")
     else:
-        print(f"{GREEN}All users are blocked.{RESET}") 
+        print(f"{GREEN}All users are blocked.{RESET}")
+
+def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
+    """Fetch user's email address from Auth0.
+    
+    Args:
+        user_id: The Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        
+    Returns:
+        str | None: User's email address if found, None otherwise
+    """
+    url = f"{base_url}/api/v2/users/{quote(user_id)}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+        user_data = response.json()
+        return user_data.get("email")
+    except requests.exceptions.RequestException as e:
+        print(f"{RED}Error fetching email for user {CYAN}{user_id}{RED}: {e}{RESET}")
+        return None 

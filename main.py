@@ -6,8 +6,10 @@ from user_operations import (
     delete_user,
     block_user,
     revoke_user_grants,
-    check_unblocked_users
+    check_unblocked_users,
+    get_user_email
 )
+from email_domain_checker import check_domains_for_emails
 
 def main():
     """Main entry point for the application."""
@@ -29,6 +31,19 @@ def main():
         if check_unblocked:
             # Process all users at once for unblocked check
             check_unblocked_users(user_ids, token, base_url)
+        elif check_domains:
+            # Collect emails for all users
+            emails = []
+            for user_id in user_ids:
+                email = get_user_email(user_id, token, base_url)
+                if email:
+                    emails.append(email)
+            
+            if emails:
+                print(f"\nChecking domains for {len(emails)} users...\n")
+                check_domains_for_emails(emails)
+            else:
+                print("No valid email addresses found for the provided user IDs.")
         else:
             # Process users one by one for other operations
             for user_id in user_ids:
@@ -38,10 +53,6 @@ def main():
                     delete_user(user_id, token, base_url)
                 elif revoke_grants_only:
                     revoke_user_grants(user_id, token, base_url)
-                elif check_domains:
-                    # TODO: Implement domain checking functionality
-                    print("Domain checking functionality not implemented yet")
-                    break
 
     except FileNotFoundError as e:
         print(f"Error: {str(e)}")
