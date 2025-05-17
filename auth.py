@@ -1,4 +1,3 @@
-import os
 import requests
 from dotenv import load_dotenv
 from config import get_env_config
