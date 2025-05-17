@@ -17,6 +17,19 @@ A Python script for managing Auth0 users, supporting both development and produc
 - **New:** Check which users are not blocked (`--check-unblocked`)
 - **New:** Check email domains for block status and optionally block/revoke users with blocked domains (`--check-domains`)
 - **New:** Input file can be prepared from a CSV using `cleanup_csv.py`
+- **New:** Modular codebase for better maintainability and extensibility
+
+## Project Structure
+
+The project is organized into several modules:
+
+- `main.py`: Main entry point for the application
+- `auth.py`: Authentication and token management
+- `config.py`: Configuration and environment management
+- `user_operations.py`: Core user management operations
+- `utils.py`: Utility functions and helpers
+- `email_domain_checker.py`: Email domain validation and checking
+- `cleanup_csv.py`: CSV file preparation utility
 
 ## Prerequisites
 
@@ -65,7 +78,7 @@ If you have a CSV file (e.g., `ids.csv`) with columns like `ip,userId,userName,u
 python cleanup_csv.py
 ```
 
-This will overwrite `ids.csv` with a single column (no header) suitable for use as input to `delete.py`.
+This will overwrite `ids.csv` with a single column (no header) suitable for use as input to the main script.
 
 ## Usage
 
@@ -80,7 +93,7 @@ This will overwrite `ids.csv` with a single column (no header) suitable for use 
 
 2. Run the script:
    ```bash
-   python delete.py users.txt [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains]
+   python main.py users.txt [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains]
    ```
 
    Parameters:

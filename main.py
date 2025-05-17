@@ -1,0 +1,107 @@
+import sys
+import requests
+from config import check_env_file, get_base_url
+from auth import get_access_token, AuthConfigError
+from utils import validate_args, read_user_ids_generator
+from user_operations import (
+    delete_user,
+    block_user,
+    revoke_user_grants,
+    check_unblocked_users,
+    get_user_email
+)
+from email_domain_checker import check_domains_for_emails
+
+def show_progress(current: int, total: int, operation: str) -> None:
+    """Show progress indicator for bulk operations.
+    
+    Args:
+        current: Current item number
+        total: Total number of items
+        operation: Operation being performed
+    """
+    spinner = ['|', '/', '-', '\\']
+    spin_idx = (current - 1) % len(spinner)
+    sys.stdout.write(f"\r{operation}... {spinner[spin_idx]} ({current}/{total})")
+    sys.stdout.flush()
+
+def main():
+    """Main entry point for the application."""
+    try:
+        # Check for .env file
+        check_env_file()
+        
+        # Validate command line arguments
+        args = validate_args()
+        input_file = args.input_file
+        env = args.env
+        operation = args.operation
+        
+        # Get access token and base URL
+        token = get_access_token(env)
+        base_url = get_base_url(env)
+        
+        # Read user IDs from file using generator
+        user_ids = list(read_user_ids_generator(input_file))
+        total_users = len(user_ids)
+        
+        # Process users based on operation
+        if operation == "check-unblocked":
+            # Process all users at once for unblocked check
+            check_unblocked_users(user_ids, token, base_url)
+        elif operation == "check-domains":
+            # Collect emails for all users
+            emails = []
+            print(f"\nCollecting emails for {total_users} users...")
+            for idx, user_id in enumerate(user_ids, 1):
+                show_progress(idx, total_users, "Collecting emails")
+                email = get_user_email(user_id, token, base_url)
+                if email:
+                    emails.append(email)
+            print("\n")  # Clear progress line
+            
+            if emails:
+                print(f"\nChecking domains for {len(emails)} users...\n")
+                check_domains_for_emails(emails)
+            else:
+                print("No valid email addresses found for the provided user IDs.")
+        else:
+            # Process users one by one for other operations
+            operation_display = {
+                "block": "Blocking users",
+                "delete": "Deleting users",
+                "revoke-grants-only": "Revoking grants"
+            }.get(operation, "Processing users")
+            
+            print(f"\n{operation_display}...")
+            for idx, user_id in enumerate(user_ids, 1):
+                show_progress(idx, total_users, operation_display)
+                if operation == "block":
+                    block_user(user_id, token, base_url)
+                elif operation == "delete":
+                    delete_user(user_id, token, base_url)
+                elif operation == "revoke-grants-only":
+                    revoke_user_grants(user_id, token, base_url)
+            print("\n")  # Clear progress line
+
+    except FileNotFoundError as e:
+        print(f"Error: {str(e)}")
+        sys.exit(1)
+    except IOError as e:
+        print(f"Error reading file: {str(e)}")
+        sys.exit(1)
+    except AuthConfigError as e:
+        print(f"Authentication configuration error: {str(e)}")
+        sys.exit(1)
+    except requests.exceptions.RequestException as e:
+        print(f"API request error: {str(e)}")
+        sys.exit(1)
+    except ValueError as e:
+        print(f"Configuration error: {str(e)}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main() 

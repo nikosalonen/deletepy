@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 from urllib.parse import urlparse
 import json
+from utils import show_progress
 
 # Load .env
 load_dotenv()
@@ -40,6 +41,10 @@ def save_cache(cache):
         print(f"Warning: Could not save cache: {e}")
 
 def check_domain(domain, cache):
+    if not API_KEY:
+        print("Warning: ISTEMPMAIL_API_KEY not found in .env")
+        return None
+        
     if domain in cache:
         print(f"[CACHE] Domain {domain} found in cache.")
         return cache[domain]
@@ -56,6 +61,10 @@ def check_domain(domain, cache):
         return None
 
 def check_domains_for_emails(emails):
+    if not API_KEY:
+        print("Warning: ISTEMPMAIL_API_KEY not found in .env")
+        return
+        
     cache = load_cache()
     total = len(emails)
     for idx, email in enumerate(emails):
@@ -81,9 +90,16 @@ def check_domains_for_emails(emails):
         print(f"{email} ({domain}): {', '.join(status)}")
 
 def check_domains_status_for_emails(emails):
+    if not API_KEY:
+        print("Warning: ISTEMPMAIL_API_KEY not found in .env")
+        return {}
+        
     cache = load_cache()
     results = {}
-    for email in emails:
+    total_emails = len(emails)
+    
+    for idx, email in enumerate(emails, 1):
+        show_progress(idx, total_emails, "Checking domains")
         domain = extract_domain(email)
         if not domain:
             results[email] = ["INVALID"]
@@ -103,10 +119,14 @@ def check_domains_status_for_emails(emails):
         if not status:
             status.append("ALLOWED")
         results[email] = status
+    
+    print("\n")  # Clear progress line
     return results
 
 # CLI usage
 if __name__ == "__main__":
+    if not API_KEY:
+        sys.exit("Error: ISTEMPMAIL_API_KEY not found in .env")
     if len(sys.argv) < 2:
         print("Usage: python email_domain_checker.py <email1> [<email2> ...]")
         sys.exit(1)
