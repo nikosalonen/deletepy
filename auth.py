@@ -46,4 +46,10 @@ def get_access_token(env: str = "dev") -> str:
     }
     response = requests.post(url, json=payload, timeout=API_TIMEOUT)
     response.raise_for_status()
-    return response.json()["access_token"] 
+    try:
+        json_response = response.json()
+        if "access_token" not in json_response:
+            raise AuthConfigError("Access token not found in Auth0 response")
+        return json_response["access_token"]
+    except ValueError as e:
+        raise AuthConfigError(f"Invalid JSON response from Auth0: {str(e)}")
