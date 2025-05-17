@@ -14,7 +14,7 @@ from email_domain_checker import check_domains_for_emails
 
 def show_progress(current: int, total: int, operation: str) -> None:
     """Show progress indicator for bulk operations.
-    
+
     Args:
         current: Current item number
         total: Total number of items
@@ -25,26 +25,47 @@ def show_progress(current: int, total: int, operation: str) -> None:
     sys.stdout.write(f"\r{operation}... {spinner[spin_idx]} ({current}/{total})")
     sys.stdout.flush()
 
+def confirm_production_operation(operation: str, total_users: int) -> bool:
+    """Confirm operation in production environment.
+
+    Args:
+        operation: The operation to be performed
+        total_users: Total number of users to be processed
+
+    Returns:
+        bool: True if confirmed, False otherwise
+    """
+    operation_display = {
+        "block": "blocking",
+        "delete": "deleting",
+        "revoke-grants-only": "revoking grants for"
+    }.get(operation, "processing")
+
+    print(f"\nYou are about to perform {operation_display} {total_users} users in PRODUCTION environment.")
+    print("This action cannot be undone.")
+    response = input("Are you sure you want to proceed? (yes/no): ").lower().strip()
+    return response == "yes"
+
 def main():
     """Main entry point for the application."""
     try:
         # Check for .env file
         check_env_file()
-        
+
         # Validate command line arguments
         args = validate_args()
         input_file = args.input_file
         env = args.env
         operation = args.operation
-        
+
         # Get access token and base URL
         token = get_access_token(env)
         base_url = get_base_url(env)
-        
+
         # Read user IDs from file using generator
         user_ids = list(read_user_ids_generator(input_file))
         total_users = len(user_ids)
-        
+
         # Process users based on operation
         if operation == "check-unblocked":
             # Process all users at once for unblocked check
@@ -59,7 +80,7 @@ def main():
                 if email:
                     emails.append(email)
             print("\n")  # Clear progress line
-            
+
             if emails:
                 print(f"\nChecking domains for {len(emails)} users...\n")
                 check_domains_for_emails(emails)
@@ -72,7 +93,12 @@ def main():
                 "delete": "Deleting users",
                 "revoke-grants-only": "Revoking grants"
             }.get(operation, "Processing users")
-            
+
+            # Request confirmation for production environment
+            if env == "prod" and not confirm_production_operation(operation, total_users):
+                print("Operation cancelled by user.")
+                sys.exit(0)
+
             print(f"\n{operation_display}...")
             for idx, user_id in enumerate(user_ids, 1):
                 show_progress(idx, total_users, operation_display)
@@ -104,4 +130,4 @@ def main():
         sys.exit(1)
 
 if __name__ == "__main__":
-    main() 
+    main()
