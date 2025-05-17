@@ -1,11 +1,12 @@
 import requests
 import time
+from urllib.parse import quote
 from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
     """Delete user from Auth0."""
     print(f"{YELLOW}Deleting user: {CYAN}{user_id}{YELLOW}{RESET}")
-    url = f"{base_url}/api/v2/users/{user_id}"
+    url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -20,7 +21,7 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
 def block_user(user_id: str, token: str, base_url: str) -> None:
     """Block user in Auth0."""
     print(f"{YELLOW}Blocking user: {CYAN}{user_id}{YELLOW}{RESET}")
-    url = f"{base_url}/api/v2/users/{user_id}"
+    url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -56,7 +57,7 @@ def get_user_id_from_email(email: str, token: str, base_url: str) -> str:
 
 def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
     """Fetch all Auth0 sessions for a user and revoke them one by one."""
-    list_url = f"{base_url}/api/v2/users/{user_id}/sessions"
+    list_url = f"{base_url}/api/v2/users/{quote(user_id)}/sessions"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -88,7 +89,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
 
 def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
     """Revoke all application grants (authorized applications) for a user in one call."""
-    grants_url = f"{base_url}/api/v2/grants?user_id={user_id}"
+    grants_url = f"{base_url}/api/v2/grants?user_id={quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json"
@@ -111,7 +112,7 @@ def check_unblocked_users(user_ids, token, base_url):
     for idx, user_id in enumerate(user_ids):
         if shutdown_requested:
             break
-        url = f"{base_url}/api/v2/users/{user_id}"
+        url = f"{base_url}/api/v2/users/{quote(user_id)}"
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
