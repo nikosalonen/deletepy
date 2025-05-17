@@ -1,5 +1,6 @@
 import requests
 import time
+import sys
 from urllib.parse import quote
 from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested
 
