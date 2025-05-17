@@ -23,8 +23,8 @@ def get_access_token(env: str = "dev") -> str:
     load_dotenv()
     config = get_env_config(env)
     
-    client_id = os.getenv(config["client_id"])
-    client_secret = os.getenv(config["client_secret"])
+    client_id = config["client_id"]
+    client_secret = config["client_secret"]
     domain = config["auth0_domain"]
     
     # Validate required environment variables
