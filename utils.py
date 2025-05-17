@@ -43,10 +43,10 @@ def read_user_ids(filepath: str) -> List[str]:
         with open(filepath, 'r') as f:
             # Use a generator expression to read line by line
             return [line.strip() for line in f if line.strip()]
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Error: File {filepath} not found")
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Error: File {filepath} not found") from e
     except IOError as e:
-        raise IOError(f"Error reading file: {e}")
+        raise IOError(f"Error reading file: {e}") from e
 
 def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
     """Read user IDs from file using a generator pattern.
