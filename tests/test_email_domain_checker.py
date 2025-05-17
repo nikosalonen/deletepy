@@ -2,14 +2,17 @@ import pytest
 import os
 import json
 from unittest.mock import patch, MagicMock
-from email_domain_checker import (
-    extract_domain,
-    load_cache,
-    save_cache,
-    check_domain,
-    check_domains_for_emails,
-    check_domains_status_for_emails
-)
+
+# Mock the API key before importing the module
+with patch.dict('os.environ', {'ISTEMPMAIL_API_KEY': 'test_key'}):
+    from email_domain_checker import (
+        extract_domain,
+        load_cache,
+        save_cache,
+        check_domain,
+        check_domains_for_emails,
+        check_domains_status_for_emails
+    )
 
 @pytest.fixture(autouse=True)
 def mock_api_key():
