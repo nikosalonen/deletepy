@@ -1,0 +1,139 @@
+import requests
+import time
+from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested
+
+def delete_user(user_id: str, token: str, base_url: str) -> None:
+    """Delete user from Auth0."""
+    print(f"{YELLOW}Deleting user: {CYAN}{user_id}{YELLOW}{RESET}")
+    url = f"{base_url}/api/v2/users/{user_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.delete(url, headers=headers)
+        response.raise_for_status()
+        print(f"{GREEN}Successfully deleted user {CYAN}{user_id}{GREEN}{RESET}")
+    except requests.exceptions.RequestException as e:
+        print(f"{RED}Error deleting user {CYAN}{user_id}{RED}: {e}{RESET}")
+
+def block_user(user_id: str, token: str, base_url: str) -> None:
+    """Block user in Auth0."""
+    print(f"{YELLOW}Blocking user: {CYAN}{user_id}{YELLOW}{RESET}")
+    url = f"{base_url}/api/v2/users/{user_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    payload = {"blocked": True}
+    try:
+        response = requests.patch(url, headers=headers, json=payload)
+        response.raise_for_status()
+        print(f"{GREEN}Successfully blocked user {CYAN}{user_id}{GREEN}{RESET}")
+    except requests.exceptions.RequestException as e:
+        print(f"{RED}Error blocking user {CYAN}{user_id}{RED}: {e}{RESET}")
+
+def get_user_id_from_email(email: str, token: str, base_url: str) -> str:
+    """Fetch user_id from Auth0 using email address. Returns user_id or None if not found."""
+    url = f"{base_url}/api/v2/users-by-email"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    params = {"email": email}
+    try:
+        response = requests.get(url, headers=headers, params=params)
+        response.raise_for_status()
+        users = response.json()
+        if users and isinstance(users, list) and "user_id" in users[0]:
+            return users[0]["user_id"]
+        else:
+            print(f"{YELLOW}Warning: No user found for email {CYAN}{email}{YELLOW}{RESET}")
+            return None
+    except requests.exceptions.RequestException as e:
+        print(f"{RED}Error fetching user_id for email {CYAN}{email}{RED}: {e}{RESET}")
+        return None
+
+def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
+    """Fetch all Auth0 sessions for a user and revoke them one by one."""
+    list_url = f"{base_url}/api/v2/users/{user_id}/sessions"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.get(list_url, headers=headers)
+        if response.status_code != 200:
+            print(f"{YELLOW}Failed to fetch sessions for user {CYAN}{user_id}{YELLOW}: {YELLOW}{response.status_code}{YELLOW} {response.text}{RESET}")
+            return
+        sessions = response.json().get("sessions", [])
+        if not sessions:
+            print(f"{YELLOW}No sessions found for user {CYAN}{user_id}{YELLOW}{RESET}")
+            return
+        for session in sessions:
+            if shutdown_requested:
+                break
+            session_id = session.get("id")
+            if not session_id:
+                continue
+            del_url = f"{base_url}/api/v2/sessions/{session_id}"
+            del_resp = requests.delete(del_url, headers=headers)
+            if del_resp.status_code in (202, 204):
+                print(f"{GREEN}Revoked session {CYAN}{session_id}{GREEN} for user {CYAN}{user_id}{GREEN}{RESET}")
+            else:
+                print(f"{YELLOW}Failed to revoke session {CYAN}{session_id}{YELLOW} for user {CYAN}{user_id}{YELLOW}: {YELLOW}{del_resp.status_code}{YELLOW} {del_resp.text}{RESET}")
+            time.sleep(0.2)
+    except requests.exceptions.RequestException as e:
+        print(f"{RED}Error revoking sessions for user {CYAN}{user_id}{RED}: {e}{RESET}")
+
+def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
+    """Revoke all application grants (authorized applications) for a user in one call."""
+    grants_url = f"{base_url}/api/v2/grants?user_id={user_id}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.delete(grants_url, headers=headers)
+        if response.status_code in (204, 200):
+            print(f"{GREEN}Revoked all application grants for user {CYAN}{user_id}{GREEN}{RESET}")
+        else:
+            print(f"{YELLOW}Failed to revoke grants for user {CYAN}{user_id}{YELLOW}: {YELLOW}{response.status_code}{YELLOW} {response.text}{RESET}")
+        time.sleep(0.2)
+    except requests.exceptions.RequestException as e:
+        print(f"{RED}Error revoking grants for user {CYAN}{user_id}{RED}: {e}{RESET}")
+
+def check_unblocked_users(user_ids, token, base_url):
+    """Print user IDs that are not blocked, with a progress indicator."""
+    unblocked = []
+    spinner = ['|', '/', '-', '\\']
+    spin_idx = 0
+    for idx, user_id in enumerate(user_ids):
+        if shutdown_requested:
+            break
+        url = f"{base_url}/api/v2/users/{user_id}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        try:
+            response = requests.get(url, headers=headers)
+            if response.status_code != 200:
+                continue
+            user_data = response.json()
+            if not user_data.get("blocked", False):
+                unblocked.append(user_id)
+            # Update spinner
+            sys.stdout.write(f"\rChecking users... {spinner[spin_idx]} ({idx + 1}/{len(user_ids)})")
+            sys.stdout.flush()
+            spin_idx = (spin_idx + 1) % len(spinner)
+            time.sleep(0.2)
+        except requests.exceptions.RequestException:
+            continue
+    print("\n")  # Clear spinner line
+    if unblocked:
+        print(f"{YELLOW}Found {len(unblocked)} unblocked users:{RESET}")
+        for user_id in unblocked:
+            print(f"{CYAN}{user_id}{RESET}")
+    else:
+        print(f"{GREEN}All users are blocked.{RESET}") 
