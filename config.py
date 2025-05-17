@@ -36,6 +36,9 @@ def get_env_config(env: str = "dev"):
     Raises:
         ValueError: If environment is invalid or required variables are missing
     """
+    # Load environment variables from .env file
+    load_dotenv()
+    
     env_config = {
         "prod": {
             "client_id": "AUTH0_CLIENT_ID",
