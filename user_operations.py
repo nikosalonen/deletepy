@@ -1,6 +1,5 @@
 import requests
 import time
-import sys
 from urllib.parse import quote
 from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested, show_progress
 
@@ -181,4 +180,4 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
         return user_data.get("email")
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error fetching email for user {CYAN}{user_id}{RED}: {e}{RESET}")
-        return None 
+        return None
