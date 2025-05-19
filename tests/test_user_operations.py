@@ -174,7 +174,7 @@ def test_check_unblocked_users(mock_requests, mock_response):
 
     # Mock print function to capture output
     with patch('builtins.print') as mock_print, \
-         patch('user_operations.show_progress') as mock_show_progress:
+         patch('user_operations.show_progress'):
         # Call the function with two test users
         user_ids = ["user1", "user2"]
         check_unblocked_users(user_ids, "test_token", "http://test.com")
