@@ -11,10 +11,10 @@ API_TIMEOUT = 30
 def delete_user(user_id: str, token: str, base_url: str) -> None:
     """Delete user from Auth0."""
     print(f"{YELLOW}Deleting user: {CYAN}{user_id}{YELLOW}{RESET}")
-    
+
     # First revoke all sessions
     revoke_user_sessions(user_id, token, base_url)
-    
+
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -31,11 +31,11 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
 def block_user(user_id: str, token: str, base_url: str) -> None:
     """Block user in Auth0."""
     print(f"{YELLOW}Blocking user: {CYAN}{user_id}{YELLOW}{RESET}")
-    
+
     # First revoke all sessions and grants
     revoke_user_sessions(user_id, token, base_url)
     revoke_user_grants(user_id, token, base_url)
-    
+
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -50,8 +50,8 @@ def block_user(user_id: str, token: str, base_url: str) -> None:
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error blocking user {CYAN}{user_id}{RED}: {e}{RESET}")
 
-def get_user_id_from_email(email: str, token: str, base_url: str) -> str:
-    """Fetch user_id from Auth0 using email address. Returns user_id or None if not found."""
+def get_user_id_from_email(email: str, token: str, base_url: str) -> list[str] | None:
+    """Fetch user_ids from Auth0 using email address. Returns list of user_ids or None if not found."""
     url = f"{base_url}/api/v2/users-by-email"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -63,11 +63,11 @@ def get_user_id_from_email(email: str, token: str, base_url: str) -> str:
         response.raise_for_status()
         users = response.json()
         time.sleep(API_RATE_LIMIT)
-        if users and isinstance(users, list) and "user_id" in users[0]:
-            return users[0]["user_id"]
-        else:
-            print(f"{YELLOW}Warning: No user found for email {CYAN}{email}{YELLOW}{RESET}")
-            return None
+        if users and isinstance(users, list):
+            user_ids = [user["user_id"] for user in users if "user_id" in user]
+            if user_ids:
+                return user_ids
+        return None
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error fetching user_id for email {CYAN}{email}{RED}: {e}{RESET}")
         return None
@@ -120,7 +120,7 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
 
 def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
     """Print user IDs that are not blocked, with a progress indicator.
-    
+
     Args:
         user_ids: List of Auth0 user IDs to check
         token: Auth0 access token
@@ -128,7 +128,7 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
     """
     unblocked = []
     total_users = len(user_ids)
-    
+
     for idx, user_id in enumerate(user_ids, 1):
         if shutdown_requested:
             break
@@ -147,7 +147,7 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
             time.sleep(API_RATE_LIMIT)
         except requests.exceptions.RequestException:
             continue
-    
+
     print("\n")  # Clear progress line
     if unblocked:
         print(f"{YELLOW}Found {len(unblocked)} unblocked users:{RESET}")
@@ -158,12 +158,12 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
 
 def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
     """Fetch user's email address from Auth0.
-    
+
     Args:
         user_id: The Auth0 user ID
         token: Auth0 access token
         base_url: Auth0 API base URL
-        
+
     Returns:
         str | None: User's email address if found, None otherwise
     """
@@ -180,4 +180,30 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
         return user_data.get("email")
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error fetching email for user {CYAN}{user_id}{RED}: {e}{RESET}")
+        return None
+
+def get_user_details(user_id: str, token: str, base_url: str) -> dict | None:
+    """Fetch user details from Auth0 including connection information.
+
+    Args:
+        user_id: The Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        dict | None: User details if found, None otherwise
+    """
+    url = f"{base_url}/api/v2/users/{quote(user_id)}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json"
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
+        response.raise_for_status()
+        user_data = response.json()
+        time.sleep(API_RATE_LIMIT)
+        return user_data
+    except requests.exceptions.RequestException as e:
+        print(f"{RED}Error fetching details for user {CYAN}{user_id}{RED}: {e}{RESET}")
         return None
