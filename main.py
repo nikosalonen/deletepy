@@ -134,10 +134,10 @@ def main():
                 sys.exit(0)
 
             print(f"\n{operation_display}...")
-            multiple_users = {}  # Store emails with multiple users
-            not_found_users = []  # Store emails that weren't found
-            processed_count = 0
-            skipped_count = 0
+            multiple_users: dict[str, list[str]] = {}  # Store emails with multiple users
+            not_found_users: list[str] = []  # Store emails that weren't found
+            processed_count: int = 0
+            skipped_count: int = 0
 
             for idx, user_id in enumerate(user_ids, 1):
                 show_progress(idx, total_users, operation_display)
