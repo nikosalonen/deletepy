@@ -2,7 +2,6 @@ import os
 import sys
 import requests
 from dotenv import load_dotenv
-from urllib.parse import urlparse
 import json
 from utils import show_progress
 
