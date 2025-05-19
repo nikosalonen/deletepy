@@ -186,7 +186,7 @@ def main():
                     print(f"\n  {CYAN}{email}{RESET}:")
                     for uid in user_ids:
                         user_details = get_user_details(uid, token, base_url)
-                        if user_details and "identities" in user_details and len(user_details["identities"]) > 0:
+                        if user_details and user_details.get("identities") and len(user_details["identities"]) > 0:
                             connection = user_details["identities"][0].get("connection", "unknown")
                             print(f"    - {uid} (Connection: {connection})")
                         else:
