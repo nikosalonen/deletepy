@@ -2,7 +2,7 @@ import sys
 import requests
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError
-from utils import validate_args, read_user_ids_generator, CYAN, RESET
+from utils import validate_args, read_user_ids_generator, CYAN, RESET, show_progress
 from user_operations import (
     delete_user,
     block_user,
@@ -14,19 +14,6 @@ from user_operations import (
     get_user_details
 )
 from email_domain_checker import check_domains_status_for_emails
-
-def show_progress(current: int, total: int, operation: str) -> None:
-    """Show progress indicator for bulk operations.
-
-    Args:
-        current: Current item number
-        total: Total number of items
-        operation: Operation being performed
-    """
-    spinner = ['|', '/', '-', '\\']
-    spin_idx = (current - 1) % len(spinner)
-    sys.stdout.write(f"\r{operation}... {spinner[spin_idx]} ({current}/{total})")
-    sys.stdout.flush()
 
 def confirm_production_operation(operation: str, total_users: int) -> bool:
     """Confirm operation in production environment.
