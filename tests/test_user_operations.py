@@ -9,7 +9,7 @@ from user_operations import (
     check_unblocked_users,
     get_user_email
 )
-from utils import YELLOW, GREEN, CYAN, RESET
+from utils import YELLOW, CYAN, RESET
 
 @pytest.fixture
 def mock_response():
