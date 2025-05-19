@@ -2,14 +2,15 @@ import sys
 import requests
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError
-from utils import validate_args, read_user_ids_generator
+from utils import validate_args, read_user_ids_generator, YELLOW, CYAN, RESET
 from user_operations import (
     delete_user,
     block_user,
     revoke_user_grants,
     check_unblocked_users,
     get_user_email,
-    revoke_user_sessions
+    revoke_user_sessions,
+    get_user_id_from_email
 )
 from email_domain_checker import check_domains_status_for_emails
 
@@ -147,6 +148,15 @@ def main():
             print(f"\n{operation_display}...")
             for idx, user_id in enumerate(user_ids, 1):
                 show_progress(idx, total_users, operation_display)
+                # Trim whitespace
+                user_id = user_id.strip()
+                # If input is an email, resolve to user_id
+                if "@" in user_id:
+                    resolved_id = get_user_id_from_email(user_id, token, base_url)
+                    if not resolved_id:
+                        print(f"{YELLOW}Skipping {CYAN}{user_id}{YELLOW}: Could not resolve to user_id.{RESET}")
+                        continue
+                    user_id = resolved_id
                 if operation == "block":
                     block_user(user_id, token, base_url)
                 elif operation == "delete":
