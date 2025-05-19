@@ -7,7 +7,8 @@ from user_operations import (
     revoke_user_sessions,
     revoke_user_grants,
     check_unblocked_users,
-    get_user_email
+    get_user_email,
+    get_user_details
 )
 from utils import YELLOW, CYAN, RESET
 
@@ -85,7 +86,7 @@ def test_get_user_id_from_email(mock_requests, mock_response):
 
     result = get_user_id_from_email("test@example.com", "test_token", "http://test.com")
 
-    assert result == "test_user_id"
+    assert result == ["test_user_id"]
     mock_requests.get.assert_called_once()
     mock_requests.get.assert_called_with(
         "http://test.com/api/v2/users-by-email",
@@ -96,6 +97,18 @@ def test_get_user_id_from_email(mock_requests, mock_response):
         params={"email": "test@example.com"},
         timeout=30
     )
+
+def test_get_user_id_from_email_multiple_users(mock_requests, mock_response):
+    mock_response.json.return_value = [
+        {"user_id": "test_user_id_1"},
+        {"user_id": "test_user_id_2"}
+    ]
+    mock_requests.get.return_value = mock_response
+
+    result = get_user_id_from_email("test@example.com", "test_token", "http://test.com")
+
+    assert result == ["test_user_id_1", "test_user_id_2"]
+    mock_requests.get.assert_called_once()
 
 def test_get_user_id_from_email_not_found(mock_requests, mock_response):
     mock_response.json.return_value = []
@@ -217,6 +230,29 @@ def test_get_user_email(mock_requests, mock_response):
     result = get_user_email("test_user_id", "test_token", "http://test.com")
 
     assert result == "test@example.com"
+    mock_requests.get.assert_called_once()
+    mock_requests.get.assert_called_with(
+        "http://test.com/api/v2/users/test_user_id",
+        headers={
+            "Authorization": "Bearer test_token",
+            "Content-Type": "application/json"
+        },
+        timeout=30
+    )
+
+def test_get_user_details(mock_requests, mock_response):
+    mock_response.json.return_value = {
+        "user_id": "test_user_id",
+        "identities": [{"connection": "test-connection"}]
+    }
+    mock_requests.get.return_value = mock_response
+
+    result = get_user_details("test_user_id", "test_token", "http://test.com")
+
+    assert result == {
+        "user_id": "test_user_id",
+        "identities": [{"connection": "test-connection"}]
+    }
     mock_requests.get.assert_called_once()
     mock_requests.get.assert_called_with(
         "http://test.com/api/v2/users/test_user_id",
