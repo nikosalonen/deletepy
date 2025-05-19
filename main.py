@@ -2,7 +2,7 @@ import sys
 import requests
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError
-from utils import validate_args, read_user_ids_generator, YELLOW, CYAN, RESET
+from utils import validate_args, read_user_ids_generator, CYAN, RESET, show_progress
 from user_operations import (
     delete_user,
     block_user,
@@ -10,22 +10,10 @@ from user_operations import (
     check_unblocked_users,
     get_user_email,
     revoke_user_sessions,
-    get_user_id_from_email
+    get_user_id_from_email,
+    get_user_details
 )
 from email_domain_checker import check_domains_status_for_emails
-
-def show_progress(current: int, total: int, operation: str) -> None:
-    """Show progress indicator for bulk operations.
-
-    Args:
-        current: Current item number
-        total: Total number of items
-        operation: Operation being performed
-    """
-    spinner = ['|', '/', '-', '\\']
-    spin_idx = (current - 1) % len(spinner)
-    sys.stdout.write(f"\r{operation}... {spinner[spin_idx]} ({current}/{total})")
-    sys.stdout.flush()
 
 def confirm_production_operation(operation: str, total_users: int) -> bool:
     """Confirm operation in production environment.
@@ -146,17 +134,30 @@ def main():
                 sys.exit(0)
 
             print(f"\n{operation_display}...")
+            multiple_users: dict[str, list[str]] = {}  # Store emails with multiple users
+            not_found_users: list[str] = []  # Store emails that weren't found
+            processed_count: int = 0
+            skipped_count: int = 0
+
             for idx, user_id in enumerate(user_ids, 1):
                 show_progress(idx, total_users, operation_display)
                 # Trim whitespace
                 user_id = user_id.strip()
                 # If input is an email, resolve to user_id
                 if "@" in user_id:
-                    resolved_id = get_user_id_from_email(user_id, token, base_url)
-                    if not resolved_id:
-                        print(f"{YELLOW}Skipping {CYAN}{user_id}{YELLOW}: Could not resolve to user_id.{RESET}")
+                    resolved_ids = get_user_id_from_email(user_id, token, base_url)
+                    if not resolved_ids:
+                        not_found_users.append(user_id)
+                        skipped_count += 1
                         continue
-                    user_id = resolved_id
+
+                    if len(resolved_ids) > 1:
+                        multiple_users[user_id] = resolved_ids
+                        skipped_count += 1
+                        continue
+
+                    user_id = resolved_ids[0]
+
                 if operation == "block":
                     block_user(user_id, token, base_url)
                 elif operation == "delete":
@@ -165,7 +166,31 @@ def main():
                     # First revoke sessions, then grants
                     revoke_user_sessions(user_id, token, base_url)
                     revoke_user_grants(user_id, token, base_url)
+                processed_count += 1
+
             print("\n")  # Clear progress line
+
+            # Print summary
+            print("\nOperation Summary:")
+            print(f"Total users processed: {processed_count}")
+            print(f"Total users skipped: {skipped_count}")
+
+            if not_found_users:
+                print(f"\nNot found users ({len(not_found_users)}):")
+                for email in not_found_users:
+                    print(f"  {CYAN}{email}{RESET}")
+
+            if multiple_users:
+                print(f"\nFound {len(multiple_users)} emails with multiple users:")
+                for email, user_ids in multiple_users.items():
+                    print(f"\n  {CYAN}{email}{RESET}:")
+                    for uid in user_ids:
+                        user_details = get_user_details(uid, token, base_url)
+                        if user_details and user_details.get("identities") and len(user_details["identities"]) > 0:
+                            connection = user_details["identities"][0].get("connection", "unknown")
+                            print(f"    - {uid} (Connection: {connection})")
+                        else:
+                            print(f"    - {uid} (Connection: unknown)")
 
     except FileNotFoundError as e:
         print(f"Error: {str(e)}")
