@@ -10,7 +10,8 @@ from user_operations import (
     check_unblocked_users,
     get_user_email,
     revoke_user_sessions,
-    get_user_id_from_email
+    get_user_id_from_email,
+    get_user_details
 )
 from email_domain_checker import check_domains_status_for_emails
 
@@ -146,17 +147,30 @@ def main():
                 sys.exit(0)
 
             print(f"\n{operation_display}...")
+            multiple_users = {}  # Store emails with multiple users
+            processed_count = 0
+            skipped_count = 0
+
             for idx, user_id in enumerate(user_ids, 1):
                 show_progress(idx, total_users, operation_display)
                 # Trim whitespace
                 user_id = user_id.strip()
                 # If input is an email, resolve to user_id
                 if "@" in user_id:
-                    resolved_id = get_user_id_from_email(user_id, token, base_url)
-                    if not resolved_id:
+                    resolved_ids = get_user_id_from_email(user_id, token, base_url)
+                    if not resolved_ids:
                         print(f"{YELLOW}Skipping {CYAN}{user_id}{YELLOW}: Could not resolve to user_id.{RESET}")
+                        skipped_count += 1
                         continue
-                    user_id = resolved_id
+
+                    if len(resolved_ids) > 1:
+                        multiple_users[user_id] = resolved_ids
+                        print(f"{YELLOW}Skipping {CYAN}{user_id}{YELLOW}: Found {len(resolved_ids)} users with this email.{RESET}")
+                        skipped_count += 1
+                        continue
+
+                    user_id = resolved_ids[0]
+
                 if operation == "block":
                     block_user(user_id, token, base_url)
                 elif operation == "delete":
@@ -165,7 +179,26 @@ def main():
                     # First revoke sessions, then grants
                     revoke_user_sessions(user_id, token, base_url)
                     revoke_user_grants(user_id, token, base_url)
+                processed_count += 1
+
             print("\n")  # Clear progress line
+
+            # Print summary
+            print("\nOperation Summary:")
+            print(f"Total users processed: {processed_count}")
+            print(f"Total users skipped: {skipped_count}")
+
+            if multiple_users:
+                print(f"\nFound {len(multiple_users)} emails with multiple users:")
+                for email, user_ids in multiple_users.items():
+                    print(f"\n  {CYAN}{email}{RESET}:")
+                    for uid in user_ids:
+                        user_details = get_user_details(uid, token, base_url)
+                        if user_details:
+                            connection = user_details.get("identities", [{}])[0].get("connection", "unknown")
+                            print(f"    - {uid} (Connection: {connection})")
+                        else:
+                            print(f"    - {uid} (Connection: unknown)")
 
     except FileNotFoundError as e:
         print(f"Error: {str(e)}")
