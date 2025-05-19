@@ -2,7 +2,7 @@ import sys
 import requests
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError
-from utils import validate_args, read_user_ids_generator, YELLOW, CYAN, RESET
+from utils import validate_args, read_user_ids_generator, CYAN, RESET
 from user_operations import (
     delete_user,
     block_user,
@@ -148,6 +148,7 @@ def main():
 
             print(f"\n{operation_display}...")
             multiple_users = {}  # Store emails with multiple users
+            not_found_users = []  # Store emails that weren't found
             processed_count = 0
             skipped_count = 0
 
@@ -159,13 +160,12 @@ def main():
                 if "@" in user_id:
                     resolved_ids = get_user_id_from_email(user_id, token, base_url)
                     if not resolved_ids:
-                        print(f"{YELLOW}Skipping {CYAN}{user_id}{YELLOW}: Could not resolve to user_id.{RESET}")
+                        not_found_users.append(user_id)
                         skipped_count += 1
                         continue
 
                     if len(resolved_ids) > 1:
                         multiple_users[user_id] = resolved_ids
-                        print(f"{YELLOW}Skipping {CYAN}{user_id}{YELLOW}: Found {len(resolved_ids)} users with this email.{RESET}")
                         skipped_count += 1
                         continue
 
@@ -187,6 +187,11 @@ def main():
             print("\nOperation Summary:")
             print(f"Total users processed: {processed_count}")
             print(f"Total users skipped: {skipped_count}")
+
+            if not_found_users:
+                print(f"\nNot found users ({len(not_found_users)}):")
+                for email in not_found_users:
+                    print(f"  {CYAN}{email}{RESET}")
 
             if multiple_users:
                 print(f"\nFound {len(multiple_users)} emails with multiple users:")

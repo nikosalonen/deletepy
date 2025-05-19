@@ -67,7 +67,6 @@ def get_user_id_from_email(email: str, token: str, base_url: str) -> list[str] |
             user_ids = [user["user_id"] for user in users if "user_id" in user]
             if user_ids:
                 return user_ids
-        print(f"{YELLOW}Warning: No user found for email {CYAN}{email}{YELLOW}{RESET}")
         return None
     except requests.exceptions.RequestException as e:
         print(f"{RED}Error fetching user_id for email {CYAN}{email}{RED}: {e}{RESET}")
