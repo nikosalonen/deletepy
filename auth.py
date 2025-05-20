@@ -11,24 +11,24 @@ class AuthConfigError(Exception):
 
 def get_access_token(env: str = "dev") -> str:
     """Get access token from Auth0 using client credentials.
-    
+
     Args:
         env: Environment to use ('dev' or 'prod')
-        
+
     Returns:
         str: Access token for authentication
-        
+
     Raises:
         AuthConfigError: If required environment variables are missing
         requests.exceptions.RequestException: If the token request fails
     """
     load_dotenv()
     config = get_env_config(env)
-    
+
     client_id = config["client_id"]
     client_secret = config["client_secret"]
     domain = config["auth0_domain"]
-    
+
     # Validate required environment variables
     if not client_id:
         raise AuthConfigError(f"Missing Auth0 Client ID. Please set the {'DEV_AUTH0_CLIENT_ID' if env == 'dev' else 'AUTH0_CLIENT_ID'} environment variable.")
@@ -38,6 +38,10 @@ def get_access_token(env: str = "dev") -> str:
         raise AuthConfigError(f"Missing Auth0 Domain. Please set the {'DEV_AUTH0_DOMAIN' if env == 'dev' else 'AUTH0_DOMAIN'} environment variable.")
 
     url = f"https://{domain}/oauth/token"
+    headers = {
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+        "Content-Type": "application/json"
+    }
     payload = {
         "client_id": client_id,
         "client_secret": client_secret,
