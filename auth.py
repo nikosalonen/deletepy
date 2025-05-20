@@ -48,7 +48,7 @@ def get_access_token(env: str = "dev") -> str:
         "audience": f"https://{domain}/api/v2/",
         "grant_type": "client_credentials"
     }
-    response = requests.post(url, json=payload, timeout=API_TIMEOUT)
+    response = requests.post(url, json=payload, headers=headers, timeout=API_TIMEOUT)
     response.raise_for_status()
     try:
         json_response = response.json()
