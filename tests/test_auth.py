@@ -28,6 +28,10 @@ def test_get_access_token_success(mock_requests, mock_response, mock_config):
             "audience": "https://test.auth0.com/api/v2/",
             "grant_type": "client_credentials"
         },
+        headers={
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+            "Content-Type": "application/json"
+        },
         timeout=5
     )
 
