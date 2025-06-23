@@ -46,7 +46,8 @@ def get_access_token(env: str = "dev") -> str:
         "client_id": client_id,
         "client_secret": client_secret,
         "audience": f"https://{domain}/api/v2/",
-        "grant_type": "client_credentials"
+        "grant_type": "client_credentials",
+        "scope": "delete:users update:users delete:sessions delete:grants read:users"
     }
     response = requests.post(url, json=payload, headers=headers, timeout=API_TIMEOUT)
     response.raise_for_status()
