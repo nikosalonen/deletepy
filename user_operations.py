@@ -321,6 +321,45 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict | None:
         print(f"{RED}Error parsing response for user {CYAN}{user_id}{RED}: {e}{RESET}")
         return None
 
+def _build_csv_data_dict(email: str, user_id: str, user_details: dict | None, status: str) -> dict:
+    """Build CSV data dictionary for user export.
+    
+    Args:
+        email: User's email address
+        user_id: Auth0 user ID
+        user_details: User details from Auth0 API (None if error fetching)
+        status: Status string for the CSV record
+        
+    Returns:
+        dict: CSV data dictionary with standardized fields
+    """
+    if user_details:
+        # Extract connection information
+        connection_info = "unknown"
+        if user_details.get("identities") and len(user_details["identities"]) > 0:
+            connection_info = user_details["identities"][0].get("connection", "unknown")
+        
+        return {
+            'email': email,
+            'user_id': user_id,
+            'connection': connection_info,
+            'last_login': user_details.get('last_login', 'N/A'),
+            'created_at': user_details.get('created_at', 'N/A'),
+            'updated_at': user_details.get('updated_at', 'N/A'),
+            'status': status
+        }
+    else:
+        # No user details available
+        return {
+            'email': email,
+            'user_id': user_id,
+            'connection': 'unknown',
+            'last_login': 'N/A',
+            'created_at': 'N/A',
+            'updated_at': 'N/A',
+            'status': status
+        }
+
 def export_users_last_login_to_csv(emails: list[str], token: str, base_url: str, output_file: str = "users_last_login.csv", batch_size: int = None, connection: str = None) -> None:
     """Fetch user data for given emails and export last_login values to CSV.
 
@@ -418,30 +457,9 @@ def export_users_last_login_to_csv(emails: list[str], token: str, base_url: str,
                     user_details = get_user_details(user_id, token, base_url)
 
                     if user_details:
-                        # Extract connection information
-                        connection_info = "unknown"
-                        if user_details.get("identities") and len(user_details["identities"]) > 0:
-                            connection_info = user_details["identities"][0].get("connection", "unknown")
-
-                        csv_data.append({
-                            'email': email,
-                            'user_id': user_id,
-                            'connection': connection_info,
-                            'last_login': user_details.get('last_login', 'N/A'),
-                            'created_at': user_details.get('created_at', 'N/A'),
-                            'updated_at': user_details.get('updated_at', 'N/A'),
-                            'status': f'MULTIPLE_USERS ({len(user_ids)})'
-                        })
+                        csv_data.append(_build_csv_data_dict(email, user_id, user_details, f'MULTIPLE_USERS ({len(user_ids)})'))
                     else:
-                        csv_data.append({
-                            'email': email,
-                            'user_id': user_id,
-                            'connection': 'unknown',
-                            'last_login': 'N/A',
-                            'created_at': 'N/A',
-                            'updated_at': 'N/A',
-                            'status': 'ERROR_FETCHING_DETAILS'
-                        })
+                        csv_data.append(_build_csv_data_dict(email, user_id, None, 'ERROR_FETCHING_DETAILS'))
                 continue
 
             # Get user details for single user
@@ -450,31 +468,10 @@ def export_users_last_login_to_csv(emails: list[str], token: str, base_url: str,
 
             if user_details:
                 processed_count += 1
-                # Extract connection information
-                connection_info = "unknown"
-                if user_details.get("identities") and len(user_details["identities"]) > 0:
-                    connection_info = user_details["identities"][0].get("connection", "unknown")
-
-                csv_data.append({
-                    'email': email,
-                    'user_id': user_id,
-                    'connection': connection_info,
-                    'last_login': user_details.get('last_login', 'N/A'),
-                    'created_at': user_details.get('created_at', 'N/A'),
-                    'updated_at': user_details.get('updated_at', 'N/A'),
-                    'status': 'SUCCESS'
-                })
+                csv_data.append(_build_csv_data_dict(email, user_id, user_details, 'SUCCESS'))
             else:
                 error_count += 1
-                csv_data.append({
-                    'email': email,
-                    'user_id': user_id,
-                    'connection': 'unknown',
-                    'last_login': 'N/A',
-                    'created_at': 'N/A',
-                    'updated_at': 'N/A',
-                    'status': 'ERROR_FETCHING_DETAILS'
-                })
+                csv_data.append(_build_csv_data_dict(email, user_id, None, 'ERROR_FETCHING_DETAILS'))
 
         print("\n")  # Clear progress line
 
