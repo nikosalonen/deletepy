@@ -28,13 +28,13 @@ signal.signal(signal.SIGINT, handle_shutdown)
 
 def read_user_ids(filepath: str) -> List[str]:
     """Read user IDs from file.
-    
+
     Args:
         filepath: Path to the file containing user IDs
-        
+
     Returns:
         List[str]: List of user IDs read from the file
-        
+
     Raises:
         FileNotFoundError: If the specified file does not exist
         IOError: If there is an error reading the file
@@ -50,13 +50,13 @@ def read_user_ids(filepath: str) -> List[str]:
 
 def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
     """Read user IDs from file using a generator pattern.
-    
+
     Args:
         filepath: Path to the file containing user IDs
-        
+
     Yields:
         str: User ID from the file
-        
+
     Raises:
         FileNotFoundError: If the specified file does not exist
         IOError: If there is an error reading the file
@@ -74,23 +74,24 @@ def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
 
 def validate_args() -> argparse.Namespace:
     """Parse and validate command line arguments.
-    
+
     Returns:
         argparse.Namespace: Parsed arguments containing:
-            - input_file: Path to the file containing user IDs
+            - input_file: Path to the file containing user IDs (optional for doctor)
             - env: Environment to run in ('dev' or 'prod')
-            - operation: The operation to perform (block/delete/revoke-grants-only/check-unblocked/check-domains)
+            - operation: The operation to perform (block/delete/revoke-grants-only/check-unblocked/check-domains/doctor)
     """
     parser = argparse.ArgumentParser(
         description="Process user operations based on IDs from a file.",
-        usage="python main.py <ids_file> [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains]"
+        usage="python main.py <ids_file> [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains|--doctor]"
     )
-    
+
     parser.add_argument(
         "input_file",
-        help="Path to the file containing user IDs"
+        nargs="?",
+        help="Path to the file containing user IDs (not required for --doctor)"
     )
-    
+
     parser.add_argument(
         "env",
         nargs="?",
@@ -98,7 +99,7 @@ def validate_args() -> argparse.Namespace:
         default="dev",
         help="Environment to run in (default: dev)"
     )
-    
+
     operation_group = parser.add_mutually_exclusive_group(required=True)
     operation_group.add_argument(
         "--block",
@@ -135,13 +136,37 @@ def validate_args() -> argparse.Namespace:
         dest="operation",
         help="Check domains for the specified users"
     )
-    
+    operation_group.add_argument(
+        "--doctor",
+        action="store_const",
+        const="doctor",
+        dest="operation",
+        help="Test if credentials work"
+    )
+
+    parser.add_argument(
+        "--test-api",
+        action="store_true",
+        help="Test API access when using --doctor (optional)"
+    )
+
     args = parser.parse_args()
-    return args 
+
+    # Special handling for doctor command: if first argument is 'dev' or 'prod' and operation is doctor,
+    # treat it as the environment instead of input_file
+    if args.operation == "doctor" and args.input_file in ["dev", "prod"]:
+        args.env = args.input_file
+        args.input_file = None
+
+    # Validate that input_file is provided for all operations except doctor
+    if args.operation != "doctor" and not args.input_file:
+        parser.error(f"input_file is required for operation '{args.operation}'")
+
+    return args
 
 def show_progress(current: int, total: int, operation: str) -> None:
     """Show progress indicator for bulk operations.
-    
+
     Args:
         current: Current item number
         total: Total number of items
@@ -150,4 +175,4 @@ def show_progress(current: int, total: int, operation: str) -> None:
     spinner = ['|', '/', '-', '\\']
     spin_idx = (current - 1) % len(spinner)
     sys.stdout.write(f"\r{operation}... {spinner[spin_idx]} ({current}/{total})")
-    sys.stdout.flush() 
+    sys.stdout.flush()

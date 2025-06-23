@@ -1,7 +1,7 @@
 import sys
 import requests
 from config import check_env_file, get_base_url
-from auth import get_access_token, AuthConfigError
+from auth import get_access_token, AuthConfigError, doctor
 from utils import validate_args, read_user_ids_generator, CYAN, RESET, show_progress
 from user_operations import (
     delete_user,
@@ -54,12 +54,21 @@ def main():
     try:
         # Validate arguments
         args = validate_args()
-        input_file = args.input_file
         env = args.env
         operation = args.operation
 
         # Check environment configuration
         check_env_file()
+
+        if operation == "doctor":
+            # Run doctor check
+            result = doctor(env, args.test_api)
+            if not result["success"]:
+                sys.exit(1)
+            return
+
+        # For other operations, input_file is required
+        input_file = args.input_file
         base_url = get_base_url(env)
         token = get_access_token(env)
 
