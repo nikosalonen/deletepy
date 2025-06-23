@@ -33,7 +33,7 @@ def test_get_access_token_success(mock_requests, mock_response, mock_config):
             "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
             "Content-Type": "application/json"
         },
-        timeout=5
+        timeout=30
     )
 
 def test_get_access_token_missing_client_id(mock_config):

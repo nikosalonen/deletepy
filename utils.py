@@ -1,6 +1,7 @@
 import sys
 import signal
 import argparse
+import re
 from typing import List, Generator
 
 # ANSI color codes
@@ -18,7 +19,9 @@ def handle_shutdown(signum, frame):
     global shutdown_requested
     shutdown_requested = True
     # Clear spinner/progress line
-    sys.stdout.write("\r" + " " * 80 + "\r")
+    import shutil
+    terminal_width = shutil.get_terminal_size().columns
+    sys.stdout.write("\r" + " " * terminal_width + "\r")
     sys.stdout.flush()
     print(f"{YELLOW}Operation cancelled by user. Exiting...{RESET}")
     sys.exit(130)
@@ -163,6 +166,29 @@ def validate_args() -> argparse.Namespace:
         parser.error(f"input_file is required for operation '{args.operation}'")
 
     return args
+
+def validate_auth0_user_id(user_id: str) -> bool:
+    """Validate Auth0 user ID format.
+    
+    Auth0 user IDs typically follow patterns like:
+    - auth0|123456789012345678901234
+    - google-oauth2|123456789012345678901
+    - email|507f1f77bcf86cd799439011
+    
+    Args:
+        user_id: The user ID to validate
+        
+    Returns:
+        bool: True if valid Auth0 user ID format, False otherwise
+    """
+    if not user_id or not isinstance(user_id, str):
+        return False
+    
+    # Auth0 user IDs have connection|identifier format
+    # Connection can contain letters, numbers, hyphens
+    # Identifier is typically alphanumeric
+    pattern = r'^[a-zA-Z0-9\-]+\|[a-zA-Z0-9]+$'
+    return bool(re.match(pattern, user_id))
 
 def show_progress(current: int, total: int, operation: str) -> None:
     """Show progress indicator for bulk operations.

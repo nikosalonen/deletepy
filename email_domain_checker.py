@@ -28,7 +28,8 @@ def load_cache():
         try:
             with open(CACHE_FILE, "r") as f:
                 return json.load(f)
-        except Exception:
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Warning: Could not load cache: {e}")
             return {}
     return {}
 
@@ -55,7 +56,7 @@ def check_domain(domain, cache):
         cache[domain] = data
         save_cache(cache)
         return data
-    except Exception as e:
+    except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
         print(f"Error checking domain {domain}: {e}")
         return None
 
