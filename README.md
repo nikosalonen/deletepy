@@ -2,6 +2,7 @@
 
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/nikosalonen/deletepy?utm_source=oss&utm_medium=github&utm_campaign=nikosalonen%2Fdeletepy&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
+
 A comprehensive Python tool for managing Auth0 users with support for bulk operations across development and production environments. This tool provides safe, rate-limited operations for user management, session control, and domain validation.
 
 ## Features
