@@ -44,13 +44,16 @@ def check_domain(domain, cache):
     if not API_KEY:
         print("Warning: ISTEMPMAIL_API_KEY not found in .env")
         return None
-        
+
     if domain in cache:
         print(f"[CACHE] Domain {domain} found in cache.")
         return cache[domain]
     url = API_URL.format(apikey=API_KEY, domain=domain)
+    headers = {
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
+    }
     try:
-        resp = requests.get(url, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         data = resp.json()
         cache[domain] = data
@@ -64,7 +67,7 @@ def check_domains_for_emails(emails):
     if not API_KEY:
         print("Warning: ISTEMPMAIL_API_KEY not found in .env")
         return
-        
+
     cache = load_cache()
     total = len(emails)
     for idx, email in enumerate(emails):
@@ -93,11 +96,11 @@ def check_domains_status_for_emails(emails):
     if not API_KEY:
         print("Warning: ISTEMPMAIL_API_KEY not found in .env")
         return {}
-        
+
     cache = load_cache()
     results = {}
     total_emails = len(emails)
-    
+
     for idx, email in enumerate(emails, 1):
         show_progress(idx, total_emails, "Checking domains")
         domain = extract_domain(email)
@@ -119,7 +122,7 @@ def check_domains_status_for_emails(emails):
         if not status:
             status.append("ALLOWED")
         results[email] = status
-    
+
     print("\n")  # Clear progress line
     return results
 

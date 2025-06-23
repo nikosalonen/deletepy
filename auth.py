@@ -100,7 +100,8 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             base_url = f"https://{config['auth0_domain']}"
             headers = {
                 "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
             }
 
             # Make a simple API call to test the token
