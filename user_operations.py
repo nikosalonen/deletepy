@@ -60,8 +60,7 @@ def make_rate_limited_request(method: str, url: str, headers: dict, **kwargs) ->
             if response.status_code == 429:
                 if handle_rate_limit_response(response, attempt):
                     continue
-                else:
-                    return None
+                return None
 
             # Handle other errors
             if response.status_code >= 400:
@@ -75,10 +74,9 @@ def make_rate_limited_request(method: str, url: str, headers: dict, **kwargs) ->
             if attempt >= MAX_RETRIES:
                 print(f"{RED}Request failed after {MAX_RETRIES} attempts: {e}{RESET}")
                 return None
-            else:
-                delay = min(BASE_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
-                print(f"{YELLOW}Request failed, retrying in {delay} seconds... ({attempt}/{MAX_RETRIES}){RESET}")
-                time.sleep(delay)
+            delay = min(BASE_RETRY_DELAY * (2 ** (attempt - 1)), MAX_RETRY_DELAY)
+            print(f"{YELLOW}Request failed, retrying in {delay} seconds... ({attempt}/{MAX_RETRIES}){RESET}")
+            time.sleep(delay)
 
     return None
 
