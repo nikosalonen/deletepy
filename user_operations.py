@@ -331,7 +331,22 @@ def export_users_last_login_to_csv(emails: list[str], token: str, base_url: str,
         output_file: Output CSV file path (default: users_last_login.csv)
         batch_size: Number of emails to process before writing to CSV (auto-calculated if None)
         connection: Optional connection filter (e.g., "google-oauth2", "auth0", "facebook")
+    
+    Raises:
+        PermissionError: If the output file path is not writable
+        FileNotFoundError: If the output directory does not exist
     """
+    # Validate output file path is writable
+    try:
+        with open(output_file, 'w', encoding='utf-8') as test_file:
+            pass  # Just test if we can open for writing
+    except PermissionError as e:
+        raise PermissionError(f"Output file path is not writable: {output_file}") from e
+    except FileNotFoundError as e:
+        raise FileNotFoundError(f"Output directory does not exist: {output_file}") from e
+    except Exception as e:
+        raise IOError(f"Cannot write to output file: {output_file}") from e
+    
     # Validate rate limit configuration
     if not validate_rate_limit_config():
         print(f"{YELLOW}Warning: Rate limit configuration may be too aggressive.{RESET}")
