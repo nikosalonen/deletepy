@@ -1,5 +1,4 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from user_operations import (
     delete_user,
     block_user,
@@ -11,17 +10,6 @@ from user_operations import (
     get_user_details
 )
 from utils import YELLOW, CYAN, RESET
-
-@pytest.fixture
-def mock_response():
-    response = MagicMock()
-    response.raise_for_status = MagicMock()
-    return response
-
-@pytest.fixture
-def mock_requests():
-    with patch('user_operations.requests') as mock:
-        yield mock
 
 def test_delete_user(mock_requests, mock_response):
     mock_requests.delete.return_value = mock_response
@@ -84,13 +72,14 @@ def test_block_user(mock_requests, mock_response):
 
 def test_get_user_id_from_email(mock_requests, mock_response):
     mock_response.json.return_value = [{"user_id": "test_user_id"}]
-    mock_requests.get.return_value = mock_response
+    mock_requests.request.return_value = mock_response
 
     result = get_user_id_from_email("test@example.com", "test_token", "http://test.com")
 
     assert result == ["test_user_id"]
-    mock_requests.get.assert_called_once()
-    mock_requests.get.assert_called_with(
+    mock_requests.request.assert_called_once()
+    mock_requests.request.assert_called_with(
+        "GET",
         "http://test.com/api/v2/users-by-email",
         headers={
             "Authorization": "Bearer test_token",
@@ -106,16 +95,16 @@ def test_get_user_id_from_email_multiple_users(mock_requests, mock_response):
         {"user_id": "test_user_id_1"},
         {"user_id": "test_user_id_2"}
     ]
-    mock_requests.get.return_value = mock_response
+    mock_requests.request.return_value = mock_response
 
     result = get_user_id_from_email("test@example.com", "test_token", "http://test.com")
 
     assert result == ["test_user_id_1", "test_user_id_2"]
-    mock_requests.get.assert_called_once()
+    mock_requests.request.assert_called_once()
 
 def test_get_user_id_from_email_not_found(mock_requests, mock_response):
     mock_response.json.return_value = []
-    mock_requests.get.return_value = mock_response
+    mock_requests.request.return_value = mock_response
 
     result = get_user_id_from_email("test@example.com", "test_token", "http://test.com")
 
@@ -255,7 +244,7 @@ def test_get_user_details(mock_requests, mock_response):
         "user_id": "test_user_id",
         "identities": [{"connection": "test-connection"}]
     }
-    mock_requests.get.return_value = mock_response
+    mock_requests.request.return_value = mock_response
 
     result = get_user_details("test_user_id", "test_token", "http://test.com")
 
@@ -263,8 +252,9 @@ def test_get_user_details(mock_requests, mock_response):
         "user_id": "test_user_id",
         "identities": [{"connection": "test-connection"}]
     }
-    mock_requests.get.assert_called_once()
-    mock_requests.get.assert_called_with(
+    mock_requests.request.assert_called_once()
+    mock_requests.request.assert_called_with(
+        "GET",
         "http://test.com/api/v2/users/test_user_id",
         headers={
             "Authorization": "Bearer test_token",
