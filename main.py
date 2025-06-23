@@ -1,5 +1,6 @@
 import sys
 import requests
+from datetime import datetime
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError, doctor
 from utils import validate_args, read_user_ids_generator, validate_auth0_user_id, CYAN, RESET, show_progress, YELLOW, RED
@@ -140,7 +141,6 @@ def main():
                 sys.exit(0)
 
             # Generate output filename with timestamp
-            from datetime import datetime
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_file = f"users_last_login_{timestamp}.csv"
 
