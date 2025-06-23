@@ -5,7 +5,9 @@ from unittest.mock import MagicMock, patch
 def mock_response():
     """Create a mock response object for requests."""
     response = MagicMock()
+    response.status_code = 200  # Set default status code
     response.raise_for_status = MagicMock()
+    response.json = MagicMock()
     return response
 
 @pytest.fixture
