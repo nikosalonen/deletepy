@@ -44,10 +44,9 @@ def get_optimal_batch_size(total_emails: int) -> int:
     """
     if total_emails > LARGE_DATASET_THRESHOLD:
         return 25
-    elif total_emails > MEDIUM_DATASET_THRESHOLD:
+    if total_emails > MEDIUM_DATASET_THRESHOLD:
         return 50
-    else:
-        return 100
+    return 100
 
 def get_estimated_processing_time(total_emails: int, batch_size: int = None) -> float:
     """Calculate estimated processing time in minutes.
