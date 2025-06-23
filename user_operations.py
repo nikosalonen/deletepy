@@ -156,11 +156,15 @@ def get_user_id_from_email(email: str, token: str, base_url: str, connection: st
                 if "user_id" in user:
                     # If connection filter is specified, check if user matches
                     if connection:
-                        user_details = get_user_details(user["user_id"], token, base_url)
-                        if user_details and user_details.get("identities"):
-                            user_connection = user_details["identities"][0].get("connection", "unknown")
+                        # Check if identities array exists in the response and filter directly
+                        if user.get("identities") and isinstance(user["identities"], list):
+                            # Filter by connection using data already in the response
+                            user_connection = user["identities"][0].get("connection", "unknown")
                             if user_connection == connection:
                                 user_ids.append(user["user_id"])
+                        else:
+                            # Fallback: identities not included, skip this user to avoid API call
+                            print(f"{RED}Warning: Connection info not available for user {user['user_id']}, skipping{RESET}")
                     else:
                         # No connection filter, include all users
                         user_ids.append(user["user_id"])
