@@ -140,6 +140,13 @@ def validate_args() -> argparse.Namespace:
         help="Check domains for the specified users"
     )
     operation_group.add_argument(
+        "--export-last-login",
+        action="store_const",
+        const="export-last-login",
+        dest="operation",
+        help="Export user last_login data to CSV"
+    )
+    operation_group.add_argument(
         "--doctor",
         action="store_const",
         const="doctor",
@@ -151,6 +158,12 @@ def validate_args() -> argparse.Namespace:
         "--test-api",
         action="store_true",
         help="Test API access when using --doctor (optional)"
+    )
+
+    parser.add_argument(
+        "--connection",
+        type=str,
+        help="Filter users by connection type (e.g., 'google-oauth2', 'auth0', 'facebook')"
     )
 
     args = parser.parse_args()
@@ -169,21 +182,21 @@ def validate_args() -> argparse.Namespace:
 
 def validate_auth0_user_id(user_id: str) -> bool:
     """Validate Auth0 user ID format.
-    
+
     Auth0 user IDs typically follow patterns like:
     - auth0|123456789012345678901234
     - google-oauth2|123456789012345678901
     - email|507f1f77bcf86cd799439011
-    
+
     Args:
         user_id: The user ID to validate
-        
+
     Returns:
         bool: True if valid Auth0 user ID format, False otherwise
     """
     if not user_id or not isinstance(user_id, str):
         return False
-    
+
     # Auth0 user IDs have connection|identifier format
     # Connection can contain letters, numbers, hyphens
     # Identifier is typically alphanumeric

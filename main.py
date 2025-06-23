@@ -1,8 +1,9 @@
 import sys
 import requests
+from datetime import datetime
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError, doctor
-from utils import validate_args, read_user_ids_generator, validate_auth0_user_id, CYAN, RESET, show_progress
+from utils import validate_args, read_user_ids_generator, validate_auth0_user_id, CYAN, RESET, show_progress, YELLOW, RED
 from user_operations import (
     delete_user,
     block_user,
@@ -11,9 +12,11 @@ from user_operations import (
     get_user_email,
     revoke_user_sessions,
     get_user_id_from_email,
-    get_user_details
+    get_user_details,
+    export_users_last_login_to_csv
 )
 from email_domain_checker import check_domains_status_for_emails
+from rate_limit_config import get_optimal_batch_size, get_estimated_processing_time
 
 def confirm_production_operation(operation: str, total_users: int) -> bool:
     """Confirm operation in production environment.
@@ -129,6 +132,40 @@ def main():
                 print(f"\nErrors checking domains ({len(error)}):")
                 for email in error:
                     print(f"  {email}")
+        elif operation == "export-last-login":
+            # For export operation, treat input as emails directly
+            emails = [line.strip() for line in user_ids if line.strip()]
+
+            if not emails:
+                print("No valid emails found to export.")
+                sys.exit(0)
+
+            # Generate output filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"users_last_login_{timestamp}.csv"
+
+            # Get connection filter if specified
+            connection_filter = args.connection
+
+            # Calculate optimal batch size based on number of emails
+            batch_size = get_optimal_batch_size(len(emails))
+            estimated_time = get_estimated_processing_time(len(emails), batch_size)
+
+            print(f"\nExporting last_login data for {len(emails)} users...")
+            print(f"Using batch size: {batch_size}")
+            print(f"Estimated processing time: {estimated_time:.1f} minutes")
+
+            if connection_filter:
+                print(f"Connection filter: {connection_filter}")
+
+            try:
+                export_users_last_login_to_csv(emails, token, base_url, output_file, batch_size, connection_filter)
+            except KeyboardInterrupt:
+                print(f"\n{YELLOW}Export operation interrupted by user.{RESET}")
+                sys.exit(0)
+            except Exception as e:
+                print(f"\n{RED}Export operation failed: {e}{RESET}")
+                sys.exit(1)
         else:
             # Process users one by one for other operations
             operation_display = {
@@ -167,7 +204,7 @@ def main():
                         continue
 
                     user_id = resolved_ids[0]
-                
+
                 # Validate Auth0 user ID format (skip emails as they're already processed)
                 elif not validate_auth0_user_id(user_id):
                     invalid_user_ids.append(user_id)
