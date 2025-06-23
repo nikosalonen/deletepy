@@ -26,7 +26,8 @@ def test_get_access_token_success(mock_requests, mock_response, mock_config):
             "client_id": "test_client_id",
             "client_secret": "test_client_secret",
             "audience": "https://test.auth0.com/api/v2/",
-            "grant_type": "client_credentials"
+            "grant_type": "client_credentials",
+            "scope": "delete:users update:users delete:sessions delete:grants read:users"
         },
         headers={
             "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
