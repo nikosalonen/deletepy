@@ -145,7 +145,8 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
                 unblocked.append(user_id)
             show_progress(idx, total_users, "Checking users")
             time.sleep(API_RATE_LIMIT)
-        except requests.exceptions.RequestException:
+        except requests.exceptions.RequestException as e:
+            print(f"{RED}Error checking user {CYAN}{user_id}{RED}: {e}{RESET}")
             continue
 
     print("\n")  # Clear progress line

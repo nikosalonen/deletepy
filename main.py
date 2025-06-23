@@ -2,7 +2,7 @@ import sys
 import requests
 from config import check_env_file, get_base_url
 from auth import get_access_token, AuthConfigError, doctor
-from utils import validate_args, read_user_ids_generator, CYAN, RESET, show_progress
+from utils import validate_args, read_user_ids_generator, validate_auth0_user_id, CYAN, RESET, show_progress
 from user_operations import (
     delete_user,
     block_user,
@@ -145,6 +145,7 @@ def main():
             print(f"\n{operation_display}...")
             multiple_users: dict[str, list[str]] = {}  # Store emails with multiple users
             not_found_users: list[str] = []  # Store emails that weren't found
+            invalid_user_ids: list[str] = []  # Store invalid user IDs
             processed_count: int = 0
             skipped_count: int = 0
 
@@ -153,7 +154,7 @@ def main():
                 # Trim whitespace
                 user_id = user_id.strip()
                 # If input is an email, resolve to user_id
-                if "@" in user_id:
+                if "@" in user_id and user_id.count("@") == 1 and len(user_id.split("@")[1]) > 0:
                     resolved_ids = get_user_id_from_email(user_id, token, base_url)
                     if not resolved_ids:
                         not_found_users.append(user_id)
@@ -166,6 +167,12 @@ def main():
                         continue
 
                     user_id = resolved_ids[0]
+                
+                # Validate Auth0 user ID format (skip emails as they're already processed)
+                elif not validate_auth0_user_id(user_id):
+                    invalid_user_ids.append(user_id)
+                    skipped_count += 1
+                    continue
 
                 if operation == "block":
                     block_user(user_id, token, base_url)
@@ -188,6 +195,11 @@ def main():
                 print(f"\nNot found users ({len(not_found_users)}):")
                 for email in not_found_users:
                     print(f"  {CYAN}{email}{RESET}")
+
+            if invalid_user_ids:
+                print(f"\nInvalid user IDs ({len(invalid_user_ids)}):")
+                for user_id in invalid_user_ids:
+                    print(f"  {CYAN}{user_id}{RESET}")
 
             if multiple_users:
                 print(f"\nFound {len(multiple_users)} emails with multiple users:")
