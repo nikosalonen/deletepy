@@ -1,6 +1,7 @@
 import requests
 import time
 import csv
+from contextlib import suppress
 from urllib.parse import quote
 from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested, show_progress
 from rate_limit_config import (
@@ -29,10 +30,8 @@ def handle_rate_limit_response(response: requests.Response, attempt: int) -> boo
         # Try to get retry-after header
         retry_after = response.headers.get('Retry-After')
         if retry_after:
-            try:
+            with suppress(ValueError):
                 delay = max(delay, int(retry_after))
-            except ValueError:
-                pass  # Use calculated delay if header is invalid
 
         print(f"{YELLOW}Rate limit hit. Waiting {delay} seconds before retry {attempt}/{MAX_RETRIES}...{RESET}")
         time.sleep(delay)
