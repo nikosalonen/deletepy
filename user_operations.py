@@ -18,7 +18,8 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
     }
     try:
         response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
@@ -39,7 +40,8 @@ def block_user(user_id: str, token: str, base_url: str) -> None:
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
     }
     payload = {"blocked": True}
     try:
@@ -55,7 +57,8 @@ def get_user_id_from_email(email: str, token: str, base_url: str) -> list[str] |
     url = f"{base_url}/api/v2/users-by-email"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
     }
     params = {"email": email}
     try:
@@ -77,7 +80,8 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
     list_url = f"{base_url}/api/v2/users/{quote(user_id)}/sessions"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
     }
     try:
         response = requests.get(list_url, headers=headers, timeout=API_TIMEOUT)
@@ -108,7 +112,8 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
     grants_url = f"{base_url}/api/v2/grants?user_id={quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
     }
     try:
         response = requests.delete(grants_url, headers=headers, timeout=API_TIMEOUT)
@@ -135,7 +140,8 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
         url = f"{base_url}/api/v2/users/{quote(user_id)}"
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
         }
         try:
             response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
@@ -171,7 +177,8 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
     }
     try:
         response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
@@ -197,7 +204,8 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict | None:
     url = f"{base_url}/api/v2/users/{quote(user_id)}"
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
     }
     try:
         response = requests.get(url, headers=headers, timeout=API_TIMEOUT)

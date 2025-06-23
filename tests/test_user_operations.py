@@ -42,7 +42,8 @@ def test_delete_user(mock_requests, mock_response):
             "http://test.com/api/v2/users/test_user_id",
             headers={
                 "Authorization": "Bearer test_token",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
             },
             timeout=30
         )
@@ -74,7 +75,8 @@ def test_block_user(mock_requests, mock_response):
             "http://test.com/api/v2/users/test_user_id",
             headers={
                 "Authorization": "Bearer test_token",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
             },
             json={"blocked": True},
             timeout=30
@@ -92,7 +94,8 @@ def test_get_user_id_from_email(mock_requests, mock_response):
         "http://test.com/api/v2/users-by-email",
         headers={
             "Authorization": "Bearer test_token",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
         },
         params={"email": "test@example.com"},
         timeout=30
@@ -131,7 +134,8 @@ def test_revoke_user_sessions(mock_requests, mock_response):
         "http://test.com/api/v2/users/test_user_id/sessions",
         headers={
             "Authorization": "Bearer test_token",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
         },
         timeout=30
     )
@@ -147,7 +151,8 @@ def test_revoke_user_sessions(mock_requests, mock_response):
     assert delete_calls[0][1] == {
         "headers": {
             "Authorization": "Bearer test_token",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
         },
         "timeout": 30
     }
@@ -157,7 +162,8 @@ def test_revoke_user_sessions(mock_requests, mock_response):
     assert delete_calls[1][1] == {
         "headers": {
             "Authorization": "Bearer test_token",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
         },
         "timeout": 30
     }
@@ -172,7 +178,8 @@ def test_revoke_user_grants(mock_requests, mock_response):
         "http://test.com/api/v2/grants?user_id=test_user_id",
         headers={
             "Authorization": "Bearer test_token",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
         },
         timeout=30
     )
@@ -203,7 +210,8 @@ def test_check_unblocked_users(mock_requests, mock_response):
         assert get_calls[0][1] == {
             "headers": {
                 "Authorization": "Bearer test_token",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
             },
             "timeout": 30
         }
@@ -213,7 +221,8 @@ def test_check_unblocked_users(mock_requests, mock_response):
         assert get_calls[1][1] == {
             "headers": {
                 "Authorization": "Bearer test_token",
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
             },
             "timeout": 30
         }
@@ -235,7 +244,8 @@ def test_get_user_email(mock_requests, mock_response):
         "http://test.com/api/v2/users/test_user_id",
         headers={
             "Authorization": "Bearer test_token",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
         },
         timeout=30
     )
@@ -258,7 +268,8 @@ def test_get_user_details(mock_requests, mock_response):
         "http://test.com/api/v2/users/test_user_id",
         headers={
             "Authorization": "Bearer test_token",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
         },
         timeout=30
     )
