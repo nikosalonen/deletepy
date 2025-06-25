@@ -18,10 +18,12 @@ CACHE_FILE = "domain_cache.json"
 CYAN = "\033[96m"
 RESET = "\033[0m"
 
+
 def extract_domain(email):
     if "@" not in email:
         return email
     return email.split("@")[-1].lower()
+
 
 def load_cache():
     if os.path.exists(CACHE_FILE):
@@ -33,12 +35,14 @@ def load_cache():
             return {}
     return {}
 
+
 def save_cache(cache):
     try:
         with open(CACHE_FILE, "w") as f:
             json.dump(cache, f, indent=2)
     except Exception as e:
         print(f"Warning: Could not save cache: {e}")
+
 
 def check_domain(domain, cache):
     if not API_KEY:
@@ -49,9 +53,7 @@ def check_domain(domain, cache):
         print(f"[CACHE] Domain {domain} found in cache.")
         return cache[domain]
     url = API_URL.format(apikey=API_KEY, domain=domain)
-    headers = {
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
-    }
+    headers = {"User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"}
     try:
         resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
@@ -63,6 +65,7 @@ def check_domain(domain, cache):
         print(f"Error checking domain {domain}: {e}")
         return None
 
+
 def check_domains_for_emails(emails):
     if not API_KEY:
         print("Warning: ISTEMPMAIL_API_KEY not found in .env")
@@ -72,7 +75,7 @@ def check_domains_for_emails(emails):
     total = len(emails)
     for idx, email in enumerate(emails):
         domain = extract_domain(email)
-        print(f"{CYAN}Checking {idx+1}/{total}: {email}{RESET}")
+        print(f"{CYAN}Checking {idx + 1}/{total}: {email}{RESET}")
         if not domain:
             print(f"Invalid email: {email}")
             continue
@@ -91,6 +94,7 @@ def check_domains_for_emails(emails):
         if not status:
             status.append("ALLOWED")
         print(f"{email} ({domain}): {', '.join(status)}")
+
 
 def check_domains_status_for_emails(emails):
     if not API_KEY:
@@ -125,6 +129,7 @@ def check_domains_status_for_emails(emails):
 
     print("\n")  # Clear progress line
     return results
+
 
 # CLI usage
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+
 @pytest.fixture
 def mock_response():
     """Create a mock response object for requests."""
@@ -9,6 +10,7 @@ def mock_response():
     response.raise_for_status = MagicMock()
     response.json = MagicMock()
     return response
+
 
 @pytest.fixture
 def mock_requests(request):
@@ -20,7 +22,7 @@ def mock_requests(request):
     # Extract the module name from the test file name
     # e.g., test_auth.py -> auth, test_user_operations.py -> user_operations
     test_file = request.module.__file__
-    module_name = test_file.split('test_')[-1].replace('.py', '')
+    module_name = test_file.split("test_")[-1].replace(".py", "")
 
-    with patch(f'{module_name}.requests') as mock:
+    with patch(f"{module_name}.requests") as mock:
         yield mock
