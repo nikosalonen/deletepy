@@ -574,18 +574,62 @@ def _build_csv_data_dict(email: str, user_id: str, user_details: dict | None, st
             'status': status
         }
 
-def find_users_by_social_media_ids(social_ids: list[str], token: str, base_url: str) -> None:
+def unlink_user_identity(user_id: str, provider: str, user_identity_id: str, token: str, base_url: str) -> bool:
+    """Unlink a specific identity from a user.
+    
+    Args:
+        user_id: The Auth0 user ID
+        provider: The identity provider (e.g., 'google-oauth2', 'facebook') 
+        user_identity_id: The user ID for that identity provider
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    url = f"{base_url}/api/v2/users/{quote(user_id)}/identities/{provider}/{quote(user_identity_id)}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json", 
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
+    }
+    
+    response = make_rate_limited_request("DELETE", url, headers)
+    if response is None:
+        print(f"{RED}Error unlinking identity {CYAN}{user_identity_id}{RED} from user {CYAN}{user_id}{RED}: Request failed after retries{RESET}")
+        return False
+        
+    try:
+        # Success response should be 200/204
+        if response.status_code in [200, 204]:
+            print(f"{GREEN}Successfully unlinked identity {CYAN}{user_identity_id}{GREEN} ({provider}) from user {CYAN}{user_id}{GREEN}{RESET}")
+            return True
+        else:
+            print(f"{RED}Failed to unlink identity {CYAN}{user_identity_id}{RED} from user {CYAN}{user_id}{RED}: HTTP {response.status_code}{RESET}")
+            return False
+    except Exception as e:
+        print(f"{RED}Error unlinking identity {CYAN}{user_identity_id}{RED} from user {CYAN}{user_id}{RED}: {e}{RESET}")
+        return False
+
+def find_users_by_social_media_ids(social_ids: list[str], token: str, base_url: str, env: str = "dev", auto_delete: bool = True) -> None:
     """Find Auth0 users who have the specified social media IDs in their identities array.
+    
+    If auto_delete is True, users where the social media ID is their main/only identity will be deleted.
 
     Args:
         social_ids: List of social media IDs to search for
         token: Auth0 access token
         base_url: Auth0 API base URL
+        env: Environment (dev/prod) for confirmation prompts
+        auto_delete: Whether to automatically delete users with main identity matches
     """
     print(f"{YELLOW}Searching for users with {len(social_ids)} social media IDs...{RESET}")
     
     found_users = []
     not_found_ids = []
+    users_to_delete = []  # Users where social ID is only non-auth0 identity  
+    identities_to_unlink = []  # Identities to unlink from multi-identity users
+    auth0_main_protected = []  # Users with auth0 as main identity (protected)
     total_ids = len(social_ids)
     
     for idx, social_id in enumerate(social_ids, 1):
@@ -625,25 +669,49 @@ def find_users_by_social_media_ids(social_ids: list[str], token: str, base_url: 
                 for user in users:
                     user_id = user.get("user_id", "unknown")
                     email = user.get("email", "N/A")
+                    identities = user.get("identities", [])
                     
-                    # Get connection information from identities
-                    connection_info = "unknown"
-                    if user.get("identities") and len(user["identities"]) > 0:
+                    # Find the matching identity and get main identity info
+                    matching_identity = None
+                    main_identity = identities[0] if identities else None
+                    main_connection = main_identity.get("connection", "unknown") if main_identity else "unknown"
+                    
+                    if identities:
                         # Find the specific identity that matches our social ID
-                        for identity in user["identities"]:
+                        for identity in identities:
                             if identity.get("user_id") == social_id:
-                                connection_info = identity.get("connection", "unknown")
+                                matching_identity = identity
                                 break
-                        if connection_info == "unknown":
-                            # Fallback to first identity connection
-                            connection_info = user["identities"][0].get("connection", "unknown")
                     
-                    found_users.append({
+                    if not matching_identity:
+                        continue  # Skip if no matching identity found
+                    
+                    matching_connection = matching_identity.get("connection", "unknown")
+                    
+                    user_info = {
                         "social_id": social_id,
                         "user_id": user_id,
                         "email": email,
-                        "connection": connection_info
-                    })
+                        "matching_connection": matching_connection,
+                        "main_connection": main_connection,
+                        "identities_count": len(identities),
+                        "matching_identity": matching_identity,
+                        "is_main_identity": matching_identity == main_identity
+                    }
+                    
+                    found_users.append(user_info)
+                    
+                    # Apply new logic based on requirements
+                    if auto_delete:
+                        if main_connection == "auth0":
+                            # Main identity is auth0 - protect entire user
+                            auth0_main_protected.append(user_info)
+                        elif len(identities) == 1:
+                            # Single non-auth0 identity - delete entire user
+                            users_to_delete.append(user_info)
+                        else:
+                            # Multiple identities with non-auth0 main - unlink the matching identity
+                            identities_to_unlink.append(user_info)
             else:
                 not_found_ids.append(social_id)
                 
@@ -659,19 +727,132 @@ def find_users_by_social_media_ids(social_ids: list[str], token: str, base_url: 
     print(f"Users found: {len(found_users)}")
     print(f"Not found: {len(not_found_ids)}")
     
-    if found_users:
-        print(f"\n{GREEN}Found users:{RESET}")
-        for user in found_users:
+    if users_to_delete and auto_delete:
+        print(f"\n{RED}Users to delete (single non-auth0 identity): {len(users_to_delete)}{RESET}")
+        for user in users_to_delete:
             print(f"  Social ID: {CYAN}{user['social_id']}{RESET}")
             print(f"  User ID: {CYAN}{user['user_id']}{RESET}")
             print(f"  Email: {CYAN}{user['email']}{RESET}")
-            print(f"  Connection: {CYAN}{user['connection']}{RESET}")
+            print(f"  Connection: {CYAN}{user['matching_connection']}{RESET}")
+            print(f"  Identities: {user['identities_count']} (single identity)")
+            print()
+    
+    if identities_to_unlink and auto_delete:
+        print(f"\n{YELLOW}Identities to unlink (multi-identity users): {len(identities_to_unlink)}{RESET}")
+        for user in identities_to_unlink:
+            main_status = " (main)" if user['is_main_identity'] else ""
+            print(f"  Social ID: {CYAN}{user['social_id']}{RESET}")
+            print(f"  User ID: {CYAN}{user['user_id']}{RESET}")
+            print(f"  Email: {CYAN}{user['email']}{RESET}")
+            print(f"  Identity to unlink: {CYAN}{user['matching_connection']}{RESET}{main_status}")
+            print(f"  Main identity: {CYAN}{user['main_connection']}{RESET}")
+            print(f"  Total identities: {user['identities_count']}")
+            print()
+    
+    if auth0_main_protected:
+        print(f"\n{GREEN}Users with auth0 main identity (protected): {len(auth0_main_protected)}{RESET}")
+        for user in auth0_main_protected:
+            print(f"  Social ID: {CYAN}{user['social_id']}{RESET}")
+            print(f"  User ID: {CYAN}{user['user_id']}{RESET}")
+            print(f"  Email: {CYAN}{user['email']}{RESET}")
+            print(f"  Main connection: {CYAN}{user['main_connection']}{RESET}")
+            print(f"  Identities: {user['identities_count']} (auth0 main - protected)")
+            print()
+    
+    # Handle remaining found users that don't fall into above categories
+    other_users = [u for u in found_users if u not in users_to_delete and u not in identities_to_unlink and u not in auth0_main_protected]
+    if other_users:
+        print(f"\n{GREEN}Other found users:{RESET}")
+        for user in other_users:
+            print(f"  Social ID: {CYAN}{user['social_id']}{RESET}")
+            print(f"  User ID: {CYAN}{user['user_id']}{RESET}")
+            print(f"  Email: {CYAN}{user['email']}{RESET}")
+            print(f"  Matching connection: {CYAN}{user['matching_connection']}{RESET}")
+            print(f"  Identities: {user['identities_count']}")
             print()
     
     if not_found_ids:
         print(f"\n{YELLOW}Social IDs not found:{RESET}")
         for social_id in not_found_ids:
             print(f"  {CYAN}{social_id}{RESET}")
+    
+    # Handle operations if there are users to delete or identities to unlink
+    total_operations = len(users_to_delete) + len(identities_to_unlink)
+    
+    if total_operations > 0 and auto_delete:
+        # Get confirmation for production environment
+        if env == "prod":
+            print(f"\n{RED}WARNING: You are about to perform operations in PRODUCTION environment:{RESET}")
+            print(f"- Delete {len(users_to_delete)} users")
+            print(f"- Unlink {len(identities_to_unlink)} identities")
+            print("These actions cannot be undone.")
+            response = input("Are you sure you want to proceed? (yes/no): ").lower().strip()
+            if response != "yes":
+                print("Operations cancelled by user.")
+                return
+        
+        # Handle user deletions
+        deleted_count = 0
+        failed_deletions = 0
+        
+        if users_to_delete:
+            print(f"\n{YELLOW}Deleting {len(users_to_delete)} users...{RESET}")
+            for idx, user in enumerate(users_to_delete, 1):
+                if shutdown_requested:
+                    break
+                    
+                show_progress(idx, len(users_to_delete), "Deleting users")
+                
+                try:
+                    delete_user(user['user_id'], token, base_url)
+                    deleted_count += 1
+                except Exception as e:
+                    print(f"\n{RED}Failed to delete user {CYAN}{user['user_id']}{RED}: {e}{RESET}")
+                    failed_deletions += 1
+            print("\n")  # Clear progress line
+        
+        # Handle identity unlinking
+        unlinked_count = 0
+        failed_unlinks = 0
+        
+        if identities_to_unlink:
+            print(f"\n{YELLOW}Unlinking {len(identities_to_unlink)} identities...{RESET}")
+            for idx, user in enumerate(identities_to_unlink, 1):
+                if shutdown_requested:
+                    break
+                    
+                show_progress(idx, len(identities_to_unlink), "Unlinking identities")
+                
+                try:
+                    success = unlink_user_identity(
+                        user['user_id'],
+                        user['matching_connection'],
+                        user['social_id'],
+                        token,
+                        base_url
+                    )
+                    if success:
+                        unlinked_count += 1
+                    else:
+                        failed_unlinks += 1
+                except Exception as e:
+                    print(f"\n{RED}Failed to unlink identity {CYAN}{user['social_id']}{RED} from user {CYAN}{user['user_id']}{RED}: {e}{RESET}")
+                    failed_unlinks += 1
+            print("\n")  # Clear progress line
+        
+        # Print summary
+        print(f"\n{GREEN}Operations Summary:{RESET}")
+        if users_to_delete:
+            print(f"Users deleted: {deleted_count}")
+            print(f"Failed deletions: {failed_deletions}")
+        if identities_to_unlink:
+            print(f"Identities unlinked: {unlinked_count}")
+            print(f"Failed unlinks: {failed_unlinks}")
+            
+    elif total_operations > 0 and not auto_delete:
+        print(f"\n{YELLOW}Note: {total_operations} operations found, but auto_delete is disabled.{RESET}")
+        print(f"- {len(users_to_delete)} users would be deleted")
+        print(f"- {len(identities_to_unlink)} identities would be unlinked")
 
 def export_users_last_login_to_csv(emails: list[str], token: str, base_url: str, output_file: str = "users_last_login.csv", batch_size: int = None, connection: str = None) -> None:
     """Fetch user data for given emails and export last_login values to CSV.
