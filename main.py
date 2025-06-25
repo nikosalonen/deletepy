@@ -13,7 +13,8 @@ from user_operations import (
     revoke_user_sessions,
     get_user_id_from_email,
     get_user_details,
-    export_users_last_login_to_csv
+    export_users_last_login_to_csv,
+    find_users_by_social_media_ids
 )
 from email_domain_checker import check_domains_status_for_emails
 from rate_limit_config import get_optimal_batch_size, get_estimated_processing_time
@@ -165,6 +166,22 @@ def main():
                 sys.exit(0)
             except Exception as e:
                 print(f"\n{RED}Export operation failed: {e}{RESET}")
+                sys.exit(1)
+        elif operation == "find-social-ids":
+            # For social media ID search, treat input as social media IDs
+            social_ids = [line.strip() for line in user_ids if line.strip()]
+
+            if not social_ids:
+                print("No valid social media IDs found to search.")
+                sys.exit(0)
+
+            try:
+                find_users_by_social_media_ids(social_ids, token, base_url)
+            except KeyboardInterrupt:
+                print(f"\n{YELLOW}Social media ID search interrupted by user.{RESET}")
+                sys.exit(0)
+            except Exception as e:
+                print(f"\n{RED}Social media ID search failed: {e}{RESET}")
                 sys.exit(1)
         else:
             # Process users one by one for other operations

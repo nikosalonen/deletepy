@@ -153,6 +153,13 @@ def validate_args() -> argparse.Namespace:
         dest="operation",
         help="Test if credentials work"
     )
+    operation_group.add_argument(
+        "--find-social-ids",
+        action="store_const",
+        const="find-social-ids",
+        dest="operation",
+        help="Find users by social media IDs from identities"
+    )
 
     parser.add_argument(
         "--test-api",

@@ -92,7 +92,10 @@ def test_validate_args():
     ("--delete", "delete"),
     ("--revoke-grants-only", "revoke-grants-only"),
     ("--check-unblocked", "check-unblocked"),
-    ("--check-domains", "check-domains")
+    ("--check-domains", "check-domains"),
+    ("--export-last-login", "export-last-login"),
+    ("--doctor", "doctor"),
+    ("--find-social-ids", "find-social-ids")
 ])
 def test_validate_args_operations(monkeypatch, flag, expected_operation):
     """Test that validate_args correctly parses all supported operation flags."""

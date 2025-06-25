@@ -339,7 +339,7 @@ def _validate_and_setup_export(emails: list[str], output_file: str, batch_size: 
     """
     # Validate output file path is writable
     try:
-        with open(output_file, 'w', encoding='utf-8') as test_file:
+        with open(output_file, 'w', encoding='utf-8'):
             pass  # Just test if we can open for writing
     except PermissionError as e:
         raise PermissionError(f"Output file path is not writable: {output_file}") from e
@@ -573,6 +573,105 @@ def _build_csv_data_dict(email: str, user_id: str, user_details: dict | None, st
             'updated_at': 'N/A',
             'status': status
         }
+
+def find_users_by_social_media_ids(social_ids: list[str], token: str, base_url: str) -> None:
+    """Find Auth0 users who have the specified social media IDs in their identities array.
+
+    Args:
+        social_ids: List of social media IDs to search for
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+    """
+    print(f"{YELLOW}Searching for users with {len(social_ids)} social media IDs...{RESET}")
+    
+    found_users = []
+    not_found_ids = []
+    total_ids = len(social_ids)
+    
+    for idx, social_id in enumerate(social_ids, 1):
+        if shutdown_requested:
+            break
+            
+        show_progress(idx, total_ids, "Searching social IDs")
+        
+        # Trim whitespace from social ID
+        social_id = social_id.strip()
+        if not social_id:
+            continue
+            
+        # Search for users with this social ID in their identities
+        # Using the users endpoint with a Lucene query to search identities
+        url = f"{base_url}/api/v2/users"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
+        }
+        
+        # Use q parameter to search for the social ID in identities
+        params = {
+            "q": f'identities.user_id:"{social_id}"',
+            "search_engine": "v3"
+        }
+        
+        response = make_rate_limited_request("GET", url, headers, params=params)
+        if response is None:
+            print(f"{RED}Error searching for social ID {CYAN}{social_id}{RED}: Request failed after retries{RESET}")
+            continue
+            
+        try:
+            users = response.json()
+            if users and isinstance(users, list) and len(users) > 0:
+                for user in users:
+                    user_id = user.get("user_id", "unknown")
+                    email = user.get("email", "N/A")
+                    
+                    # Get connection information from identities
+                    connection_info = "unknown"
+                    if user.get("identities") and len(user["identities"]) > 0:
+                        # Find the specific identity that matches our social ID
+                        for identity in user["identities"]:
+                            if identity.get("user_id") == social_id:
+                                connection_info = identity.get("connection", "unknown")
+                                break
+                        if connection_info == "unknown":
+                            # Fallback to first identity connection
+                            connection_info = user["identities"][0].get("connection", "unknown")
+                    
+                    found_users.append({
+                        "social_id": social_id,
+                        "user_id": user_id,
+                        "email": email,
+                        "connection": connection_info
+                    })
+            else:
+                not_found_ids.append(social_id)
+                
+        except ValueError as e:
+            print(f"{RED}Error parsing search results for social ID {CYAN}{social_id}{RED}: {e}{RESET}")
+            continue
+    
+    print("\n")  # Clear progress line
+    
+    # Print results
+    print(f"\n{YELLOW}Social Media ID Search Results:{RESET}")
+    print(f"Total social IDs searched: {total_ids}")
+    print(f"Users found: {len(found_users)}")
+    print(f"Not found: {len(not_found_ids)}")
+    
+    if found_users:
+        print(f"\n{GREEN}Found users:{RESET}")
+        for user in found_users:
+            print(f"  Social ID: {CYAN}{user['social_id']}{RESET}")
+            print(f"  User ID: {CYAN}{user['user_id']}{RESET}")
+            print(f"  Email: {CYAN}{user['email']}{RESET}")
+            print(f"  Connection: {CYAN}{user['connection']}{RESET}")
+            print()
+    
+    if not_found_ids:
+        print(f"\n{YELLOW}Social IDs not found:{RESET}")
+        for social_id in not_found_ids:
+            print(f"  {CYAN}{social_id}{RESET}")
 
 def export_users_last_login_to_csv(emails: list[str], token: str, base_url: str, output_file: str = "users_last_login.csv", batch_size: int = None, connection: str = None) -> None:
     """Fetch user data for given emails and export last_login values to CSV.
