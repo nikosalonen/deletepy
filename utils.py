@@ -14,20 +14,24 @@ CYAN = "\033[96m"
 # Graceful shutdown handler
 shutdown_requested = False
 
+
 def handle_shutdown(signum, frame):
     """Handle graceful shutdown on SIGINT."""
     global shutdown_requested
     shutdown_requested = True
     # Clear spinner/progress line
     import shutil
+
     terminal_width = shutil.get_terminal_size().columns
     sys.stdout.write("\r" + " " * terminal_width + "\r")
     sys.stdout.flush()
     print(f"{YELLOW}Operation cancelled by user. Exiting...{RESET}")
     sys.exit(130)
 
+
 # Register signal handler
 signal.signal(signal.SIGINT, handle_shutdown)
+
 
 def read_user_ids(filepath: str) -> List[str]:
     """Read user IDs from file.
@@ -43,13 +47,14 @@ def read_user_ids(filepath: str) -> List[str]:
         IOError: If there is an error reading the file
     """
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             # Use a generator expression to read line by line
             return [line.strip() for line in f if line.strip()]
     except FileNotFoundError as e:
         raise FileNotFoundError(f"Error: File {filepath} not found") from e
     except IOError as e:
         raise IOError(f"Error reading file: {e}") from e
+
 
 def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
     """Read user IDs from file using a generator pattern.
@@ -65,7 +70,7 @@ def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
         IOError: If there is an error reading the file
     """
     try:
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             for line in f:
                 line = line.strip()
                 if line:  # Skip empty lines
@@ -74,6 +79,7 @@ def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
         raise FileNotFoundError(f"Error: File {filepath} not found") from None
     except IOError as e:
         raise IOError(f"Error reading file: {e}") from e
+
 
 def validate_args() -> argparse.Namespace:
     """Parse and validate command line arguments.
@@ -86,13 +92,13 @@ def validate_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(
         description="Process user operations based on IDs from a file.",
-        usage="python main.py <ids_file> [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains|--doctor]"
+        usage="python main.py <ids_file> [env] [--block|--delete|--revoke-grants-only|--check-unblocked|--check-domains|--doctor]",
     )
 
     parser.add_argument(
         "input_file",
         nargs="?",
-        help="Path to the file containing user IDs (not required for --doctor)"
+        help="Path to the file containing user IDs (not required for --doctor)",
     )
 
     parser.add_argument(
@@ -100,7 +106,7 @@ def validate_args() -> argparse.Namespace:
         nargs="?",
         choices=["dev", "prod"],
         default="dev",
-        help="Environment to run in (default: dev)"
+        help="Environment to run in (default: dev)",
     )
 
     operation_group = parser.add_mutually_exclusive_group(required=True)
@@ -109,68 +115,68 @@ def validate_args() -> argparse.Namespace:
         action="store_const",
         const="block",
         dest="operation",
-        help="Block the specified users"
+        help="Block the specified users",
     )
     operation_group.add_argument(
         "--delete",
         action="store_const",
         const="delete",
         dest="operation",
-        help="Delete the specified users"
+        help="Delete the specified users",
     )
     operation_group.add_argument(
         "--revoke-grants-only",
         action="store_const",
         const="revoke-grants-only",
         dest="operation",
-        help="Revoke grants for the specified users"
+        help="Revoke grants for the specified users",
     )
     operation_group.add_argument(
         "--check-unblocked",
         action="store_const",
         const="check-unblocked",
         dest="operation",
-        help="Check if specified users are unblocked"
+        help="Check if specified users are unblocked",
     )
     operation_group.add_argument(
         "--check-domains",
         action="store_const",
         const="check-domains",
         dest="operation",
-        help="Check domains for the specified users"
+        help="Check domains for the specified users",
     )
     operation_group.add_argument(
         "--export-last-login",
         action="store_const",
         const="export-last-login",
         dest="operation",
-        help="Export user last_login data to CSV"
+        help="Export user last_login data to CSV",
     )
     operation_group.add_argument(
         "--doctor",
         action="store_const",
         const="doctor",
         dest="operation",
-        help="Test if credentials work"
+        help="Test if credentials work",
     )
     operation_group.add_argument(
         "--find-social-ids",
         action="store_const",
         const="find-social-ids",
         dest="operation",
-        help="Find users by social media IDs from identities"
+        help="Find users by social media IDs from identities",
     )
 
     parser.add_argument(
         "--test-api",
         action="store_true",
-        help="Test API access when using --doctor (optional)"
+        help="Test API access when using --doctor (optional)",
     )
 
     parser.add_argument(
         "--connection",
         type=str,
-        help="Filter users by connection type (e.g., 'google-oauth2', 'auth0', 'facebook')"
+        help="Filter users by connection type (e.g., 'google-oauth2', 'auth0', 'facebook')",
     )
 
     args = parser.parse_args()
@@ -186,6 +192,7 @@ def validate_args() -> argparse.Namespace:
         parser.error(f"input_file is required for operation '{args.operation}'")
 
     return args
+
 
 def validate_auth0_user_id(user_id: str) -> bool:
     """Validate Auth0 user ID format.
@@ -207,8 +214,9 @@ def validate_auth0_user_id(user_id: str) -> bool:
     # Auth0 user IDs have connection|identifier format
     # Connection can contain letters, numbers, hyphens
     # Identifier is typically alphanumeric
-    pattern = r'^[a-zA-Z0-9\-]+\|[a-zA-Z0-9]+$'
+    pattern = r"^[a-zA-Z0-9\-]+\|[a-zA-Z0-9]+$"
     return bool(re.match(pattern, user_id))
+
 
 def show_progress(current: int, total: int, operation: str) -> None:
     """Show progress indicator for bulk operations.
@@ -218,7 +226,7 @@ def show_progress(current: int, total: int, operation: str) -> None:
         total: Total number of items
         operation: Operation being performed
     """
-    spinner = ['|', '/', '-', '\\']
+    spinner = ["|", "/", "-", "\\"]
     spin_idx = (current - 1) % len(spinner)
     sys.stdout.write(f"\r{operation}... {spinner[spin_idx]} ({current}/{total})")
     sys.stdout.flush()
