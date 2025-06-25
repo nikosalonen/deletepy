@@ -176,7 +176,7 @@ def main():
                 sys.exit(0)
 
             try:
-                find_users_by_social_media_ids(social_ids, token, base_url)
+                find_users_by_social_media_ids(social_ids, token, base_url, env, auto_delete=True)
             except KeyboardInterrupt:
                 print(f"\n{YELLOW}Social media ID search interrupted by user.{RESET}")
                 sys.exit(0)
