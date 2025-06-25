@@ -8,18 +8,19 @@ and shows how the export functionality handles them.
 
 import os
 
+
 def create_test_emails_file():
     """Create a test file with emails that might have multiple users."""
     test_emails = [
         "admin@company.com",  # Likely to have multiple users (Google + Auth0)
-        "user@example.com",   # Single user
-        "test@domain.org",    # Single user
-        "support@company.com", # Might have multiple users
-        "developer@startup.io" # Single user
+        "user@example.com",  # Single user
+        "test@domain.org",  # Single user
+        "support@company.com",  # Might have multiple users
+        "developer@startup.io",  # Single user
     ]
 
     filename = "test_multiple_users.txt"
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         for email in test_emails:
             f.write(f"{email}\n")
 
@@ -29,6 +30,7 @@ def create_test_emails_file():
         print(f"  - {email}")
     return filename
 
+
 def main():
     """Main function to demonstrate multiple user handling."""
     print("Multiple Users Test")
@@ -36,7 +38,9 @@ def main():
 
     # Check if main.py exists
     if not os.path.exists("main.py"):
-        print("Error: main.py not found. Please run this script from the project root directory.")
+        print(
+            "Error: main.py not found. Please run this script from the project root directory."
+        )
         return
 
     # Create test emails file
@@ -50,9 +54,12 @@ def main():
 
     print("\nExpected behavior:")
     print("- Emails with single users: One row per email")
-    print("- Emails with multiple users: Multiple rows per email, each with different connection")
+    print(
+        "- Emails with multiple users: Multiple rows per email, each with different connection"
+    )
     print("- Connection column will show: google-oauth2, auth0, facebook, etc.")
     print("- Status will show: MULTIPLE_USERS (N) for emails with multiple accounts")
+
 
 if __name__ == "__main__":
     main()

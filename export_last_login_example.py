@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 
+
 def create_sample_emails_file():
     """Create a sample file with email addresses for testing."""
     sample_emails = [
@@ -22,16 +23,17 @@ def create_sample_emails_file():
         "user2@example.com",
         "user3@example.com",
         "admin@company.com",
-        "test@domain.org"
+        "test@domain.org",
     ]
 
     filename = "sample_emails.txt"
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         for email in sample_emails:
             f.write(f"{email}\n")
 
     print(f"Created sample emails file: {filename}")
     return filename
+
 
 def run_export_command(emails_file, env="dev"):
     """Run the export-last-login command."""
@@ -39,11 +41,12 @@ def run_export_command(emails_file, env="dev"):
     print(f"Command: python main.py {emails_file} {env} --export-last-login")
 
     try:
-        result = subprocess.run([
-            sys.executable, "main.py",
-            emails_file, env,
-            "--export-last-login"
-        ], capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            [sys.executable, "main.py", emails_file, env, "--export-last-login"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
 
         print("Command output:")
         print(result.stdout)
@@ -59,6 +62,7 @@ def run_export_command(emails_file, env="dev"):
         print("Errors:")
         print(e.stderr)
 
+
 def main():
     """Main function to demonstrate the export functionality."""
     print("Export Last Login Example")
@@ -66,7 +70,9 @@ def main():
 
     # Check if main.py exists
     if not os.path.exists("main.py"):
-        print("Error: main.py not found. Please run this script from the project root directory.")
+        print(
+            "Error: main.py not found. Please run this script from the project root directory."
+        )
         sys.exit(1)
 
     # Create sample emails file
@@ -85,6 +91,7 @@ def main():
     print("1. Create a text file with one email per line")
     print("2. Run: python main.py your_emails.txt dev --export-last-login")
     print("3. Check the generated CSV file for results")
+
 
 if __name__ == "__main__":
     main()
