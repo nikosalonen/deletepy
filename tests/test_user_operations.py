@@ -7,7 +7,8 @@ from user_operations import (
     revoke_user_grants,
     check_unblocked_users,
     get_user_email,
-    get_user_details
+    get_user_details,
+    find_users_by_social_media_ids
 )
 from utils import YELLOW, CYAN, RESET
 
@@ -263,3 +264,134 @@ def test_get_user_details(mock_requests, mock_response):
         },
         timeout=30
     )
+
+def test_find_users_by_social_media_ids_found(mock_requests, mock_response):
+    # Mock response with a user found
+    mock_response.json.return_value = [{
+        "user_id": "auth0|123456789",
+        "email": "test@example.com",
+        "identities": [{
+            "user_id": "12345678901234567890",
+            "connection": "google-oauth2"
+        }]
+    }]
+    mock_requests.request.return_value = mock_response
+
+    with patch('builtins.print') as mock_print, \
+         patch('user_operations.show_progress'):
+        find_users_by_social_media_ids(["12345678901234567890"], "test_token", "http://test.com")
+
+        # Verify API call was made correctly
+        mock_requests.request.assert_called_once()
+        mock_requests.request.assert_called_with(
+            "GET",
+            "http://test.com/api/v2/users",
+            headers={
+                "Authorization": "Bearer test_token",
+                "Content-Type": "application/json",
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
+            },
+            params={
+                "q": 'identities.user_id:"12345678901234567890"',
+                "search_engine": "v3"
+            },
+            timeout=30
+        )
+
+        # Verify output includes found user
+        mock_print.assert_any_call("Users found: 1")
+        mock_print.assert_any_call("Not found: 0")
+
+def test_find_users_by_social_media_ids_not_found(mock_requests, mock_response):
+    # Mock empty response - no users found
+    mock_response.json.return_value = []
+    mock_requests.request.return_value = mock_response
+
+    with patch('builtins.print') as mock_print, \
+         patch('user_operations.show_progress'):
+        find_users_by_social_media_ids(["nonexistent123"], "test_token", "http://test.com")
+
+        # Verify API call was made correctly
+        mock_requests.request.assert_called_once()
+        mock_requests.request.assert_called_with(
+            "GET",
+            "http://test.com/api/v2/users",
+            headers={
+                "Authorization": "Bearer test_token",
+                "Content-Type": "application/json",
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
+            },
+            params={
+                "q": 'identities.user_id:"nonexistent123"',
+                "search_engine": "v3"
+            },
+            timeout=30
+        )
+
+        # Verify output shows no users found
+        mock_print.assert_any_call("Users found: 0")
+        mock_print.assert_any_call("Not found: 1")
+
+def test_find_users_by_social_media_ids_multiple_ids(mock_requests, mock_response):
+    # Mock responses for multiple social IDs - first found, second not found
+    mock_response.json.side_effect = [
+        [{
+            "user_id": "auth0|123456789",
+            "email": "test@example.com",
+            "identities": [{
+                "user_id": "12345678901234567890",
+                "connection": "google-oauth2"
+            }]
+        }],
+        []  # Second ID not found
+    ]
+    mock_requests.request.return_value = mock_response
+
+    with patch('builtins.print') as mock_print, \
+         patch('user_operations.show_progress'):
+        find_users_by_social_media_ids(["12345678901234567890", "nonexistent123"], "test_token", "http://test.com")
+
+        # Verify two API calls were made
+        assert mock_requests.request.call_count == 2
+
+        # Verify output shows summary
+        mock_print.assert_any_call("Total social IDs searched: 2")
+        mock_print.assert_any_call("Users found: 1")
+        mock_print.assert_any_call("Not found: 1")
+
+def test_find_users_by_social_media_ids_empty_input(mock_requests, mock_response):
+    with patch('builtins.print') as mock_print, \
+         patch('user_operations.show_progress'):
+        find_users_by_social_media_ids([], "test_token", "http://test.com")
+
+        # Verify no API calls were made for empty input
+        mock_requests.request.assert_not_called()
+
+        # Verify summary shows zero results
+        mock_print.assert_any_call("Total social IDs searched: 0")
+        mock_print.assert_any_call("Users found: 0")
+        mock_print.assert_any_call("Not found: 0")
+
+def test_find_users_by_social_media_ids_whitespace_handling(mock_requests, mock_response):
+    # Mock response for trimmed social ID
+    mock_response.json.return_value = [{
+        "user_id": "auth0|123456789",
+        "email": "test@example.com",
+        "identities": [{
+            "user_id": "12345678901234567890",
+            "connection": "google-oauth2"
+        }]
+    }]
+    mock_requests.request.return_value = mock_response
+
+    with patch('builtins.print'), \
+         patch('user_operations.show_progress'):
+        # Test with social ID that has whitespace
+        find_users_by_social_media_ids(["  12345678901234567890  ", ""], "test_token", "http://test.com")
+
+        # Verify only one API call was made (empty string skipped)
+        mock_requests.request.assert_called_once()
+        
+        # Verify the API call used the trimmed social ID
+        call_args = mock_requests.request.call_args
+        assert call_args[1]['params']['q'] == 'identities.user_id:"12345678901234567890"'
