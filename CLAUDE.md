@@ -70,6 +70,9 @@ python main.py users.txt dev --check-unblocked
 
 # Check email domains
 python main.py users.txt dev --check-domains
+
+# Find users by social media IDs
+python main.py social_ids.txt dev --find-social-ids
 ```
 
 ### Code Quality
