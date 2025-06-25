@@ -70,6 +70,9 @@ python main.py users.txt dev --check-unblocked
 
 # Check email domains
 python main.py users.txt dev --check-domains
+
+# Find users by social media IDs (deletes single-identity users, unlinks from multi-identity users)
+python main.py social_ids.txt dev --find-social-ids
 ```
 
 ### Code Quality
@@ -103,6 +106,29 @@ ruff check --fix .
 - `conftest.py` provides automatic module-based request mocking
 - Each module has corresponding test files following `test_*.py` naming
 - Tests cover both success and error scenarios for Auth0 API interactions
+
+### Function Complexity Guidelines
+To maintain code readability and testability, follow these rules for function complexity:
+
+**Maximum Limits:**
+- **50 lines per function** - Functions exceeding 50 lines should be refactored
+- **4 levels of nesting** - Deeply nested code indicates need for extraction
+- **10 variables** - Too many variables suggest the function does too much
+- **5 parameters** - Functions with many parameters should be redesigned
+
+**Refactoring Rules:**
+- **Extract helper functions** when logic can be grouped into distinct operations
+- **Use private functions** (prefixed with `_`) for internal utilities
+- **Break down complex loops** that handle multiple concerns
+- **Separate display logic** from business logic
+- **Extract validation** and error handling into dedicated functions
+
+**When to Refactor:**
+- Function has multiple responsibilities (violates Single Responsibility Principle)
+- Complex conditional logic with deep nesting
+- Long parameter lists or too many local variables
+- Repetitive code patterns within the function
+- Difficulty in writing focused unit tests
 
 ### Auth0 API Requirements
 Required Auth0 Management API scopes:

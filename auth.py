@@ -5,9 +5,12 @@ from config import get_env_config
 # API timeout in seconds for authentication requests
 API_TIMEOUT = 30
 
+
 class AuthConfigError(Exception):
     """Exception raised for authentication configuration errors."""
+
     pass
+
 
 def get_access_token(env: str = "dev") -> str:
     """Get access token from Auth0 using client credentials.
@@ -31,23 +34,29 @@ def get_access_token(env: str = "dev") -> str:
 
     # Validate required environment variables
     if not client_id:
-        raise AuthConfigError(f"Missing Auth0 Client ID. Please set the {'DEV_AUTH0_CLIENT_ID' if env == 'dev' else 'AUTH0_CLIENT_ID'} environment variable.")
+        raise AuthConfigError(
+            f"Missing Auth0 Client ID. Please set the {'DEV_AUTH0_CLIENT_ID' if env == 'dev' else 'AUTH0_CLIENT_ID'} environment variable."
+        )
     if not client_secret:
-        raise AuthConfigError(f"Missing Auth0 Client Secret. Please set the {'DEV_AUTH0_CLIENT_SECRET' if env == 'dev' else 'AUTH0_CLIENT_SECRET'} environment variable.")
+        raise AuthConfigError(
+            f"Missing Auth0 Client Secret. Please set the {'DEV_AUTH0_CLIENT_SECRET' if env == 'dev' else 'AUTH0_CLIENT_SECRET'} environment variable."
+        )
     if not domain:
-        raise AuthConfigError(f"Missing Auth0 Domain. Please set the {'DEV_AUTH0_DOMAIN' if env == 'dev' else 'AUTH0_DOMAIN'} environment variable.")
+        raise AuthConfigError(
+            f"Missing Auth0 Domain. Please set the {'DEV_AUTH0_DOMAIN' if env == 'dev' else 'AUTH0_DOMAIN'} environment variable."
+        )
 
     url = f"https://{domain}/oauth/token"
     headers = {
         "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
     payload = {
         "client_id": client_id,
         "client_secret": client_secret,
         "audience": f"https://{domain}/api/v2/",
         "grant_type": "client_credentials",
-        "scope": "delete:users update:users delete:sessions delete:grants read:users"
+        "scope": "delete:users update:users delete:sessions delete:grants read:users",
     }
     response = requests.post(url, json=payload, headers=headers, timeout=API_TIMEOUT)
     response.raise_for_status()
@@ -58,6 +67,7 @@ def get_access_token(env: str = "dev") -> str:
         return json_response["access_token"]
     except ValueError as e:
         raise AuthConfigError(f"Invalid JSON response from Auth0: {str(e)}") from e
+
 
 def doctor(env: str = "dev", test_api: bool = False) -> dict:
     """Test if the credentials work by getting an access token and optionally testing API access.
@@ -92,7 +102,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             "environment": env,
             "token_obtained": True,
             "api_tested": False,
-            "details": "Credentials are working correctly"
+            "details": "Credentials are working correctly",
         }
 
         if test_api:
@@ -101,12 +111,14 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",
-                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)"
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
             }
 
             # Make a simple API call to test the token
             test_url = f"{base_url}/api/v2/users"
-            response = requests.get(test_url, headers=headers, timeout=API_TIMEOUT, params={"per_page": 1})
+            response = requests.get(
+                test_url, headers=headers, timeout=API_TIMEOUT, params={"per_page": 1}
+            )
 
             if response.status_code == 200:
                 print("    ✅ API access successful")
@@ -117,7 +129,9 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
                 print(f"    ⚠️  API access failed with status {response.status_code}")
                 result["api_tested"] = True
                 result["api_status"] = f"failed_{response.status_code}"
-                result["details"] = f"Token obtained but API access failed with status {response.status_code}"
+                result["details"] = (
+                    f"Token obtained but API access failed with status {response.status_code}"
+                )
 
         print("✅ Doctor check completed successfully!")
         return result
@@ -130,7 +144,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             "token_obtained": False,
             "api_tested": False,
             "error": str(e),
-            "details": "Authentication configuration is invalid"
+            "details": "Authentication configuration is invalid",
         }
     except requests.exceptions.RequestException as e:
         print(f"❌ Network/API error: {str(e)}")
@@ -140,7 +154,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             "token_obtained": False,
             "api_tested": False,
             "error": str(e),
-            "details": "Network or API request failed"
+            "details": "Network or API request failed",
         }
     except Exception as e:
         print(f"❌ Unexpected error: {str(e)}")
@@ -150,5 +164,5 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             "token_obtained": False,
             "api_tested": False,
             "error": str(e),
-            "details": "Unexpected error occurred"
+            "details": "Unexpected error occurred",
         }
