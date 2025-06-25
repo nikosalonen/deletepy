@@ -45,6 +45,10 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
             "action": "revoking grants for",
             "consequence": "This will invalidate all refresh tokens and prevent applications from obtaining new access tokens for these users.",
         },
+        "find-social-ids": {
+            "action": "processing social media identities for",
+            "consequence": "This will delete users with single social identities and unlink social identities from users with multiple identities.",
+        },
     }.get(
         operation,
         {
