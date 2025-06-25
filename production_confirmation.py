@@ -14,7 +14,24 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
 
     Returns:
         bool: True if confirmed, False otherwise
+
+    Raises:
+        ValueError: If operation is empty or total_users is not positive
+        TypeError: If parameters are not of expected types
     """
+    if not isinstance(operation, str):
+        raise TypeError(f"Operation must be a string, got {type(operation).__name__}")
+
+    if not isinstance(total_users, int):
+        raise TypeError(
+            f"Total users must be an integer, got {type(total_users).__name__}"
+        )
+
+    if not operation or not operation.strip():
+        raise ValueError("Operation cannot be empty or whitespace")
+
+    if total_users <= 0:
+        raise ValueError(f"Total users must be a positive integer, got {total_users}")
     operation_details = {
         "block": {
             "action": "blocking",
