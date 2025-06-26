@@ -36,8 +36,13 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+**Important**: Always ensure the virtual environment is activated before running any commands. You can tell it's active when you see `(venv)` at the beginning of your command prompt.
+
 ### Running Tests
 ```bash
+# Make sure virtual environment is activated first!
+source venv/bin/activate
+
 # Run all tests
 pytest
 
@@ -53,6 +58,9 @@ pytest tests/test_auth.py::test_get_access_token_success
 
 ### Main Operations
 ```bash
+# Make sure virtual environment is activated first!
+source venv/bin/activate
+
 # Check authentication configuration
 python main.py doctor [dev|prod]
 
