@@ -44,12 +44,18 @@ def mock_requests(request):
     # If only one module, patch it directly
     if len(module_paths) == 1:
         with patch(f"{module_paths[0]}.requests") as mock:
+            # Ensure exceptions module is properly mocked
+            import requests
+            mock.exceptions = requests.exceptions
             yield mock
     else:
         # Multiple modules - patch all of them with the same mock
         patches = []
         try:
             mock = MagicMock()
+            # Ensure exceptions module is properly mocked
+            import requests
+            mock.exceptions = requests.exceptions
             for module_path in module_paths:
                 patcher = patch(f"{module_path}.requests", mock)
                 patches.append(patcher)
