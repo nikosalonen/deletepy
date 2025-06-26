@@ -7,16 +7,11 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
 
+from ..core.exceptions import FileOperationError
 from .display_utils import (
     print_error,
     print_warning,
 )
-
-
-class FileOperationError(Exception):
-    """Custom exception for file operation errors."""
-
-    pass
 
 
 # Graceful shutdown handler

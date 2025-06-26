@@ -1,6 +1,7 @@
 """Core functionality for Auth0 User Management Tool."""
 
-from .auth import AuthConfigError, doctor, get_access_token
+from .auth import doctor, get_access_token
+from .exceptions import AuthConfigError
 from .config import check_env_file, get_base_url, get_env_config, validate_env_var
 
 __all__ = [

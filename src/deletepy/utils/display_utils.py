@@ -215,6 +215,5 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
     return response == "yes"
 
 
-class FileOperationError(Exception):
-    """Exception raised for file operation errors."""
-    pass
+# Import FileOperationError from centralized exceptions
+from ..core.exceptions import FileOperationError
