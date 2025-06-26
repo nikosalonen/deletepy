@@ -23,7 +23,7 @@ class FileOperationError(Exception):
 shutdown_requested = False
 
 
-def handle_shutdown(signum, frame):
+def handle_shutdown(signum: int, frame: object) -> None:
     """Handle graceful shutdown on interrupt signals."""
     global shutdown_requested
     print_warning("\nShutdown requested. Finishing current operation...")
