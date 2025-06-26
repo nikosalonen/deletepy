@@ -13,7 +13,6 @@ from .display_utils import (
     print_warning,
 )
 
-
 # Graceful shutdown handler
 shutdown_requested = False
 

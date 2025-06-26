@@ -1,5 +1,6 @@
 """Utilities module for Auth0 user management."""
 
+from ..core.exceptions import FileOperationError
 from .auth_utils import (
     AUTH0_USER_ID_PREFIXES,
     get_connection_type,
@@ -15,15 +16,6 @@ from .csv_utils import (
     find_best_column,
     resolve_encoded_username,
     write_identifiers_to_file,
-)
-from ..core.exceptions import FileOperationError
-from .logging_utils import get_logger, setup_logging, log_operation
-from .legacy_print import (
-    log_api_request,
-    log_batch_operation,
-    log_file_operation,
-    log_progress,
-    log_user_operation,
 )
 from .display_utils import (
     confirm_action,
@@ -52,6 +44,14 @@ from .file_utils import (
 from .file_utils import (
     safe_file_write as safe_write,
 )
+from .legacy_print import (
+    log_api_request,
+    log_batch_operation,
+    log_file_operation,
+    log_progress,
+    log_user_operation,
+)
+from .logging_utils import get_logger, log_operation, setup_logging
 
 # FileOperationError is imported from core.exceptions above
 

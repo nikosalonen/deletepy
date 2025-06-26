@@ -1,9 +1,9 @@
 import requests
 from dotenv import load_dotenv
 
+from ..utils.logging_utils import get_logger
 from .config import get_env_config
 from .exceptions import AuthConfigError
-from ..utils.logging_utils import get_logger
 
 # API timeout in seconds for authentication requests
 API_TIMEOUT = 30
@@ -85,7 +85,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
     try:
         logger.info(
             f"🔍 Testing credentials for {env.upper()} environment...",
-            extra={'operation': 'doctor_check', 'environment': env}
+            extra={"operation": "doctor_check", "environment": env},
         )
 
         # Test getting access token
@@ -100,7 +100,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
         token = get_access_token(env)
         logger.info(
             "    ✅ Access token obtained successfully",
-            extra={'operation': 'token_request', 'status': 'success'}
+            extra={"operation": "token_request", "status": "success"},
         )
 
         result = {
@@ -130,11 +130,11 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
                 logger.info(
                     "    ✅ API access successful",
                     extra={
-                        'operation': 'api_test',
-                        'status': 'success',
-                        'status_code': response.status_code,
-                        'api_endpoint': test_url
-                    }
+                        "operation": "api_test",
+                        "status": "success",
+                        "status_code": response.status_code,
+                        "api_endpoint": test_url,
+                    },
                 )
                 result["api_tested"] = True
                 result["api_status"] = "success"
@@ -143,11 +143,11 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
                 logger.warning(
                     f"    ⚠️  API access failed with status {response.status_code}",
                     extra={
-                        'operation': 'api_test',
-                        'status': 'failed',
-                        'status_code': response.status_code,
-                        'api_endpoint': test_url
-                    }
+                        "operation": "api_test",
+                        "status": "failed",
+                        "status_code": response.status_code,
+                        "api_endpoint": test_url,
+                    },
                 )
                 result["api_tested"] = True
                 result["api_status"] = f"failed_{response.status_code}"
@@ -157,15 +157,23 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
 
         logger.info(
             "✅ Doctor check completed successfully!",
-            extra={'operation': 'doctor_check', 'status': 'completed', 'environment': env}
+            extra={
+                "operation": "doctor_check",
+                "status": "completed",
+                "environment": env,
+            },
         )
         return result
 
     except AuthConfigError as e:
         logger.error(
             f"❌ Authentication configuration error: {str(e)}",
-            extra={'operation': 'doctor_check', 'error_type': 'AuthConfigError', 'environment': env},
-            exc_info=True
+            extra={
+                "operation": "doctor_check",
+                "error_type": "AuthConfigError",
+                "environment": env,
+            },
+            exc_info=True,
         )
         return {
             "success": False,
@@ -178,8 +186,12 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
     except requests.exceptions.RequestException as e:
         logger.error(
             f"❌ Network/API error: {str(e)}",
-            extra={'operation': 'doctor_check', 'error_type': 'RequestException', 'environment': env},
-            exc_info=True
+            extra={
+                "operation": "doctor_check",
+                "error_type": "RequestException",
+                "environment": env,
+            },
+            exc_info=True,
         )
         return {
             "success": False,
@@ -192,8 +204,12 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
     except Exception as e:
         logger.error(
             f"❌ Unexpected error: {str(e)}",
-            extra={'operation': 'doctor_check', 'error_type': 'UnexpectedError', 'environment': env},
-            exc_info=True
+            extra={
+                "operation": "doctor_check",
+                "error_type": "UnexpectedError",
+                "environment": env,
+            },
+            exc_info=True,
         )
         return {
             "success": False,

@@ -16,6 +16,7 @@ _shutdown_requested = False
 
 def setup_shutdown_handler():
     """Setup signal handlers for graceful shutdown."""
+
     def signal_handler(signum, frame):
         global _shutdown_requested
         _shutdown_requested = True
@@ -73,11 +74,13 @@ def safe_file_write(file_path: str, content: str, backup: bool = True) -> bool:
     try:
         # Create backup if file exists and backup is requested
         if backup and os.path.exists(file_path):
-            backup_path = f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            backup_path = (
+                f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            )
             shutil.copy2(file_path, backup_path)
 
         # Write new content
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(content)
 
         return True
@@ -103,7 +106,7 @@ def confirm_action(message: str, default: bool = False) -> bool:
     if not response:
         return default
 
-    return response in ['y', 'yes', 'true', '1']
+    return response in ["y", "yes", "true", "1"]
 
 
 def print_section_header(title: str) -> None:
@@ -180,7 +183,7 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
 
     if total_users <= 0:
         raise ValueError(f"Total users must be a positive integer, got {total_users}")
-    
+
     operation_details = {
         "block": {
             "action": "blocking",
@@ -216,4 +219,3 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
 
 
 # Import FileOperationError from centralized exceptions
-from ..core.exceptions import FileOperationError

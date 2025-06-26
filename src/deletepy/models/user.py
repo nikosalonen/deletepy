@@ -46,7 +46,7 @@ class User:
     user_metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
-    def from_auth0_data(cls, data: dict[str, Any]) -> 'User':
+    def from_auth0_data(cls, data: dict[str, Any]) -> "User":
         """Create a User instance from Auth0 API response data.
 
         Args:
@@ -57,63 +57,69 @@ class User:
         """
         # Parse identities
         identities = []
-        for identity_data in data.get('identities', []):
+        for identity_data in data.get("identities", []):
             identity = UserIdentity(
-                connection=identity_data.get('connection', ''),
-                user_id=identity_data.get('user_id', ''),
-                provider=identity_data.get('provider', ''),
-                is_social=identity_data.get('isSocial', False),
-                access_token=identity_data.get('access_token'),
-                access_token_secret=identity_data.get('access_token_secret'),
-                refresh_token=identity_data.get('refresh_token'),
-                profile_data=identity_data.get('profileData', {})
+                connection=identity_data.get("connection", ""),
+                user_id=identity_data.get("user_id", ""),
+                provider=identity_data.get("provider", ""),
+                is_social=identity_data.get("isSocial", False),
+                access_token=identity_data.get("access_token"),
+                access_token_secret=identity_data.get("access_token_secret"),
+                refresh_token=identity_data.get("refresh_token"),
+                profile_data=identity_data.get("profileData", {}),
             )
             identities.append(identity)
 
         # Parse datetime fields
         last_login = None
-        if data.get('last_login'):
+        if data.get("last_login"):
             try:
-                last_login = datetime.fromisoformat(data['last_login'].replace('Z', '+00:00'))
+                last_login = datetime.fromisoformat(
+                    data["last_login"].replace("Z", "+00:00")
+                )
             except (ValueError, AttributeError):
                 pass
 
         created_at = None
-        if data.get('created_at'):
+        if data.get("created_at"):
             try:
-                created_at = datetime.fromisoformat(data['created_at'].replace('Z', '+00:00'))
+                created_at = datetime.fromisoformat(
+                    data["created_at"].replace("Z", "+00:00")
+                )
             except (ValueError, AttributeError):
                 pass
 
         updated_at = None
-        if data.get('updated_at'):
+        if data.get("updated_at"):
             try:
-                updated_at = datetime.fromisoformat(data['updated_at'].replace('Z', '+00:00'))
+                updated_at = datetime.fromisoformat(
+                    data["updated_at"].replace("Z", "+00:00")
+                )
             except (ValueError, AttributeError):
                 pass
 
         return cls(
-            user_id=data.get('user_id', ''),
-            email=data.get('email'),
+            user_id=data.get("user_id", ""),
+            email=data.get("email"),
             connection=identities[0].connection if identities else None,
             identities=identities,
-            blocked=data.get('blocked', False),
+            blocked=data.get("blocked", False),
             last_login=last_login,
-            last_ip=data.get('last_ip'),
-            logins_count=data.get('logins_count', 0),
+            last_ip=data.get("last_ip"),
+            logins_count=data.get("logins_count", 0),
             created_at=created_at,
             updated_at=updated_at,
-            email_verified=data.get('email_verified', False),
-            phone_number=data.get('phone_number'),
-            phone_verified=data.get('phone_verified', False),
-            picture=data.get('picture'),
-            nickname=data.get('nickname'),
-            name=data.get('name'),
-            given_name=data.get('given_name'),
-            family_name=data.get('family_name'),
-            locale=data.get('locale'),
-            app_metadata=data.get('app_metadata', {}),
-            user_metadata=data.get('user_metadata', {})
+            email_verified=data.get("email_verified", False),
+            phone_number=data.get("phone_number"),
+            phone_verified=data.get("phone_verified", False),
+            picture=data.get("picture"),
+            nickname=data.get("nickname"),
+            name=data.get("name"),
+            given_name=data.get("given_name"),
+            family_name=data.get("family_name"),
+            locale=data.get("locale"),
+            app_metadata=data.get("app_metadata", {}),
+            user_metadata=data.get("user_metadata", {}),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -123,38 +129,39 @@ class User:
             Dict[str, Any]: User data as dictionary
         """
         return {
-            'user_id': self.user_id,
-            'email': self.email,
-            'connection': self.connection,
-            'identities': [
+            "user_id": self.user_id,
+            "email": self.email,
+            "connection": self.connection,
+            "identities": [
                 {
-                    'connection': identity.connection,
-                    'user_id': identity.user_id,
-                    'provider': identity.provider,
-                    'isSocial': identity.is_social,
-                    'access_token': identity.access_token,
-                    'access_token_secret': identity.access_token_secret,
-                    'refresh_token': identity.refresh_token,
-                    'profileData': identity.profile_data
-                } for identity in self.identities
+                    "connection": identity.connection,
+                    "user_id": identity.user_id,
+                    "provider": identity.provider,
+                    "isSocial": identity.is_social,
+                    "access_token": identity.access_token,
+                    "access_token_secret": identity.access_token_secret,
+                    "refresh_token": identity.refresh_token,
+                    "profileData": identity.profile_data,
+                }
+                for identity in self.identities
             ],
-            'blocked': self.blocked,
-            'last_login': self.last_login.isoformat() if self.last_login else None,
-            'last_ip': self.last_ip,
-            'logins_count': self.logins_count,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
-            'email_verified': self.email_verified,
-            'phone_number': self.phone_number,
-            'phone_verified': self.phone_verified,
-            'picture': self.picture,
-            'nickname': self.nickname,
-            'name': self.name,
-            'given_name': self.given_name,
-            'family_name': self.family_name,
-            'locale': self.locale,
-            'app_metadata': self.app_metadata,
-            'user_metadata': self.user_metadata
+            "blocked": self.blocked,
+            "last_login": self.last_login.isoformat() if self.last_login else None,
+            "last_ip": self.last_ip,
+            "logins_count": self.logins_count,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "email_verified": self.email_verified,
+            "phone_number": self.phone_number,
+            "phone_verified": self.phone_verified,
+            "picture": self.picture,
+            "nickname": self.nickname,
+            "name": self.name,
+            "given_name": self.given_name,
+            "family_name": self.family_name,
+            "locale": self.locale,
+            "app_metadata": self.app_metadata,
+            "user_metadata": self.user_metadata,
         }
 
     def is_social_user(self) -> bool:
@@ -251,12 +258,12 @@ class BatchOperationResults:
             Dict[str, Any]: Summary data
         """
         return {
-            'operation': self.operation,
-            'total_users': self.total_users,
-            'processed_count': self.processed_count,
-            'skipped_count': self.skipped_count,
-            'success_rate': self.success_rate,
-            'not_found_users_count': len(self.not_found_users),
-            'invalid_user_ids_count': len(self.invalid_user_ids),
-            'multiple_users_count': len(self.multiple_users)
+            "operation": self.operation,
+            "total_users": self.total_users,
+            "processed_count": self.processed_count,
+            "skipped_count": self.skipped_count,
+            "success_rate": self.success_rate,
+            "not_found_users_count": len(self.not_found_users),
+            "invalid_user_ids_count": len(self.invalid_user_ids),
+            "multiple_users_count": len(self.multiple_users),
         }

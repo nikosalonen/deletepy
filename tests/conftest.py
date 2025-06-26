@@ -1,5 +1,6 @@
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 
 @pytest.fixture
@@ -23,21 +24,21 @@ def mock_requests(request):
     # Extract the test file name and map to new module structure
     test_file = request.module.__file__
     test_name = test_file.split("test_")[-1].replace(".py", "")
-    
+
     # Map test files to their corresponding module paths
     # Some test files need multiple modules patched
     module_mapping = {
         "auth": ["src.deletepy.core.auth"],
         "user_operations": [
-            "src.deletepy.operations.user_ops", 
+            "src.deletepy.operations.user_ops",
             "src.deletepy.operations.batch_ops",
-            "src.deletepy.utils.request_utils"
+            "src.deletepy.utils.request_utils",
         ],
         "utils": ["src.deletepy.utils.file_utils"],
         "cleanup_csv": ["src.deletepy.utils.csv_utils"],
         "email_domain_checker": ["src.deletepy.operations.domain_ops"],
     }
-    
+
     module_paths = module_mapping.get(test_name, [f"src.deletepy.{test_name}"])
 
     # If only one module, patch it directly

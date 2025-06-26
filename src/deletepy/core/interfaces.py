@@ -103,7 +103,9 @@ class UserOperationProtocol(Protocol):
         """
         ...
 
-    def execute_batch_operation(self, user_ids: list[str], operation: str) -> BatchOperationResults:
+    def execute_batch_operation(
+        self, user_ids: list[str], operation: str
+    ) -> BatchOperationResults:
         """Execute batch operation on multiple users.
 
         Args:
@@ -190,6 +192,7 @@ class ConfigProviderProtocol(Protocol):
 
 # Abstract base classes for concrete implementations
 
+
 class BaseUserService(ABC):
     """Abstract base class for user services."""
 
@@ -234,7 +237,9 @@ class BaseBatchProcessor(ABC):
     """Abstract base class for batch processing."""
 
     @abstractmethod
-    def process_batch(self, user_ids: list[str], operation: str) -> BatchOperationResults:
+    def process_batch(
+        self, user_ids: list[str], operation: str
+    ) -> BatchOperationResults:
         """Process batch of users.
 
         Args:

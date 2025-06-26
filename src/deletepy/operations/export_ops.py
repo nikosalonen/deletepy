@@ -37,7 +37,9 @@ def _validate_and_setup_export(
     """
     # Validate output file path is writable
     try:
-        output_dir = os.path.dirname(output_file) if os.path.dirname(output_file) else "."
+        output_dir = (
+            os.path.dirname(output_file) if os.path.dirname(output_file) else "."
+        )
         if not os.path.exists(output_dir):
             raise FileNotFoundError(f"Output directory does not exist: {output_dir}")
 
@@ -47,7 +49,7 @@ def _validate_and_setup_export(
             f.write("test")
         os.remove(test_file)
     except (PermissionError, OSError) as e:
-        raise PermissionError(f"Cannot write to output file {output_file}: {e}")
+        raise PermissionError(f"Cannot write to output file {output_file}: {e}") from e
 
     # Auto-calculate batch size if not provided
     if batch_size is None:
@@ -161,7 +163,9 @@ def _process_email_batch(
 
         show_progress(idx, len(batch_emails), f"Batch {batch_number}")
 
-        user_data_list, email_counters = _fetch_user_data(email, token, base_url, connection)
+        user_data_list, email_counters = _fetch_user_data(
+            email, token, base_url, connection
+        )
 
         # Update batch counters
         for key in batch_counters:
@@ -169,7 +173,9 @@ def _process_email_batch(
 
         # Build CSV data for each user found
         for user_details in user_data_list:
-            csv_row = _build_csv_data_dict(email, user_details.get("user_id", ""), user_details, "Found")
+            csv_row = _build_csv_data_dict(
+                email, user_details.get("user_id", ""), user_details, "Found"
+            )
             csv_data.append(csv_row)
 
         # If no users found, add a row with "Not Found" status
@@ -180,7 +186,9 @@ def _process_email_batch(
     return csv_data, batch_counters
 
 
-def _write_csv_batch(csv_data: list[dict[str, Any]], output_file: str, batch_number: int) -> bool:
+def _write_csv_batch(
+    csv_data: list[dict[str, Any]], output_file: str, batch_number: int
+) -> bool:
     """Write CSV data to file.
 
     Args:
@@ -210,7 +218,7 @@ def _write_csv_batch(csv_data: list[dict[str, Any]], output_file: str, batch_num
                 "status",
                 "blocked",
                 "email_verified",
-                "identities_count"
+                "identities_count",
             ]
 
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -267,7 +275,7 @@ def _generate_export_summary(
     if csv_data:
         print(f"\n{YELLOW}Sample data:{RESET}")
         for i, row in enumerate(csv_data[:3]):  # Show first 3 rows
-            print(f"  {i+1}. {row['email']} -> {row['user_id']} ({row['status']})")
+            print(f"  {i + 1}. {row['email']} -> {row['user_id']} ({row['status']})")
 
 
 def _build_csv_data_dict(
@@ -295,7 +303,7 @@ def _build_csv_data_dict(
             "status": status,
             "blocked": "",
             "email_verified": "",
-            "identities_count": "0"
+            "identities_count": "0",
         }
 
     # Extract last_login with proper formatting
@@ -325,7 +333,7 @@ def _build_csv_data_dict(
         "status": status,
         "blocked": str(user_details.get("blocked", False)),
         "email_verified": str(user_details.get("email_verified", False)),
-        "identities_count": str(len(identities))
+        "identities_count": str(len(identities)),
     }
 
 

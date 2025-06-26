@@ -1,33 +1,30 @@
 """Tests for data models."""
 
-import pytest
 from datetime import datetime
+
+import pytest
+
+from src.deletepy.models.config import APIConfig, AppConfig, Auth0Config, ExportConfig
 from src.deletepy.models.user import (
-    User, 
-    UserIdentity, 
-    UserOperationResult, 
-    BatchOperationResults
-)
-from src.deletepy.models.config import (
-    Auth0Config, 
-    APIConfig, 
-    ExportConfig, 
-    AppConfig
+    BatchOperationResults,
+    User,
+    UserIdentity,
+    UserOperationResult,
 )
 
 
 class TestUserIdentity:
     """Test UserIdentity model."""
-    
+
     def test_user_identity_creation(self):
         """Test creating a UserIdentity instance."""
         identity = UserIdentity(
             connection="google-oauth2",
             user_id="12345",
             provider="google-oauth2",
-            is_social=True
+            is_social=True,
         )
-        
+
         assert identity.connection == "google-oauth2"
         assert identity.user_id == "12345"
         assert identity.provider == "google-oauth2"
@@ -43,20 +40,20 @@ class TestUserIdentity:
             user_id="67890",
             provider="auth0",
             access_token="token123",
-            profile_data=profile_data
+            profile_data=profile_data,
         )
-        
+
         assert identity.access_token == "token123"
         assert identity.profile_data == profile_data
 
 
 class TestUser:
     """Test User model."""
-    
+
     def test_user_creation(self):
         """Test creating a User instance."""
         user = User(user_id="auth0|123456")
-        
+
         assert user.user_id == "auth0|123456"
         assert user.email is None
         assert user.blocked is False
@@ -66,12 +63,8 @@ class TestUser:
 
     def test_user_with_full_data(self):
         """Test User with complete data."""
-        identity = UserIdentity(
-            connection="auth0",
-            user_id="123456",
-            provider="auth0"
-        )
-        
+        identity = UserIdentity(connection="auth0", user_id="123456", provider="auth0")
+
         created_at = datetime.now()
         user = User(
             user_id="auth0|123456",
@@ -79,9 +72,9 @@ class TestUser:
             identities=[identity],
             blocked=False,
             created_at=created_at,
-            logins_count=5
+            logins_count=5,
         )
-        
+
         assert user.email == "test@example.com"
         assert len(user.identities) == 1
         assert user.identities[0] == identity
@@ -99,18 +92,18 @@ class TestUser:
                     "connection": "auth0",
                     "user_id": "123456",
                     "provider": "auth0",
-                    "isSocial": False
+                    "isSocial": False,
                 }
             ],
             "logins_count": 3,
             "created_at": "2023-01-01T00:00:00.000Z",
             "last_login": "2023-01-02T00:00:00.000Z",
             "app_metadata": {"role": "user"},
-            "user_metadata": {"preference": "dark"}
+            "user_metadata": {"preference": "dark"},
         }
-        
+
         user = User.from_auth0_data(auth0_data)
-        
+
         assert user.user_id == "auth0|123456"
         assert user.email == "test@example.com"
         assert user.blocked is False
@@ -125,14 +118,10 @@ class TestUser:
 
     def test_to_dict(self):
         """Test converting User to dictionary."""
-        user = User(
-            user_id="auth0|123456",
-            email="test@example.com",
-            blocked=True
-        )
-        
+        user = User(user_id="auth0|123456", email="test@example.com", blocked=True)
+
         result = user.to_dict()
-        
+
         assert result["user_id"] == "auth0|123456"
         assert result["email"] == "test@example.com"
         assert result["blocked"] is True
@@ -144,59 +133,46 @@ class TestUser:
             connection="google-oauth2",
             user_id="123",
             provider="google-oauth2",
-            is_social=True
+            is_social=True,
         )
-        
+
         # User with one social identity
-        social_user = User(
-            user_id="google-oauth2|123",
-            identities=[social_identity]
-        )
+        social_user = User(user_id="google-oauth2|123", identities=[social_identity])
         assert social_user.is_social_user() is True
-        
+
         # User with no identities
         no_identity_user = User(user_id="auth0|123")
         assert no_identity_user.is_social_user() is False
-        
+
         # User with non-social identity
         non_social_identity = UserIdentity(
-            connection="auth0",
-            user_id="123",
-            provider="auth0",
-            is_social=False
+            connection="auth0", user_id="123", provider="auth0", is_social=False
         )
-        non_social_user = User(
-            user_id="auth0|123",
-            identities=[non_social_identity]
-        )
+        non_social_user = User(user_id="auth0|123", identities=[non_social_identity])
         assert non_social_user.is_social_user() is False
 
     def test_has_multiple_identities(self):
         """Test checking if user has multiple identities."""
         identity1 = UserIdentity(connection="auth0", user_id="123", provider="auth0")
-        identity2 = UserIdentity(connection="google-oauth2", user_id="456", provider="google-oauth2")
-        
+        identity2 = UserIdentity(
+            connection="google-oauth2", user_id="456", provider="google-oauth2"
+        )
+
         # User with multiple identities
-        multi_user = User(
-            user_id="auth0|123",
-            identities=[identity1, identity2]
-        )
+        multi_user = User(user_id="auth0|123", identities=[identity1, identity2])
         assert multi_user.has_multiple_identities() is True
-        
+
         # User with single identity
-        single_user = User(
-            user_id="auth0|123",
-            identities=[identity1]
-        )
+        single_user = User(user_id="auth0|123", identities=[identity1])
         assert single_user.has_multiple_identities() is False
 
     def test_get_primary_identity(self):
         """Test getting primary identity."""
         identity = UserIdentity(connection="auth0", user_id="123", provider="auth0")
         user = User(user_id="auth0|123", identities=[identity])
-        
+
         assert user.get_primary_identity() == identity
-        
+
         # User with no identities
         empty_user = User(user_id="auth0|123")
         assert empty_user.get_primary_identity() is None
@@ -207,20 +183,16 @@ class TestUser:
             connection="google-oauth2",
             user_id="123",
             provider="google-oauth2",
-            is_social=True
+            is_social=True,
         )
         non_social_identity = UserIdentity(
-            connection="auth0",
-            user_id="456",
-            provider="auth0",
-            is_social=False
+            connection="auth0", user_id="456", provider="auth0", is_social=False
         )
-        
+
         user = User(
-            user_id="auth0|123",
-            identities=[social_identity, non_social_identity]
+            user_id="auth0|123", identities=[social_identity, non_social_identity]
         )
-        
+
         social_identities = user.get_social_identities()
         assert len(social_identities) == 1
         assert social_identities[0] == social_identity
@@ -228,15 +200,13 @@ class TestUser:
 
 class TestUserOperationResult:
     """Test UserOperationResult model."""
-    
+
     def test_operation_result_creation(self):
         """Test creating UserOperationResult."""
         result = UserOperationResult(
-            user_id="auth0|123",
-            operation="delete",
-            success=True
+            user_id="auth0|123", operation="delete", success=True
         )
-        
+
         assert result.user_id == "auth0|123"
         assert result.operation == "delete"
         assert result.success is True
@@ -249,40 +219,35 @@ class TestUserOperationResult:
             user_id="auth0|123",
             operation="delete",
             success=False,
-            error_message="User not found"
+            error_message="User not found",
         )
-        
+
         assert result.success is False
         assert result.error_message == "User not found"
 
     def test_operation_result_str(self):
         """Test string representation of UserOperationResult."""
         success_result = UserOperationResult(
-            user_id="auth0|123",
-            operation="delete",
-            success=True
+            user_id="auth0|123", operation="delete", success=True
         )
         assert "delete auth0|123: SUCCESS" in str(success_result)
-        
+
         error_result = UserOperationResult(
             user_id="auth0|123",
             operation="delete",
             success=False,
-            error_message="User not found"
+            error_message="User not found",
         )
         assert "delete auth0|123: FAILED - User not found" in str(error_result)
 
 
 class TestBatchOperationResults:
     """Test BatchOperationResults model."""
-    
+
     def test_batch_results_creation(self):
         """Test creating BatchOperationResults."""
-        results = BatchOperationResults(
-            operation="delete",
-            total_users=10
-        )
-        
+        results = BatchOperationResults(operation="delete", total_users=10)
+
         assert results.operation == "delete"
         assert results.total_users == 10
         assert results.processed_count == 0
@@ -295,43 +260,33 @@ class TestBatchOperationResults:
     def test_success_rate(self):
         """Test calculating success rate."""
         results = BatchOperationResults(
-            operation="delete",
-            total_users=10,
-            processed_count=8
+            operation="delete", total_users=10, processed_count=8
         )
-        
+
         assert results.success_rate == 80.0
-        
+
         # Test zero division
-        empty_results = BatchOperationResults(
-            operation="delete",
-            total_users=0
-        )
+        empty_results = BatchOperationResults(operation="delete", total_users=0)
         assert empty_results.success_rate == 0.0
 
     def test_add_result(self):
         """Test adding operation results."""
-        batch_results = BatchOperationResults(
-            operation="delete",
-            total_users=2
-        )
-        
+        batch_results = BatchOperationResults(operation="delete", total_users=2)
+
         success_result = UserOperationResult(
-            user_id="auth0|123",
-            operation="delete",
-            success=True
+            user_id="auth0|123", operation="delete", success=True
         )
-        
+
         failure_result = UserOperationResult(
             user_id="auth0|456",
             operation="delete",
             success=False,
-            error_message="User not found"
+            error_message="User not found",
         )
-        
+
         batch_results.add_result(success_result)
         batch_results.add_result(failure_result)
-        
+
         assert batch_results.processed_count == 1
         assert batch_results.skipped_count == 1
         assert len(batch_results.operation_results) == 2
@@ -344,11 +299,11 @@ class TestBatchOperationResults:
             processed_count=8,
             skipped_count=2,
             not_found_users=["user1@example.com"],
-            invalid_user_ids=["invalid_id"]
+            invalid_user_ids=["invalid_id"],
         )
-        
+
         summary = results.get_summary()
-        
+
         assert summary["operation"] == "delete"
         assert summary["total_users"] == 10
         assert summary["processed_count"] == 8
@@ -360,16 +315,16 @@ class TestBatchOperationResults:
 
 class TestAuth0Config:
     """Test Auth0Config model."""
-    
+
     def test_auth0_config_creation(self):
         """Test creating Auth0Config."""
         config = Auth0Config(
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         assert config.domain == "test.auth0.com"
         assert config.client_id == "test_client_id"
         assert config.client_secret == "test_secret"
@@ -382,9 +337,9 @@ class TestAuth0Config:
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         assert config.base_url == "https://test.auth0.com"
 
     def test_from_env_vars(self):
@@ -392,11 +347,11 @@ class TestAuth0Config:
         env_vars = {
             "DEV_AUTH0_DOMAIN": "test.auth0.com",
             "DEV_AUTH0_CLIENT_ID": "test_client_id",
-            "DEV_AUTH0_CLIENT_SECRET": "test_secret"
+            "DEV_AUTH0_CLIENT_SECRET": "test_secret",
         }
-        
+
         config = Auth0Config.from_env_vars(env_vars, "dev")
-        
+
         assert config.domain == "test.auth0.com"
         assert config.client_id == "test_client_id"
         assert config.client_secret == "test_secret"
@@ -406,9 +361,9 @@ class TestAuth0Config:
         """Test Auth0Config creation with missing domain."""
         env_vars = {
             "DEV_AUTH0_CLIENT_ID": "test_client_id",
-            "DEV_AUTH0_CLIENT_SECRET": "test_secret"
+            "DEV_AUTH0_CLIENT_SECRET": "test_secret",
         }
-        
+
         with pytest.raises(ValueError, match="Missing DEV_AUTH0_DOMAIN"):
             Auth0Config.from_env_vars(env_vars, "dev")
 
@@ -418,11 +373,11 @@ class TestAuth0Config:
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         result = config.to_dict()
-        
+
         assert result["domain"] == "test.auth0.com"
         assert result["client_id"] == "test_client_id"
         assert result["client_secret"] == "***REDACTED***"
@@ -434,9 +389,9 @@ class TestAuth0Config:
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         assert config.get_token_url() == "https://test.auth0.com/oauth/token"
 
     def test_get_api_url(self):
@@ -445,9 +400,9 @@ class TestAuth0Config:
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         assert config.get_api_url() == "https://test.auth0.com/api/v2"
         assert config.get_api_url("users") == "https://test.auth0.com/api/v2/users"
         assert config.get_api_url("/users") == "https://test.auth0.com/api/v2/users"
@@ -458,36 +413,36 @@ class TestAuth0Config:
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
         assert valid_config.validate() is True
-        
+
         # Invalid domain
         invalid_domain_config = Auth0Config(
             domain="invalid-domain.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
         assert invalid_domain_config.validate() is False
-        
+
         # Invalid environment
         invalid_env_config = Auth0Config(
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="invalid"
+            environment="invalid",
         )
         assert invalid_env_config.validate() is False
 
 
 class TestAPIConfig:
     """Test APIConfig model."""
-    
+
     def test_api_config_creation(self):
         """Test creating APIConfig with defaults."""
         config = APIConfig()
-        
+
         assert config.rate_limit == 0.5
         assert config.timeout == 30
         assert config.max_retries == 3
@@ -496,26 +451,26 @@ class TestAPIConfig:
         """Test calculating requests per second."""
         config = APIConfig(rate_limit=0.5)
         assert config.get_requests_per_second() == 2.0
-        
-        zero_limit_config = APIConfig(rate_limit=0)
-        assert config.get_requests_per_second() == 2.0  # Should still be 2.0 from previous
+
+        # Test that previous instance still returns the same value
+        assert config.get_requests_per_second() == 2.0  # Should still be 2.0
 
     def test_is_safe_for_auth0(self):
         """Test checking if rate limit is safe for Auth0."""
         safe_config = APIConfig(rate_limit=0.5)  # 2 req/sec
         assert safe_config.is_safe_for_auth0() is True
-        
+
         unsafe_config = APIConfig(rate_limit=0.1)  # 10 req/sec
         assert unsafe_config.is_safe_for_auth0() is False
 
 
 class TestExportConfig:
     """Test ExportConfig model."""
-    
+
     def test_export_config_creation(self):
         """Test creating ExportConfig with defaults."""
         config = ExportConfig()
-        
+
         assert config.default_batch_size == 50
         assert config.max_batch_size == 100
         assert config.large_dataset_threshold == 1000
@@ -523,26 +478,26 @@ class TestExportConfig:
     def test_get_optimal_batch_size(self):
         """Test calculating optimal batch size."""
         config = ExportConfig()
-        
+
         assert config.get_optimal_batch_size(100) == 100  # Small dataset
-        assert config.get_optimal_batch_size(750) == 50   # Medium dataset
+        assert config.get_optimal_batch_size(750) == 50  # Medium dataset
         assert config.get_optimal_batch_size(1500) == 25  # Large dataset
 
 
 class TestAppConfig:
     """Test AppConfig model."""
-    
+
     def test_app_config_creation(self):
         """Test creating AppConfig."""
         auth0_config = Auth0Config(
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         config = AppConfig(auth0=auth0_config)
-        
+
         assert config.auth0 == auth0_config
         assert config.api is not None
         assert config.export is not None
@@ -554,11 +509,11 @@ class TestAppConfig:
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         config = AppConfig(auth0=auth0_config)
-        
+
         assert isinstance(config.api, APIConfig)
         assert isinstance(config.export, ExportConfig)
 
@@ -567,11 +522,11 @@ class TestAppConfig:
         env_vars = {
             "DEV_AUTH0_DOMAIN": "test.auth0.com",
             "DEV_AUTH0_CLIENT_ID": "test_client_id",
-            "DEV_AUTH0_CLIENT_SECRET": "test_secret"
+            "DEV_AUTH0_CLIENT_SECRET": "test_secret",
         }
-        
+
         config = AppConfig.create_for_environment("dev", env_vars)
-        
+
         assert config.auth0.environment == "dev"
         assert config.debug is True  # dev environment
 
@@ -581,9 +536,9 @@ class TestAppConfig:
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         config = AppConfig(auth0=auth0_config)
         assert config.validate() is True
 
@@ -593,12 +548,12 @@ class TestAppConfig:
             domain="test.auth0.com",
             client_id="test_client_id",
             client_secret="test_secret",
-            environment="dev"
+            environment="dev",
         )
-        
+
         config = AppConfig(auth0=auth0_config, debug=True)
         result = config.to_dict()
-        
+
         assert "auth0" in result
         assert "api" in result
         assert "export" in result

@@ -15,14 +15,6 @@ from .cli import (
     validate_user_id_list,
 )
 from .core.auth import doctor, get_access_token
-from .core.exceptions import (
-    APIError,
-    Auth0ManagerError,
-    AuthConfigError,
-    FileOperationError,
-    UserOperationError,
-    ValidationError,
-)
 from .core.config import (
     API_RATE_LIMIT,
     API_TIMEOUT,
@@ -34,6 +26,14 @@ from .core.config import (
     get_estimated_processing_time,
     get_optimal_batch_size,
     validate_rate_limit_config,
+)
+from .core.exceptions import (
+    APIError,
+    Auth0ManagerError,
+    AuthConfigError,
+    FileOperationError,
+    UserOperationError,
+    ValidationError,
 )
 
 # Operations
@@ -76,7 +76,6 @@ from .operations.user_ops import (
 # Utilities
 from .utils import (
     AUTH0_USER_ID_PREFIXES,
-    FileOperationError,
     check_shutdown_requested,
     clean_identifier,
     confirm_action,
