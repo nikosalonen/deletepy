@@ -1,23 +1,26 @@
 from unittest.mock import patch
-from user_operations import (
+import requests
+from src.deletepy.operations.user_ops import (
     delete_user,
     block_user,
     get_user_id_from_email,
     revoke_user_sessions,
     revoke_user_grants,
-    check_unblocked_users,
     get_user_email,
     get_user_details,
-    find_users_by_social_media_ids,
     unlink_user_identity,
 )
-from utils import YELLOW, CYAN, RESET
+from src.deletepy.operations.batch_ops import (
+    check_unblocked_users,
+    find_users_by_social_media_ids,
+)
+from src.deletepy.utils.display_utils import YELLOW, CYAN, RESET
 
 
 def test_delete_user(mock_requests, mock_response):
     mock_requests.delete.return_value = mock_response
 
-    with patch("user_operations.revoke_user_sessions") as mock_revoke_sessions:
+    with patch("src.deletepy.operations.user_ops.revoke_user_sessions") as mock_revoke_sessions:
         delete_user("test_user_id", "test_token", "http://test.com")
 
         # Verify revoke_user_sessions was called first with correct parameters
@@ -42,8 +45,8 @@ def test_block_user(mock_requests, mock_response):
     mock_requests.patch.return_value = mock_response
 
     with (
-        patch("user_operations.revoke_user_sessions") as mock_revoke_sessions,
-        patch("user_operations.revoke_user_grants") as mock_revoke_grants,
+        patch("src.deletepy.operations.user_ops.revoke_user_sessions") as mock_revoke_sessions,
+        patch("src.deletepy.operations.user_ops.revoke_user_grants") as mock_revoke_grants,
     ):
         block_user("test_user_id", "test_token", "http://test.com")
 
@@ -115,11 +118,19 @@ def test_get_user_id_from_email_not_found(mock_requests, mock_response):
 
 
 def test_revoke_user_sessions(mock_requests, mock_response):
-    mock_response.json.return_value = {
+    # Mock the get response for fetching sessions
+    get_response = mock_response
+    get_response.json.return_value = {
         "sessions": [{"id": "session1"}, {"id": "session2"}]
     }
-    mock_requests.get.return_value = mock_response
-    mock_requests.delete.return_value = mock_response
+    get_response.raise_for_status.return_value = None
+    
+    # Mock the delete responses
+    delete_response = mock_response
+    delete_response.raise_for_status.return_value = None
+    
+    mock_requests.get.return_value = get_response
+    mock_requests.delete.return_value = delete_response
 
     revoke_user_sessions("test_user_id", "test_token", "http://test.com")
 
@@ -190,7 +201,7 @@ def test_check_unblocked_users(mock_requests, mock_response):
     mock_requests.get.return_value = mock_response
 
     # Mock print function to capture output
-    with patch("builtins.print") as mock_print, patch("user_operations.show_progress"):
+    with patch("builtins.print") as mock_print, patch("src.deletepy.utils.display_utils.show_progress"):
         # Call the function with two test users
         user_ids = ["user1", "user2"]
         check_unblocked_users(user_ids, "test_token", "http://test.com")
@@ -278,16 +289,15 @@ def test_get_user_details(mock_requests, mock_response):
 
 def test_unlink_user_identity_success(mock_requests, mock_response):
     mock_response.status_code = 200
-    mock_requests.request.return_value = mock_response
+    mock_requests.delete.return_value = mock_response
 
     result = unlink_user_identity(
         "auth0|123", "google-oauth2", "google123", "test_token", "http://test.com"
     )
 
     assert result is True
-    mock_requests.request.assert_called_once()
-    mock_requests.request.assert_called_with(
-        "DELETE",
+    mock_requests.delete.assert_called_once()
+    mock_requests.delete.assert_called_with(
         "http://test.com/api/v2/users/auth0%7C123/identities/google-oauth2/google123",
         headers={
             "Authorization": "Bearer test_token",
@@ -300,7 +310,7 @@ def test_unlink_user_identity_success(mock_requests, mock_response):
 
 def test_unlink_user_identity_failure(mock_requests, mock_response):
     mock_response.status_code = 400
-    mock_requests.request.return_value = mock_response
+    mock_requests.delete.side_effect = requests.exceptions.RequestException("400 Client Error")
 
     result = unlink_user_identity(
         "auth0|123", "google-oauth2", "google123", "test_token", "http://test.com"
@@ -326,8 +336,8 @@ def test_find_users_by_social_media_ids_single_identity_delete(
 
     with (
         patch("builtins.print") as mock_print,
-        patch("user_operations.show_progress"),
-        patch("user_operations.delete_user") as mock_delete,
+        patch("src.deletepy.utils.display_utils.show_progress"),
+        patch("src.deletepy.operations.user_ops.delete_user") as mock_delete,
     ):
         find_users_by_social_media_ids(
             ["12345678901234567890"],
@@ -365,9 +375,9 @@ def test_find_users_by_social_media_ids_multiple_identities_unlink(
 
     with (
         patch("builtins.print") as mock_print,
-        patch("user_operations.show_progress"),
-        patch("user_operations.delete_user") as mock_delete,
-        patch("user_operations.unlink_user_identity") as mock_unlink,
+        patch("src.deletepy.utils.display_utils.show_progress"),
+        patch("src.deletepy.operations.user_ops.delete_user") as mock_delete,
+        patch("src.deletepy.operations.user_ops.unlink_user_identity") as mock_unlink,
     ):
         mock_unlink.return_value = True
 
@@ -414,9 +424,9 @@ def test_find_users_by_social_media_ids_auth0_main_identity_protection(
 
     with (
         patch("builtins.print") as mock_print,
-        patch("user_operations.show_progress"),
-        patch("user_operations.delete_user") as mock_delete,
-        patch("user_operations.unlink_user_identity") as mock_unlink,
+        patch("src.deletepy.utils.display_utils.show_progress"),
+        patch("src.deletepy.operations.user_ops.delete_user") as mock_delete,
+        patch("src.deletepy.operations.user_ops.unlink_user_identity") as mock_unlink,
     ):
         find_users_by_social_media_ids(
             ["12345678901234567890"],
@@ -444,7 +454,7 @@ def test_find_users_by_social_media_ids_not_found(mock_requests, mock_response):
     mock_response.json.return_value = []
     mock_requests.request.return_value = mock_response
 
-    with patch("builtins.print") as mock_print, patch("user_operations.show_progress"):
+    with patch("builtins.print") as mock_print, patch("src.deletepy.utils.display_utils.show_progress"):
         find_users_by_social_media_ids(
             ["nonexistent123"],
             "test_token",

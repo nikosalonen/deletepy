@@ -1,11 +1,11 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from auth import get_access_token, AuthConfigError, doctor
+from src.deletepy.core.auth import get_access_token, AuthConfigError, doctor
 
 
 @pytest.fixture
 def mock_config():
-    with patch("auth.get_env_config") as mock:
+    with patch("src.deletepy.core.auth.get_env_config") as mock:
         mock.return_value = {
             "client_id": "test_client_id",
             "client_secret": "test_client_secret",
@@ -189,7 +189,7 @@ def test_doctor_with_api_test_failure():
 
 def test_doctor_auth_config_error():
     """Test doctor function when authentication configuration fails."""
-    with patch("auth.get_env_config") as mock_get_config:
+    with patch("src.deletepy.core.auth.get_env_config") as mock_get_config:
         # Mock configuration error
         mock_get_config.side_effect = AuthConfigError("Missing client ID")
 

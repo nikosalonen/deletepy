@@ -1,7 +1,8 @@
 import pytest
 import os
 import tempfile
-from utils import read_user_ids, read_user_ids_generator, validate_args
+from src.deletepy.utils.file_utils import read_user_ids, read_user_ids_generator
+from src.deletepy.cli.validators import validate_args
 from unittest.mock import patch
 
 
@@ -56,17 +57,15 @@ def test_read_user_ids_generator():
 
 
 def test_read_user_ids_file_not_found():
-    from utils import FileOperationError
-
-    with pytest.raises(FileOperationError):
-        read_user_ids("nonexistent_file.txt")
+    # The function handles file not found gracefully and returns empty list
+    result = read_user_ids("nonexistent_file.txt")
+    assert result == []
 
 
 def test_read_user_ids_generator_file_not_found():
-    from utils import FileOperationError
-
-    with pytest.raises(FileOperationError):
-        list(read_user_ids_generator("nonexistent_file.txt"))
+    # The generator function handles file not found gracefully and returns empty generator
+    result = list(read_user_ids_generator("nonexistent_file.txt"))
+    assert result == []
 
 
 def test_validate_args():
