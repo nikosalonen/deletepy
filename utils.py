@@ -68,7 +68,7 @@ def validate_file_path(file_path: str, operation: str = "access") -> Path:
     try:
         path = Path(file_path).resolve()
     except (OSError, ValueError) as e:
-        raise FileOperationError(f"Invalid file path '{file_path}': {e}")
+        raise FileOperationError(f"Invalid file path '{file_path}': {e}") from e
 
     if operation == "read":
         if not path.exists():
@@ -331,7 +331,7 @@ def read_user_ids(filepath: str) -> List[str]:
     except FileOperationError:
         raise  # Re-raise FileOperationError as-is
     except Exception as e:
-        raise FileOperationError(f"Unexpected error reading file {filepath}: {e}")
+        raise FileOperationError(f"Unexpected error reading file {filepath}: {e}") from e
 
 
 def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
@@ -355,7 +355,7 @@ def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
     except FileOperationError:
         raise  # Re-raise FileOperationError as-is
     except Exception as e:
-        raise FileOperationError(f"Unexpected error reading file {filepath}: {e}")
+        raise FileOperationError(f"Unexpected error reading file {filepath}: {e}") from e
 
 
 def validate_args() -> argparse.Namespace:
