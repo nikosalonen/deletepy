@@ -41,14 +41,11 @@ __all__ = [
     "revoke_user_sessions",
     "revoke_user_grants",
     "unlink_user_identity",
-
     # Batch operations
     "check_unblocked_users",
     "find_users_by_social_media_ids",
-
     # Export operations
     "export_users_last_login_to_csv",
-
     # Domain operations
     "check_email_domains",
     "validate_domain_format",

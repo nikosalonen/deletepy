@@ -2,7 +2,6 @@
 
 import sys
 
-from ..utils.auth_utils import validate_auth0_user_id
 from ..utils.csv_utils import (
     extract_identifiers_from_csv,
     write_identifiers_to_file,

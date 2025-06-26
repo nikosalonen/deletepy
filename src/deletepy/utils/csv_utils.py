@@ -119,13 +119,17 @@ def resolve_encoded_username(username: str, env: str = None) -> str:
     if "_at_" in username:
         fallback = username.replace("_at_", "@")
         if env:  # Only show warning if we tried API and failed
-            print_warning(f"API resolution failed for {username}, using fallback: {fallback}")
+            print_warning(
+                f"API resolution failed for {username}, using fallback: {fallback}"
+            )
         return fallback
     elif "__" in username:
         # This is problematic as noted - but we'll do it as fallback
         fallback = username.replace("__", "@")
         if env:  # Only show warning if we tried API and failed
-            print_warning(f"API resolution failed for {username}, using fallback: {fallback} (may be incomplete)")
+            print_warning(
+                f"API resolution failed for {username}, using fallback: {fallback} (may be incomplete)"
+            )
         return fallback
 
     return username
@@ -231,7 +235,9 @@ def _process_csv_file(
     best_column = find_best_column(headers, output_type)
 
     if not best_column:
-        print_error("Could not automatically detect identifier column. Available columns:")
+        print_error(
+            "Could not automatically detect identifier column. Available columns:"
+        )
         for i, header in enumerate(headers):
             print(f"  {i}: {header}")
 
@@ -245,7 +251,9 @@ def _process_csv_file(
     skip_resolution = _should_skip_resolution(best_column, output_type)
     if skip_resolution:
         data_type = "username" if output_type == "username" else "email"
-        print_info(f"CSV column '{best_column}' contains {data_type} data. Skipping encoded username resolution.")
+        print_info(
+            f"CSV column '{best_column}' contains {data_type} data. Skipping encoded username resolution."
+        )
 
     for row in reader:
         if best_column in row:
@@ -363,7 +371,9 @@ def extract_identifiers_from_csv(
                 elif not skip_resolution and _check_if_data_available(
                     identifiers, output_type
                 ):
-                    print_info(f"CSV already contains {output_type} data. No Auth0 API calls needed.")
+                    print_info(
+                        f"CSV already contains {output_type} data. No Auth0 API calls needed."
+                    )
 
                 return identifiers
 
@@ -415,7 +425,9 @@ def _handle_conversion(
     if env:
         return _convert_to_output_type(identifiers, output_type, env)
     elif interactive:
-        print_warning(f"Requested output type '{output_type}' but no environment specified.")
+        print_warning(
+            f"Requested output type '{output_type}' but no environment specified."
+        )
         response = (
             input(
                 "Do you want to fetch this data from Auth0? Specify environment (dev/prod) or press Enter to skip: "
@@ -457,7 +469,9 @@ def write_identifiers_to_file(
         return False
 
 
-def _search_user_by_field(identifier: str, token: str, base_url: str) -> dict[str, Any] | None:
+def _search_user_by_field(
+    identifier: str, token: str, base_url: str
+) -> dict[str, Any] | None:
     """Search for a user using the appropriate Auth0 Management API endpoint.
 
     Args:
@@ -502,7 +516,9 @@ def _search_user_by_field(identifier: str, token: str, base_url: str) -> dict[st
         return None
 
 
-def _extract_output_value(user_details: dict[str, Any], output_type: str, fallback: str) -> str:
+def _extract_output_value(
+    user_details: dict[str, Any], output_type: str, fallback: str
+) -> str:
     """Extract the requested value from user details.
 
     Args:
@@ -590,7 +606,6 @@ def _convert_to_output_type(
 
     # Process each identifier
     converted = []
-    total = len(identifiers)
 
     for idx, identifier in enumerate(identifiers, 1):
         converted_identifier = _convert_single_identifier(

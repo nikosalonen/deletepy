@@ -20,7 +20,7 @@ class Auth0Config:
             self.base_url = f"https://{self.domain}"
 
     @classmethod
-    def from_env_vars(cls, env_vars: dict[str, str], environment: str) -> 'Auth0Config':
+    def from_env_vars(cls, env_vars: dict[str, str], environment: str) -> "Auth0Config":
         """Create Auth0Config from environment variables.
 
         Args:
@@ -44,13 +44,15 @@ class Auth0Config:
         if not client_id:
             raise ValueError(f"Missing {prefix}AUTH0_CLIENT_ID environment variable")
         if not client_secret:
-            raise ValueError(f"Missing {prefix}AUTH0_CLIENT_SECRET environment variable")
+            raise ValueError(
+                f"Missing {prefix}AUTH0_CLIENT_SECRET environment variable"
+            )
 
         return cls(
             domain=domain,
             client_id=client_id,
             client_secret=client_secret,
-            environment=environment
+            environment=environment,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -60,11 +62,11 @@ class Auth0Config:
             Dict[str, Any]: Configuration as dictionary
         """
         return {
-            'domain': self.domain,
-            'client_id': self.client_id,
-            'client_secret': '***REDACTED***',  # Don't expose secrets
-            'environment': self.environment,
-            'base_url': self.base_url
+            "domain": self.domain,
+            "client_id": self.client_id,
+            "client_secret": "***REDACTED***",  # Don't expose secrets
+            "environment": self.environment,
+            "base_url": self.base_url,
         }
 
     def get_token_url(self) -> str:
@@ -87,7 +89,7 @@ class Auth0Config:
         base_api_url = f"{self.base_url}/api/v2"
         if endpoint:
             # Remove leading slash if present
-            endpoint = endpoint.lstrip('/')
+            endpoint = endpoint.lstrip("/")
             return f"{base_api_url}/{endpoint}"
         return base_api_url
 
@@ -100,11 +102,13 @@ class Auth0Config:
         if not self.domain or not self.client_id or not self.client_secret:
             return False
 
-        if self.environment not in ['dev', 'prod']:
+        if self.environment not in ["dev", "prod"]:
             return False
 
         # Basic domain validation
-        if not self.domain.endswith('.auth0.com') and not self.domain.endswith('.eu.auth0.com'):
+        if not self.domain.endswith(".auth0.com") and not self.domain.endswith(
+            ".eu.auth0.com"
+        ):
             return False
 
         return True
@@ -126,7 +130,7 @@ class APIConfig:
         Returns:
             float: Requests per second
         """
-        return 1.0 / self.rate_limit if self.rate_limit > 0 else float('inf')
+        return 1.0 / self.rate_limit if self.rate_limit > 0 else float("inf")
 
     def is_safe_for_auth0(self) -> bool:
         """Check if rate limit is safe for Auth0 API limits.
@@ -183,7 +187,9 @@ class AppConfig:
             self.export = ExportConfig()
 
     @classmethod
-    def create_for_environment(cls, environment: str, env_vars: dict[str, str]) -> 'AppConfig':
+    def create_for_environment(
+        cls, environment: str, env_vars: dict[str, str]
+    ) -> "AppConfig":
         """Create application configuration for specified environment.
 
         Args:
@@ -195,10 +201,7 @@ class AppConfig:
         """
         auth0_config = Auth0Config.from_env_vars(env_vars, environment)
 
-        return cls(
-            auth0=auth0_config,
-            debug=environment == 'dev'
-        )
+        return cls(auth0=auth0_config, debug=environment == "dev")
 
     def validate(self) -> bool:
         """Validate the entire application configuration.
@@ -220,24 +223,21 @@ class AppConfig:
         Returns:
             Dict[str, Any]: Configuration as dictionary
         """
-        result = {
-            'auth0': self.auth0.to_dict(),
-            'debug': self.debug
-        }
-        
+        result = {"auth0": self.auth0.to_dict(), "debug": self.debug}
+
         if self.api:
-            result['api'] = {
-                'rate_limit': self.api.rate_limit,
-                'timeout': self.api.timeout,
-                'max_retries': self.api.max_retries,
-                'requests_per_second': self.api.get_requests_per_second()
+            result["api"] = {
+                "rate_limit": self.api.rate_limit,
+                "timeout": self.api.timeout,
+                "max_retries": self.api.max_retries,
+                "requests_per_second": self.api.get_requests_per_second(),
             }
-            
+
         if self.export:
-            result['export'] = {
-                'default_batch_size': self.export.default_batch_size,
-                'max_batch_size': self.export.max_batch_size,
-                'min_batch_size': self.export.min_batch_size
+            result["export"] = {
+                "default_batch_size": self.export.default_batch_size,
+                "max_batch_size": self.export.max_batch_size,
+                "min_batch_size": self.export.min_batch_size,
             }
-            
+
         return result

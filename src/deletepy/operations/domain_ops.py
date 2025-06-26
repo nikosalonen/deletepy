@@ -18,7 +18,7 @@ def check_email_domains(
     token: str,
     base_url: str,
     allowed_domains: list[str] | None = None,
-    blocked_domains: list[str] | None = None
+    blocked_domains: list[str] | None = None,
 ) -> dict[str, Any]:
     """Check email domains against allowed/blocked domain lists.
 
@@ -37,7 +37,7 @@ def check_email_domains(
         "blocked": [],
         "unknown": [],
         "errors": [],
-        "total_checked": 0
+        "total_checked": 0,
     }
 
     total_emails = len(emails)
@@ -50,41 +50,40 @@ def check_email_domains(
 
         try:
             # Extract domain from email
-            domain = email.split('@')[-1].lower() if '@' in email else ""
+            domain = email.split("@")[-1].lower() if "@" in email else ""
 
             if not domain:
-                results["errors"].append({
-                    "email": email,
-                    "reason": "Invalid email format"
-                })
+                results["errors"].append(
+                    {"email": email, "reason": "Invalid email format"}
+                )
                 continue
 
             # Check against domain lists
             if blocked_domains and domain in blocked_domains:
-                results["blocked"].append({
-                    "email": email,
-                    "domain": domain,
-                    "reason": "Domain in blocked list"
-                })
+                results["blocked"].append(
+                    {
+                        "email": email,
+                        "domain": domain,
+                        "reason": "Domain in blocked list",
+                    }
+                )
             elif allowed_domains and domain not in allowed_domains:
-                results["blocked"].append({
-                    "email": email,
-                    "domain": domain,
-                    "reason": "Domain not in allowed list"
-                })
+                results["blocked"].append(
+                    {
+                        "email": email,
+                        "domain": domain,
+                        "reason": "Domain not in allowed list",
+                    }
+                )
             else:
-                results["allowed"].append({
-                    "email": email,
-                    "domain": domain
-                })
+                results["allowed"].append({"email": email, "domain": domain})
 
             results["total_checked"] += 1
 
         except Exception as e:
-            results["errors"].append({
-                "email": email,
-                "reason": f"Error processing: {str(e)}"
-            })
+            results["errors"].append(
+                {"email": email, "reason": f"Error processing: {str(e)}"}
+            )
 
     print("\n")  # Clear progress line
 
@@ -97,7 +96,7 @@ def check_email_domains(
 def _display_domain_check_results(
     results: dict[str, Any],
     allowed_domains: list[str] | None,
-    blocked_domains: list[str] | None
+    blocked_domains: list[str] | None,
 ) -> None:
     """Display domain check results summary.
 
@@ -153,7 +152,7 @@ def validate_domain_format(domain: str) -> bool:
             return False
 
     # Check for valid structure
-    parts = domain_lower.split('.')
+    parts = domain_lower.split(".")
     if len(parts) < 2:
         return False
 
@@ -161,7 +160,7 @@ def validate_domain_format(domain: str) -> bool:
     for part in parts:
         if not part or len(part) > 63:
             return False
-        if part.startswith('-') or part.endswith('-'):
+        if part.startswith("-") or part.endswith("-"):
             return False
 
     return True
@@ -179,12 +178,12 @@ def extract_domains_from_emails(emails: list[str]) -> list[str]:
     domains = set()
 
     for email in emails:
-        if '@' in email:
-            domain = email.split('@')[-1].lower()
+        if "@" in email:
+            domain = email.split("@")[-1].lower()
             if validate_domain_format(domain):
                 domains.add(domain)
 
-    return sorted(list(domains))
+    return sorted(domains)
 
 
 def get_domain_statistics(emails: list[str]) -> dict[str, int]:
@@ -199,8 +198,8 @@ def get_domain_statistics(emails: list[str]) -> dict[str, int]:
     domain_counts = {}
 
     for email in emails:
-        if '@' in email:
-            domain = email.split('@')[-1].lower()
+        if "@" in email:
+            domain = email.split("@")[-1].lower()
             if validate_domain_format(domain):
                 domain_counts[domain] = domain_counts.get(domain, 0) + 1
 
@@ -208,9 +207,7 @@ def get_domain_statistics(emails: list[str]) -> dict[str, int]:
 
 
 def filter_emails_by_domain(
-    emails: list[str],
-    domains: list[str],
-    include: bool = True
+    emails: list[str], domains: list[str], include: bool = True
 ) -> list[str]:
     """Filter emails by domain list.
 
@@ -223,11 +220,11 @@ def filter_emails_by_domain(
         List[str]: Filtered list of email addresses
     """
     filtered_emails = []
-    domains_set = set(domain.lower() for domain in domains)
+    domains_set = {domain.lower() for domain in domains}
 
     for email in emails:
-        if '@' in email:
-            email_domain = email.split('@')[-1].lower()
+        if "@" in email:
+            email_domain = email.split("@")[-1].lower()
             if include:
                 if email_domain in domains_set:
                     filtered_emails.append(email)

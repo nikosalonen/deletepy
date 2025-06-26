@@ -27,9 +27,7 @@ def handle_rate_limit_response(response: requests.Response, attempt: int) -> boo
     """
     if response.status_code == 429:  # Too Many Requests
         if attempt >= MAX_RETRIES:
-            print(
-                f"Rate limit exceeded after {MAX_RETRIES} attempts. Stopping."
-            )
+            print(f"Rate limit exceeded after {MAX_RETRIES} attempts. Stopping.")
             return False
 
         # Calculate delay with exponential backoff
@@ -133,7 +131,9 @@ def validate_response(response: requests.Response, expected_status: int = 200) -
         bool: True if response is valid, False otherwise
     """
     if response.status_code != expected_status:
-        print(f"Unexpected status code: {response.status_code} (expected {expected_status})")
+        print(
+            f"Unexpected status code: {response.status_code} (expected {expected_status})"
+        )
         return False
 
     try:

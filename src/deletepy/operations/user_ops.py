@@ -33,10 +33,18 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
     try:
         response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
-        print_success(f"Successfully deleted user {user_id}", user_id=user_id, operation="delete_user")
+        print_success(
+            f"Successfully deleted user {user_id}",
+            user_id=user_id,
+            operation="delete_user",
+        )
         time.sleep(API_RATE_LIMIT)
     except requests.exceptions.RequestException as e:
-        print_error(f"Error deleting user {user_id}: {e}", user_id=user_id, operation="delete_user")
+        print_error(
+            f"Error deleting user {user_id}: {e}",
+            user_id=user_id,
+            operation="delete_user",
+        )
 
 
 def block_user(user_id: str, token: str, base_url: str) -> None:
@@ -59,10 +67,18 @@ def block_user(user_id: str, token: str, base_url: str) -> None:
             url, headers=headers, json=payload, timeout=API_TIMEOUT
         )
         response.raise_for_status()
-        print_success(f"Successfully blocked user {user_id}", user_id=user_id, operation="block_user")
+        print_success(
+            f"Successfully blocked user {user_id}",
+            user_id=user_id,
+            operation="block_user",
+        )
         time.sleep(API_RATE_LIMIT)
     except requests.exceptions.RequestException as e:
-        print_error(f"Error blocking user {user_id}: {e}", user_id=user_id, operation="block_user")
+        print_error(
+            f"Error blocking user {user_id}: {e}",
+            user_id=user_id,
+            operation="block_user",
+        )
 
 
 def get_user_id_from_email(
@@ -89,8 +105,10 @@ def get_user_id_from_email(
 
     response = make_rate_limited_request("GET", url, headers, params=params)
     if response is None:
-        print(
-            f"{RED}Error fetching user_id for email {CYAN}{email}{RED}: Request failed after retries{RESET}"
+        print_error(
+            f"Error fetching user_id for email {email}: Request failed after retries",
+            email=email,
+            operation="get_user_id_from_email"
         )
         return None
 
@@ -114,8 +132,10 @@ def get_user_id_from_email(
                                 user_ids.append(user["user_id"])
                         else:
                             # Fallback: identities not included, skip this user to avoid API call
-                            print(
-                                f"{RED}Warning: Connection info not available for user {user['user_id']}, skipping{RESET}"
+                            print_warning(
+                                f"Connection info not available for user {user['user_id']}, skipping",
+                                user_id=user['user_id'],
+                                operation="get_user_id_from_email"
                             )
                     else:
                         # No connection filter, include all users
@@ -125,7 +145,12 @@ def get_user_id_from_email(
                 return user_ids
         return None
     except ValueError as e:
-        print(f"{RED}Error parsing response for email {CYAN}{email}{RED}: {e}{RESET}")
+        print_error(
+            f"Error parsing response for email {email}: {e}",
+            email=email,
+            error=str(e),
+            operation="get_user_id_from_email"
+        )
         return None
 
 
@@ -153,7 +178,12 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
         time.sleep(API_RATE_LIMIT)
         return user_data.get("email")
     except requests.exceptions.RequestException as e:
-        print(f"{RED}Error fetching email for user {CYAN}{user_id}{RED}: {e}{RESET}")
+        print_error(
+            f"Error fetching email for user {user_id}: {e}",
+            user_id=user_id,
+            error=str(e),
+            operation="get_user_email"
+        )
         return None
 
 
@@ -177,8 +207,10 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] 
 
     response = make_rate_limited_request("GET", url, headers)
     if response is None:
-        print(
-            f"{RED}Error fetching details for user {CYAN}{user_id}{RED}: Request failed after retries{RESET}"
+        print_error(
+            f"Error fetching details for user {user_id}: Request failed after retries",
+            user_id=user_id,
+            operation="get_user_details"
         )
         return None
 
@@ -186,7 +218,12 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] 
         user_data = response.json()
         return user_data
     except ValueError as e:
-        print(f"{RED}Error parsing response for user {CYAN}{user_id}{RED}: {e}{RESET}")
+        print_error(
+            f"Error parsing response for user {user_id}: {e}",
+            user_id=user_id,
+            error=str(e),
+            operation="get_user_details"
+        )
         return None
 
 
@@ -203,7 +240,11 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
         response.raise_for_status()
         sessions = response.json().get("sessions", [])
         if not sessions:
-            print(f"{YELLOW}No sessions found for user {CYAN}{user_id}{YELLOW}{RESET}")
+            print_info(
+                f"No sessions found for user {user_id}",
+                user_id=user_id,
+                operation="revoke_user_sessions"
+            )
             return
         for session in sessions:
             if shutdown_requested():
@@ -216,15 +257,27 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
             time.sleep(API_RATE_LIMIT)
             try:
                 del_resp.raise_for_status()
-                print(
-                    f"{GREEN}Revoked session {CYAN}{session_id}{GREEN} for user {CYAN}{user_id}{GREEN}{RESET}"
+                print_success(
+                    f"Revoked session {session_id} for user {user_id}",
+                    user_id=user_id,
+                    session_id=session_id,
+                    operation="revoke_user_sessions"
                 )
             except requests.exceptions.RequestException as e:
-                print(
-                    f"{YELLOW}Failed to revoke session {CYAN}{session_id}{YELLOW} for user {CYAN}{user_id}{YELLOW}: {e}{RESET}"
+                print_warning(
+                    f"Failed to revoke session {session_id} for user {user_id}: {e}",
+                    user_id=user_id,
+                    session_id=session_id,
+                    error=str(e),
+                    operation="revoke_user_sessions"
                 )
     except requests.exceptions.RequestException as e:
-        print(f"{RED}Error revoking sessions for user {CYAN}{user_id}{RED}: {e}{RESET}")
+        print_error(
+            f"Error revoking sessions for user {user_id}: {e}",
+            user_id=user_id,
+            error=str(e),
+            operation="revoke_user_sessions"
+        )
 
 
 def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
@@ -238,12 +291,19 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
     try:
         response = requests.delete(grants_url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
-        print(
-            f"{GREEN}Revoked all application grants for user {CYAN}{user_id}{GREEN}{RESET}"
+        print_success(
+            f"Revoked all application grants for user {user_id}",
+            user_id=user_id,
+            operation="revoke_user_grants"
         )
         time.sleep(API_RATE_LIMIT)
     except requests.exceptions.RequestException as e:
-        print(f"{RED}Error revoking grants for user {CYAN}{user_id}{RED}: {e}{RESET}")
+        print_error(
+            f"Error revoking grants for user {user_id}: {e}",
+            user_id=user_id,
+            error=str(e),
+            operation="revoke_user_grants"
+        )
 
 
 def unlink_user_identity(
@@ -270,13 +330,22 @@ def unlink_user_identity(
     try:
         response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
-        print(
-            f"{GREEN}Successfully unlinked {CYAN}{provider}{GREEN} identity {CYAN}{user_identity_id}{GREEN} from user {CYAN}{user_id}{GREEN}{RESET}"
+        print_success(
+            f"Successfully unlinked {provider} identity {user_identity_id} from user {user_id}",
+            user_id=user_id,
+            provider=provider,
+            user_identity_id=user_identity_id,
+            operation="unlink_user_identity"
         )
         time.sleep(API_RATE_LIMIT)
         return True
     except requests.exceptions.RequestException as e:
-        print(
-            f"{RED}Error unlinking {CYAN}{provider}{RED} identity {CYAN}{user_identity_id}{RED} from user {CYAN}{user_id}{RED}: {e}{RESET}"
+        print_error(
+            f"Error unlinking {provider} identity {user_identity_id} from user {user_id}: {e}",
+            user_id=user_id,
+            provider=provider,
+            user_identity_id=user_identity_id,
+            error=str(e),
+            operation="unlink_user_identity"
         )
         return False

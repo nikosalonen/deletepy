@@ -8,13 +8,14 @@ import requests
 
 from ..core.config import API_RATE_LIMIT, API_TIMEOUT
 from ..utils.display_utils import (
-    CYAN,
-    GREEN,
-    RED,
-    RESET,
-    YELLOW,
     show_progress,
     shutdown_requested,
+)
+from ..utils.legacy_print import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
 )
 from .user_ops import unlink_user_identity
 
@@ -48,12 +49,20 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
             show_progress(idx, total_users, "Checking users")
             time.sleep(API_RATE_LIMIT)
         except requests.exceptions.RequestException as e:
-            print_error(f"Error checking user {user_id}: {e}", user_id=user_id, operation="check_blocked")
+            print_error(
+                f"Error checking user {user_id}: {e}",
+                user_id=user_id,
+                operation="check_blocked",
+            )
             continue
 
     print("\n")  # Clear progress line
     if unblocked:
-        print_warning(f"Found {len(unblocked)} unblocked users:", count=len(unblocked), operation="check_unblocked")
+        print_warning(
+            f"Found {len(unblocked)} unblocked users:",
+            count=len(unblocked),
+            operation="check_unblocked",
+        )
         for user_id in unblocked:
             print_info(f"  {user_id}", user_id=user_id, status="unblocked")
     else:
@@ -80,7 +89,8 @@ def find_users_by_social_media_ids(
     """
     print_info(
         f"Searching for users with {len(social_ids)} social media IDs...",
-        social_ids_count=len(social_ids), operation="social_search"
+        social_ids_count=len(social_ids),
+        operation="social_search",
     )
 
     found_users = []
@@ -128,7 +138,9 @@ def find_users_by_social_media_ids(
     )
 
 
-def _search_users_by_social_id(social_id: str, token: str, base_url: str) -> list[dict[str, Any]]:
+def _search_users_by_social_id(
+    social_id: str, token: str, base_url: str
+) -> list[dict[str, Any]]:
     """Search for users with a specific social media ID.
 
     Args:
@@ -152,13 +164,15 @@ def _search_users_by_social_id(social_id: str, token: str, base_url: str) -> lis
         "search_engine": "v3",
         "include_totals": "true",
         "page": "0",
-        "per_page": "100"
+        "per_page": "100",
     }
 
     found_users = []
 
     try:
-        response = requests.get(url, headers=headers, params=params, timeout=API_TIMEOUT)
+        response = requests.get(
+            url, headers=headers, params=params, timeout=API_TIMEOUT
+        )
         response.raise_for_status()
         data = response.json()
 
@@ -174,7 +188,11 @@ def _search_users_by_social_id(social_id: str, token: str, base_url: str) -> lis
         time.sleep(API_RATE_LIMIT)
 
     except requests.exceptions.RequestException as e:
-        print_error(f"Error searching for social ID {social_id}: {e}", social_id=social_id, operation="social_search")
+        print_error(
+            f"Error searching for social ID {social_id}: {e}",
+            social_id=social_id,
+            operation="social_search",
+        )
 
     return found_users
 
@@ -222,21 +240,25 @@ def _categorize_users(
         if len(identities) == 1:
             # Only one identity - this is the main identity
             if auto_delete:
-                users_to_delete.append({
-                    "user_id": user_id,
-                    "email": user.get("email", ""),
-                    "matching_connection": matching_connection,
-                    "social_id": social_id,
-                    "reason": "Main identity"
-                })
+                users_to_delete.append(
+                    {
+                        "user_id": user_id,
+                        "email": user.get("email", ""),
+                        "matching_connection": matching_connection,
+                        "social_id": social_id,
+                        "reason": "Main identity",
+                    }
+                )
             else:
-                auth0_main_protected.append({
-                    "user_id": user_id,
-                    "email": user.get("email", ""),
-                    "matching_connection": matching_connection,
-                    "social_id": social_id,
-                    "reason": "Main identity (protected)"
-                })
+                auth0_main_protected.append(
+                    {
+                        "user_id": user_id,
+                        "email": user.get("email", ""),
+                        "matching_connection": matching_connection,
+                        "social_id": social_id,
+                        "reason": "Main identity (protected)",
+                    }
+                )
         else:
             # Multiple identities - check if Auth0 is the main identity
             auth0_identity = None
@@ -247,22 +269,26 @@ def _categorize_users(
 
             if auth0_identity and auth0_identity.get("isSocial", False) is False:
                 # Auth0 is the main identity, protect the user
-                auth0_main_protected.append({
-                    "user_id": user_id,
-                    "email": user.get("email", ""),
-                    "matching_connection": matching_connection,
-                    "social_id": social_id,
-                    "reason": "Auth0 main identity"
-                })
+                auth0_main_protected.append(
+                    {
+                        "user_id": user_id,
+                        "email": user.get("email", ""),
+                        "matching_connection": matching_connection,
+                        "social_id": social_id,
+                        "reason": "Auth0 main identity",
+                    }
+                )
             else:
                 # Social identity can be safely unlinked
-                identities_to_unlink.append({
-                    "user_id": user_id,
-                    "email": user.get("email", ""),
-                    "matching_connection": matching_connection,
-                    "social_id": social_id,
-                    "reason": "Secondary identity"
-                })
+                identities_to_unlink.append(
+                    {
+                        "user_id": user_id,
+                        "email": user.get("email", ""),
+                        "matching_connection": matching_connection,
+                        "social_id": social_id,
+                        "reason": "Secondary identity",
+                    }
+                )
 
     return users_to_delete, identities_to_unlink, auth0_main_protected
 
@@ -290,7 +316,10 @@ def _display_search_results(
     print_info("\nSearch Results Summary:", operation="social_search_summary")
     print_info(f"Total social IDs searched: {total_ids}", total_ids=total_ids)
     print_info(f"Users found: {len(found_users)}", users_found=len(found_users))
-    print_info(f"Social IDs not found: {len(not_found_ids)}", not_found_count=len(not_found_ids))
+    print_info(
+        f"Social IDs not found: {len(not_found_ids)}",
+        not_found_count=len(not_found_ids),
+    )
 
     if not_found_ids:
         print_warning("\nSocial IDs not found:", count=len(not_found_ids))
@@ -298,27 +327,55 @@ def _display_search_results(
             print_info(f"  {social_id}", social_id=social_id, status="not_found")
 
     print_info("\nUser Categories:", operation="categorization")
-    print_info(f"  Users to delete: {len(users_to_delete)}", delete_count=len(users_to_delete))
-    print_info(f"  Identities to unlink: {len(identities_to_unlink)}", unlink_count=len(identities_to_unlink))
-    print_info(f"  Protected users: {len(auth0_main_protected)}", protected_count=len(auth0_main_protected))
+    print_info(
+        f"  Users to delete: {len(users_to_delete)}", delete_count=len(users_to_delete)
+    )
+    print_info(
+        f"  Identities to unlink: {len(identities_to_unlink)}",
+        unlink_count=len(identities_to_unlink),
+    )
+    print_info(
+        f"  Protected users: {len(auth0_main_protected)}",
+        protected_count=len(auth0_main_protected),
+    )
 
     if users_to_delete:
         print_warning("\nUsers that will be deleted:", count=len(users_to_delete))
         for user in users_to_delete:
-            print_info(f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                      user_id=user['user_id'], email=user['email'], reason=user['reason'], action="delete")
+            print_info(
+                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
+                user_id=user["user_id"],
+                email=user["email"],
+                reason=user["reason"],
+                action="delete",
+            )
 
     if identities_to_unlink:
-        print_warning("\nUsers where identities will be unlinked:", count=len(identities_to_unlink))
+        print_warning(
+            "\nUsers where identities will be unlinked:",
+            count=len(identities_to_unlink),
+        )
         for user in identities_to_unlink:
-            print_info(f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                      user_id=user['user_id'], email=user['email'], reason=user['reason'], action="unlink")
+            print_info(
+                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
+                user_id=user["user_id"],
+                email=user["email"],
+                reason=user["reason"],
+                action="unlink",
+            )
 
     if auth0_main_protected:
-        print_warning("\nProtected users (Auth0 main identity):", count=len(auth0_main_protected))
+        print_warning(
+            "\nProtected users (Auth0 main identity):", count=len(auth0_main_protected)
+        )
         for user in auth0_main_protected:
-            print_info(f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                      user_id=user['user_id'], email=user['email'], reason=user['reason'], action="protected")
+            print_info(
+                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
+                user_id=user["user_id"],
+                email=user["email"],
+                reason=user["reason"],
+                action="protected",
+            )
 
 
 def _handle_auto_delete_operations(
@@ -348,8 +405,11 @@ def _handle_auto_delete_operations(
     if auto_delete:
         # Confirm operations for production environment
         if env == "prod":
-            print_error(f"\nWARNING: This will perform {total_operations} operations in PRODUCTION!",
-                       total_operations=total_operations, environment="prod")
+            print_error(
+                f"\nWARNING: This will perform {total_operations} operations in PRODUCTION!",
+                total_operations=total_operations,
+                environment="prod",
+            )
             confirm = input("Type 'CONFIRM' to proceed: ")
             if confirm != "CONFIRM":
                 print_warning("Operations cancelled.", operation="auto_delete")
@@ -360,7 +420,11 @@ def _handle_auto_delete_operations(
         failed_deletions = 0
 
         if users_to_delete:
-            print_warning(f"\nDeleting {len(users_to_delete)} users...", count=len(users_to_delete), operation="delete_users")
+            print_warning(
+                f"\nDeleting {len(users_to_delete)} users...",
+                count=len(users_to_delete),
+                operation="delete_users",
+            )
             for idx, user in enumerate(users_to_delete, 1):
                 if shutdown_requested():
                     break
@@ -369,11 +433,15 @@ def _handle_auto_delete_operations(
 
                 try:
                     from .user_ops import delete_user
+
                     delete_user(user["user_id"], token, base_url)
                     deleted_count += 1
                 except Exception as e:
-                    print_error(f"\nFailed to delete user {user['user_id']}: {e}", 
-                               user_id=user['user_id'], operation="delete_user")
+                    print_error(
+                        f"\nFailed to delete user {user['user_id']}: {e}",
+                        user_id=user["user_id"],
+                        operation="delete_user",
+                    )
                     failed_deletions += 1
             print("\n")  # Clear progress line
 
@@ -382,8 +450,11 @@ def _handle_auto_delete_operations(
         failed_unlinks = 0
 
         if identities_to_unlink:
-            print_warning(f"\nUnlinking {len(identities_to_unlink)} identities...", 
-                         count=len(identities_to_unlink), operation="unlink_identities")
+            print_warning(
+                f"\nUnlinking {len(identities_to_unlink)} identities...",
+                count=len(identities_to_unlink),
+                operation="unlink_identities",
+            )
             for idx, user in enumerate(identities_to_unlink, 1):
                 if shutdown_requested():
                     break
@@ -403,8 +474,12 @@ def _handle_auto_delete_operations(
                     else:
                         failed_unlinks += 1
                 except Exception as e:
-                    print_error(f"\nFailed to unlink identity {user['social_id']} from user {user['user_id']}: {e}", 
-                               user_id=user['user_id'], social_id=user['social_id'], operation="unlink_identity")
+                    print_error(
+                        f"\nFailed to unlink identity {user['social_id']} from user {user['user_id']}: {e}",
+                        user_id=user["user_id"],
+                        social_id=user["social_id"],
+                        operation="unlink_identity",
+                    )
                     failed_unlinks += 1
             print("\n")  # Clear progress line
 
@@ -412,13 +487,29 @@ def _handle_auto_delete_operations(
         print_success("\nOperations Summary:", operation="operations_summary")
         if users_to_delete:
             print_info(f"Users deleted: {deleted_count}", deleted_count=deleted_count)
-            print_info(f"Failed deletions: {failed_deletions}", failed_deletions=failed_deletions)
+            print_info(
+                f"Failed deletions: {failed_deletions}",
+                failed_deletions=failed_deletions,
+            )
         if identities_to_unlink:
-            print_info(f"Identities unlinked: {unlinked_count}", unlinked_count=unlinked_count)
-            print_info(f"Failed unlinks: {failed_unlinks}", failed_unlinks=failed_unlinks)
+            print_info(
+                f"Identities unlinked: {unlinked_count}", unlinked_count=unlinked_count
+            )
+            print_info(
+                f"Failed unlinks: {failed_unlinks}", failed_unlinks=failed_unlinks
+            )
 
     elif total_operations > 0 and not auto_delete:
-        print_warning(f"\nNote: {total_operations} operations found, but auto_delete is disabled.", 
-                     total_operations=total_operations, auto_delete=False)
-        print_info(f"- {len(users_to_delete)} users would be deleted", delete_count=len(users_to_delete))
-        print_info(f"- {len(identities_to_unlink)} identities would be unlinked", unlink_count=len(identities_to_unlink))
+        print_warning(
+            f"\nNote: {total_operations} operations found, but auto_delete is disabled.",
+            total_operations=total_operations,
+            auto_delete=False,
+        )
+        print_info(
+            f"- {len(users_to_delete)} users would be deleted",
+            delete_count=len(users_to_delete),
+        )
+        print_info(
+            f"- {len(identities_to_unlink)} identities would be unlinked",
+            unlink_count=len(identities_to_unlink),
+        )
