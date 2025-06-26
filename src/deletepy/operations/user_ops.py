@@ -7,20 +7,19 @@ from urllib.parse import quote
 import requests
 
 from ..core.config import API_RATE_LIMIT, API_TIMEOUT
-from ..utils.display_utils import (
-    CYAN,
-    GREEN,
-    RED,
-    RESET,
-    YELLOW,
-    shutdown_requested,
+from ..utils.display_utils import shutdown_requested
+from ..utils.legacy_print import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
 )
 from ..utils.request_utils import make_rate_limited_request
 
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
     """Delete user from Auth0."""
-    print(f"{YELLOW}Deleting user: {CYAN}{user_id}{YELLOW}{RESET}")
+    print_info(f"Deleting user: {user_id}", user_id=user_id, operation="delete_user")
 
     # First revoke all sessions
     revoke_user_sessions(user_id, token, base_url)
@@ -34,15 +33,15 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
     try:
         response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
-        print(f"{GREEN}Successfully deleted user {CYAN}{user_id}{GREEN}{RESET}")
+        print_success(f"Successfully deleted user {user_id}", user_id=user_id, operation="delete_user")
         time.sleep(API_RATE_LIMIT)
     except requests.exceptions.RequestException as e:
-        print(f"{RED}Error deleting user {CYAN}{user_id}{RED}: {e}{RESET}")
+        print_error(f"Error deleting user {user_id}: {e}", user_id=user_id, operation="delete_user")
 
 
 def block_user(user_id: str, token: str, base_url: str) -> None:
     """Block user in Auth0."""
-    print(f"{YELLOW}Blocking user: {CYAN}{user_id}{YELLOW}{RESET}")
+    print_info(f"Blocking user: {user_id}", user_id=user_id, operation="block_user")
 
     # First revoke all sessions and grants
     revoke_user_sessions(user_id, token, base_url)
@@ -60,10 +59,10 @@ def block_user(user_id: str, token: str, base_url: str) -> None:
             url, headers=headers, json=payload, timeout=API_TIMEOUT
         )
         response.raise_for_status()
-        print(f"{GREEN}Successfully blocked user {CYAN}{user_id}{GREEN}{RESET}")
+        print_success(f"Successfully blocked user {user_id}", user_id=user_id, operation="block_user")
         time.sleep(API_RATE_LIMIT)
     except requests.exceptions.RequestException as e:
-        print(f"{RED}Error blocking user {CYAN}{user_id}{RED}: {e}{RESET}")
+        print_error(f"Error blocking user {user_id}: {e}", user_id=user_id, operation="block_user")
 
 
 def get_user_id_from_email(
