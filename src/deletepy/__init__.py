@@ -1,21 +1,45 @@
 """Auth0 User Management Tool - Main Package."""
 
 # Core functionality
-# CLI commands
+# CLI
 from .cli import (
     csv_main,
+    csv_validate_auth0_user_id,
     parse_csv_arguments,
     print_csv_usage,
     process_csv_file,
-    validate_auth0_user_id,
+    validate_args,
+    validate_connection_type,
+    validate_environment,
+    validate_file_path_argument,
+    validate_operation,
+    validate_user_id_list,
 )
-from .core.auth import get_access_token
-from .core.config import get_base_url
+from .core.auth import doctor, get_access_token
+from .core.config import (
+    API_RATE_LIMIT,
+    API_TIMEOUT,
+    BASE_RETRY_DELAY,
+    MAX_RETRIES,
+    MAX_RETRY_DELAY,
+    get_base_url,
+    get_env_config,
+    get_estimated_processing_time,
+    get_optimal_batch_size,
+    validate_rate_limit_config,
+)
+
+# Operations
 from .operations.batch_ops import (
+    _categorize_users,
+    _display_search_results,
+    _handle_auto_delete_operations,
+    _search_users_by_social_id,
     check_unblocked_users,
     find_users_by_social_media_ids,
 )
 from .operations.domain_ops import (
+    _display_domain_check_results,
     check_email_domains,
     extract_domains_from_emails,
     filter_emails_by_domain,
@@ -23,10 +47,14 @@ from .operations.domain_ops import (
     validate_domain_format,
 )
 from .operations.export_ops import (
+    _build_csv_data_dict,
+    _fetch_user_data,
+    _generate_export_summary,
+    _process_email_batch,
+    _validate_and_setup_export,
+    _write_csv_batch,
     export_users_last_login_to_csv,
 )
-
-# Operations
 from .operations.user_ops import (
     block_user,
     delete_user,
@@ -40,27 +68,30 @@ from .operations.user_ops import (
 
 # Utilities
 from .utils import (
-    # CSV utilities
     AUTH0_USER_ID_PREFIXES,
-    CYAN,
-    GREEN,
-    # Display utilities
-    RED,
-    RESET,
-    YELLOW,
-    # File utilities
     FileOperationError,
+    _check_if_data_available,
+    _convert_single_identifier,
+    _convert_to_output_type,
+    _detect_file_type,
+    _extract_output_value,
+    _handle_conversion,
+    _needs_conversion,
+    _process_csv_file,
+    _process_plain_text,
+    _search_user_by_field,
+    _should_skip_resolution,
     check_shutdown_requested,
     clean_identifier,
     confirm_action,
     extract_identifiers_from_csv,
     find_best_column,
-    get_json_response,
+    get_connection_type,
     handle_shutdown,
     is_auth0_user_id,
-    # Request utilities
-    make_rate_limited_request,
-    make_simple_request,
+    is_database_connection,
+    is_social_connection,
+    parse_auth0_user_id,
     print_error,
     print_info,
     print_section_header,
@@ -77,8 +108,8 @@ from .utils import (
     setup_signal_handlers,
     show_progress,
     shutdown_requested,
+    validate_auth0_user_id,
     validate_file_path,
-    validate_response,
     write_identifiers_to_file,
 )
 
@@ -87,55 +118,47 @@ __version__ = "1.0.0"
 __all__ = [
     # Core
     "get_access_token",
+    "doctor",
+    "get_env_config",
     "get_base_url",
-
-    # User operations
-    "delete_user",
+    "API_RATE_LIMIT",
+    "API_TIMEOUT",
+    "MAX_RETRIES",
+    "BASE_RETRY_DELAY",
+    "MAX_RETRY_DELAY",
+    "get_optimal_batch_size",
+    "get_estimated_processing_time",
+    "validate_rate_limit_config",
+    # Operations
     "block_user",
+    "delete_user",
     "get_user_details",
     "get_user_email",
     "get_user_id_from_email",
     "revoke_user_grants",
     "revoke_user_sessions",
     "unlink_user_identity",
-
-    # Batch operations
     "check_unblocked_users",
     "find_users_by_social_media_ids",
-
-    # Export operations
     "export_users_last_login_to_csv",
-
-    # Domain operations
     "check_email_domains",
-    "extract_domains_from_emails",
-    "filter_emails_by_domain",
-    "get_domain_statistics",
     "validate_domain_format",
-
-    # Display utilities
-    "RED",
-    "GREEN",
-    "YELLOW",
-    "CYAN",
-    "RESET",
-    "print_error",
-    "print_info",
-    "print_success",
-    "print_warning",
-    "print_section_header",
-    "show_progress",
-    "confirm_action",
-    "shutdown_requested",
-
-    # Request utilities
-    "make_rate_limited_request",
-    "make_simple_request",
-    "validate_response",
-    "get_json_response",
-
-    # File utilities
-    "FileOperationError",
+    "extract_domains_from_emails",
+    "get_domain_statistics",
+    "filter_emails_by_domain",
+    # Utilities
+    "AUTH0_USER_ID_PREFIXES",
+    "is_auth0_user_id",
+    "validate_auth0_user_id",
+    "get_connection_type",
+    "is_social_connection",
+    "is_database_connection",
+    "parse_auth0_user_id",
+    "extract_identifiers_from_csv",
+    "write_identifiers_to_file",
+    "find_best_column",
+    "resolve_encoded_username",
+    "clean_identifier",
     "safe_file_read",
     "safe_file_write",
     "safe_file_copy",
@@ -144,23 +167,28 @@ __all__ = [
     "validate_file_path",
     "read_user_ids",
     "read_user_ids_generator",
-    "setup_signal_handlers",
+    "show_progress",
+    "shutdown_requested",
     "handle_shutdown",
     "check_shutdown_requested",
-
-    # CSV utilities
-    "AUTH0_USER_ID_PREFIXES",
-    "is_auth0_user_id",
-    "find_best_column",
-    "resolve_encoded_username",
-    "clean_identifier",
-    "extract_identifiers_from_csv",
-    "write_identifiers_to_file",
-
-    # CLI commands
+    "setup_signal_handlers",
+    "confirm_action",
+    "print_error",
+    "print_warning",
+    "print_success",
+    "print_info",
+    "print_section_header",
+    "FileOperationError",
+    # CLI
+    "validate_args",
+    "validate_environment",
+    "validate_operation",
+    "validate_connection_type",
+    "validate_user_id_list",
+    "validate_file_path_argument",
     "csv_main",
     "parse_csv_arguments",
     "print_csv_usage",
     "process_csv_file",
-    "validate_auth0_user_id",
+    "csv_validate_auth0_user_id",
 ]
