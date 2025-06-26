@@ -30,6 +30,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Progress tracking** - Real-time progress indicators for bulk operations
 - **Graceful shutdown** - Handle interruption signals safely
 - **Memory efficient** - Generator-based file processing for large datasets
+- **Robust file operations** - Comprehensive error handling with automatic backup/restore for critical operations
 
 ## Project Structure
 
@@ -39,7 +40,7 @@ The project is organized into several modules:
 - `auth.py`: Auth0 authentication and token management with timeout handling
 - `config.py`: Environment configuration management with dev/prod validation
 - `user_operations.py`: Core Auth0 API operations with advanced rate limiting
-- `utils.py`: Shared utilities for argument parsing, file reading, and progress display
+- `utils.py`: Shared utilities for argument parsing, file reading, progress display, and Auth0 user ID validation
 - `email_domain_checker.py`: Domain validation and blocklist checking
 - `rate_limit_config.py`: Rate limiting configuration and batch optimization
 - `cleanup_csv.py`: CSV preprocessing utility for input file preparation
@@ -88,11 +89,45 @@ The project is organized into several modules:
 
 If you have a CSV file (e.g., `ids.csv`) with columns like `ip,userId,userName,user_name_prefix,user_name_suffix`, use the provided `cleanup_csv.py` script to extract a single column of user IDs or emails:
 
+### Basic CSV Cleanup
 ```bash
 python cleanup_csv.py
 ```
 
-This will overwrite `ids.csv` with a single column (no header) suitable for use as input to the main script.
+### Advanced CSV Cleanup with Output Type Control
+```bash
+# Basic cleanup with specific output type
+python cleanup_csv.py --output-type=email
+python cleanup_csv.py --output-type=username  
+python cleanup_csv.py --output-type=user_id
+
+# With environment for Auth0 API resolution
+python cleanup_csv.py dev --output-type=email
+python cleanup_csv.py prod --output-type=username
+
+# Full syntax
+python cleanup_csv.py [filename] [env] [--output-type=type]
+```
+
+**Enhanced Features:**
+- **Output type control** - Specify what type of identifiers you want in the output:
+  - `user_id`: Auth0 user IDs (default)
+  - `email`: User email addresses
+  - `username`: User usernames (falls back to email if no username exists)
+- **Smart column detection** - Automatically finds the best column based on requested output type
+- **Data availability checking** - Detects if CSV already contains the requested data type to avoid unnecessary API calls
+- **Interactive Auth0 fetching** - Prompts to fetch missing data from Auth0 API when environment isn't specified
+- **Automatic column detection** - Intelligently identifies user identifier columns using fuzzy matching
+- **Encoded username resolution** - Resolves Auth0 encoded usernames to actual email addresses:
+  - `user_at_example.com` → `user@example.com` 
+  - `user__domain.com` → Uses Auth0 API to fetch the actual email address
+- **Auth0 API integration** - When environment (`dev`/`prod`) is specified, uses Auth0 API to resolve problematic encoded usernames
+- **Multiple input formats** - Handles both CSV files and plain text files with identifiers
+- **Rate limiting** - API calls are properly rate-limited to prevent 429 errors
+
+**Important Note:** Auth0 usernames cannot contain `@` symbols. If a value contains `@`, it's treated as an email address. Encoded usernames with `_at_` or `__` patterns are resolved using the Auth0 API when possible, with string replacement as fallback.
+
+The script will overwrite `ids.csv` with a single column (no header) suitable for use as input to the main script.
 
 ## Usage
 

@@ -56,12 +56,16 @@ def test_read_user_ids_generator():
 
 
 def test_read_user_ids_file_not_found():
-    with pytest.raises(FileNotFoundError):
+    from utils import FileOperationError
+
+    with pytest.raises(FileOperationError):
         read_user_ids("nonexistent_file.txt")
 
 
 def test_read_user_ids_generator_file_not_found():
-    with pytest.raises(FileNotFoundError):
+    from utils import FileOperationError
+
+    with pytest.raises(FileOperationError):
         list(read_user_ids_generator("nonexistent_file.txt"))
 
 
