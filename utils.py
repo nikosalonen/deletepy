@@ -3,6 +3,7 @@ import signal
 import argparse
 import re
 import os
+import shutil
 from pathlib import Path
 from typing import List, Generator
 from contextlib import contextmanager
@@ -130,6 +131,21 @@ def safe_file_read(file_path: str, encoding: str = "utf-8"):
         raise FileOperationError(f"Unexpected error reading file {path}: {e}") from e
 
 
+def _restore_backup(backup_path: Path, original_path: Path) -> None:
+    """Helper function to restore backup file to original path.
+
+    Args:
+        backup_path: Path to the backup file
+        original_path: Path to restore the backup to
+    """
+    if backup_path and backup_path.exists():
+        try:
+            shutil.move(backup_path, original_path)
+        except Exception:
+            # Silently ignore backup restoration failures
+            pass
+
+
 @contextmanager
 def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
     """Context manager for safe file writing with comprehensive error handling.
@@ -152,8 +168,6 @@ def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
     if mode in ["w", "wt"] and path.exists():
         backup_path = path.with_suffix(path.suffix + ".backup")
         try:
-            import shutil
-
             shutil.copy2(path, backup_path)
         except Exception:
             # Continue without backup if backup creation fails
@@ -168,34 +182,13 @@ def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
             backup_path.unlink()
 
     except PermissionError as e:
-        # Restore backup if available
-        if backup_path and backup_path.exists():
-            try:
-                import shutil
-
-                shutil.move(backup_path, path)
-            except Exception:
-                pass
+        _restore_backup(backup_path, path)
         raise FileOperationError(f"Permission denied writing to file: {path}") from e
     except OSError as e:
-        # Restore backup if available
-        if backup_path and backup_path.exists():
-            try:
-                import shutil
-
-                shutil.move(backup_path, path)
-            except Exception:
-                pass
+        _restore_backup(backup_path, path)
         raise FileOperationError(f"OS error writing to file {path}: {e}") from e
     except Exception as e:
-        # Restore backup if available
-        if backup_path and backup_path.exists():
-            try:
-                import shutil
-
-                shutil.move(backup_path, path)
-            except Exception:
-                pass
+        _restore_backup(backup_path, path)
         raise FileOperationError(f"Unexpected error writing to file {path}: {e}") from e
 
 
@@ -331,7 +324,9 @@ def read_user_ids(filepath: str) -> List[str]:
     except FileOperationError:
         raise  # Re-raise FileOperationError as-is
     except Exception as e:
-        raise FileOperationError(f"Unexpected error reading file {filepath}: {e}") from e
+        raise FileOperationError(
+            f"Unexpected error reading file {filepath}: {e}"
+        ) from e
 
 
 def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
@@ -355,7 +350,9 @@ def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
     except FileOperationError:
         raise  # Re-raise FileOperationError as-is
     except Exception as e:
-        raise FileOperationError(f"Unexpected error reading file {filepath}: {e}") from e
+        raise FileOperationError(
+            f"Unexpected error reading file {filepath}: {e}"
+        ) from e
 
 
 def validate_args() -> argparse.Namespace:
