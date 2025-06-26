@@ -13,35 +13,8 @@ from ..utils.display_utils import (
     print_warning,
 )
 from ..utils.request_utils import make_rate_limited_request
+from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
 from .file_utils import FileOperationError, safe_file_read, safe_file_write
-
-# Auth0 user ID prefixes
-AUTH0_USER_ID_PREFIXES = (
-    "auth0|",
-    "google-oauth2|",
-    "facebook|",
-    "github|",
-    "twitter|",
-    "linkedin|",
-    "apple|",
-    "microsoft|",
-    "windowslive|",
-    "line|",
-    "samlp|",
-    "oidc|",
-)
-
-
-def is_auth0_user_id(identifier: str) -> bool:
-    """Check if a string is an Auth0 user ID.
-
-    Args:
-        identifier: String to check
-
-    Returns:
-        True if the string starts with a known Auth0 user ID prefix
-    """
-    return identifier.startswith(AUTH0_USER_ID_PREFIXES)
 
 
 def find_best_column(headers: list[str], output_type: str = "user_id") -> str | None:
