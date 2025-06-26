@@ -154,6 +154,183 @@ def clean_identifier(
     return value
 
 
+def _detect_file_type(first_line: str) -> str:
+    """Detect whether file is plain text or CSV based on first line.
+
+    Args:
+        first_line: First line of the file
+
+    Returns:
+        'plain_text' or 'csv'
+    """
+    first_line = first_line.strip()
+
+    # If first line looks like an Auth0 ID or email, treat as plain text file
+    if (
+        first_line.startswith(AUTH0_USER_ID_PREFIXES)
+        or "@" in first_line
+        or "__" in first_line
+        or "_at_" in first_line
+    ):
+        return "plain_text"
+
+    return "csv"
+
+
+def _process_plain_text(infile, env: str = None) -> List[str]:
+    """Process plain text file with identifiers.
+
+    Args:
+        infile: File object to read from
+        env: Environment for Auth0 API resolution
+
+    Returns:
+        List of cleaned identifiers
+    """
+    print("Detected plain text file with identifiers")
+    identifiers = []
+
+    for line in infile:
+        cleaned = clean_identifier(line.strip(), env)
+        if cleaned:
+            identifiers.append(cleaned)
+
+    return identifiers
+
+
+def _process_csv_file(
+    infile, output_type: str, env: str = None
+) -> tuple[List[str], bool]:
+    """Process CSV file and extract identifiers.
+
+    Args:
+        infile: File object to read from
+        output_type: Type of output desired (username|email|user_id)
+        env: Environment for Auth0 API resolution
+
+    Returns:
+        Tuple of (identifiers list, skip_resolution flag)
+    """
+    identifiers = []
+    skip_resolution = False
+
+    reader = csv.DictReader(infile)
+    headers = reader.fieldnames
+
+    if not headers:
+        print("No headers found in CSV file")
+        return identifiers, skip_resolution
+
+    print(f"Available columns: {', '.join(headers)}")
+
+    best_column = find_best_column(headers, output_type)
+
+    if not best_column:
+        print("Could not automatically detect identifier column. Available columns:")
+        for i, header in enumerate(headers):
+            print(f"  {i}: {header}")
+
+        # For automated processing, use first column as fallback
+        best_column = headers[0]
+        print(f"Using first column as fallback: {best_column}")
+
+    print(f"Using column: {best_column}")
+
+    # Check if we should skip encoded username resolution for this column
+    skip_resolution = _should_skip_resolution(best_column, output_type)
+    if skip_resolution:
+        data_type = "username" if output_type == "username" else "email"
+        print(
+            f"CSV column '{best_column}' contains {data_type} data. Skipping encoded username resolution."
+        )
+
+    for row in reader:
+        if best_column in row:
+            # Preserve encoded usernames if we're looking for username output and found username column
+            preserve_encoded = skip_resolution and output_type == "username"
+            env_for_cleaning = None if skip_resolution else env
+            cleaned = clean_identifier(
+                row[best_column], env_for_cleaning, preserve_encoded
+            )
+            if cleaned:
+                identifiers.append(cleaned)
+
+    return identifiers, skip_resolution
+
+
+def _should_skip_resolution(best_column: str, output_type: str) -> bool:
+    """Determine if we should skip encoded username resolution.
+
+    Args:
+        best_column: The selected column name
+        output_type: Type of output desired
+
+    Returns:
+        True if resolution should be skipped
+    """
+    if output_type == "username" and best_column and "user_name" in best_column.lower():
+        return True
+    elif output_type == "email" and best_column and "email" in best_column.lower():
+        return True
+
+    return False
+
+
+def _needs_conversion(
+    skip_resolution: bool, identifiers: List[str], output_type: str
+) -> bool:
+    """Check if identifiers need conversion to the requested output type.
+
+    Args:
+        skip_resolution: Whether resolution was skipped during CSV processing
+        identifiers: List of identifiers
+        output_type: Requested output type
+
+    Returns:
+        True if conversion is needed
+    """
+    if skip_resolution:
+        return False
+
+    data_already_available = _check_if_data_available(identifiers, output_type)
+    return not data_already_available
+
+
+def _handle_conversion(
+    identifiers: List[str], output_type: str, env: str = None, interactive: bool = True
+) -> List[str]:
+    """Handle conversion of identifiers to requested output type.
+
+    Args:
+        identifiers: List of identifiers to convert
+        output_type: Requested output type
+        env: Environment for Auth0 API
+        interactive: Whether to prompt user for input
+
+    Returns:
+        Converted identifiers list
+    """
+    if env:
+        return _convert_to_output_type(identifiers, output_type, env)
+    elif interactive:
+        print(
+            f"\nWarning: Requested output type '{output_type}' but no environment specified."
+        )
+        response = (
+            input(
+                "Do you want to fetch this data from Auth0? Specify environment (dev/prod) or press Enter to skip: "
+            )
+            .strip()
+            .lower()
+        )
+        if response in ["dev", "prod"]:
+            return _convert_to_output_type(identifiers, output_type, response)
+        else:
+            print("Skipping Auth0 data fetch. Using original identifiers.")
+    # Non-interactive mode or user declined - return original identifiers
+    return identifiers
+
+
 def extract_identifiers_from_csv(
     filename: str = "ids.csv",
     env: str = None,
@@ -171,84 +348,35 @@ def extract_identifiers_from_csv(
     Returns:
         List of cleaned identifiers
     """
-    identifiers = []
-    skip_resolution = False
-
     try:
         with safe_file_read(filename) as infile:
-            # Check if file has CSV headers by peeking at first line
+            # Detect file type by peeking at first line
             first_line = infile.readline()
             infile.seek(0)
 
-            # If first line looks like an Auth0 ID or email, treat as plain text file
-            if (
-                first_line.strip().startswith(AUTH0_USER_ID_PREFIXES)
-                or "@" in first_line
-                or "__" in first_line
-                or "_at_" in first_line
-            ):
-                print("Detected plain text file with identifiers")
-                for line in infile:
-                    cleaned = clean_identifier(line.strip(), env)
-                    if cleaned:
-                        identifiers.append(cleaned)
-                return identifiers
+            file_type = _detect_file_type(first_line)
 
-            # Otherwise, treat as CSV
-            reader = csv.DictReader(infile)
-            headers = reader.fieldnames
-
-            if not headers:
-                print("No headers found in CSV file")
-                return identifiers
-
-            print(f"Available columns: {', '.join(headers)}")
-
-            best_column = find_best_column(headers, output_type)
-
-            if not best_column:
-                print(
-                    "Could not automatically detect identifier column. Available columns:"
-                )
-                for i, header in enumerate(headers):
-                    print(f"  {i}: {header}")
-
-                # For automated processing, use first column as fallback
-                best_column = headers[0]
-                print(f"Using first column as fallback: {best_column}")
-
-            print(f"Using column: {best_column}")
-
-            # Check if we should skip encoded username resolution for this column
-            if (
-                output_type == "username"
-                and best_column
-                and "user_name" in best_column.lower()
-            ):
-                skip_resolution = True
-                print(
-                    f"CSV column '{best_column}' contains username data. Skipping encoded username resolution."
-                )
-            elif (
-                output_type == "email"
-                and best_column
-                and "email" in best_column.lower()
-            ):
-                skip_resolution = True
-                print(
-                    f"CSV column '{best_column}' contains email data. Skipping encoded username resolution."
+            # Process file based on detected type
+            if file_type == "plain_text":
+                return _process_plain_text(infile, env)
+            else:
+                identifiers, skip_resolution = _process_csv_file(
+                    infile, output_type, env
                 )
 
-            for row in reader:
-                if best_column in row:
-                    # Preserve encoded usernames if we're looking for username output and found username column
-                    preserve_encoded = skip_resolution and output_type == "username"
-                    env_for_cleaning = None if skip_resolution else env
-                    cleaned = clean_identifier(
-                        row[best_column], env_for_cleaning, preserve_encoded
+                # Handle conversion if needed
+                if _needs_conversion(skip_resolution, identifiers, output_type):
+                    identifiers = _handle_conversion(
+                        identifiers, output_type, env, interactive
                     )
-                    if cleaned:
-                        identifiers.append(cleaned)
+                elif not skip_resolution and _check_if_data_available(
+                    identifiers, output_type
+                ):
+                    print(
+                        f"CSV already contains {output_type} data. No Auth0 API calls needed."
+                    )
+
+                return identifiers
 
     except FileOperationError as e:
         print(f"{RED}Error reading file {filename}: {e}{RESET}")
@@ -259,39 +387,6 @@ def extract_identifiers_from_csv(
     except Exception as e:
         print(f"{RED}Unexpected error processing file {filename}: {e}{RESET}")
         return []
-
-    # Check if we need to fetch additional data from Auth0
-    # Skip if CSV already contains the requested data type or we already handled it above
-    data_already_available = _check_if_data_available(identifiers, output_type)
-
-    # If we haven't already handled column matching above, check here
-    if not skip_resolution and not data_already_available and env:
-        identifiers = _convert_to_output_type(identifiers, output_type, env)
-    elif not skip_resolution and not data_already_available and not env:
-        if interactive:
-            print(
-                f"\nWarning: Requested output type '{output_type}' but no environment specified."
-            )
-            response = (
-                input(
-                    "Do you want to fetch this data from Auth0? Specify environment (dev/prod) or press Enter to skip: "
-                )
-                .strip()
-                .lower()
-            )
-            if response in ["dev", "prod"]:
-                identifiers = _convert_to_output_type(
-                    identifiers, output_type, response
-                )
-            else:
-                print("Skipping Auth0 data fetch. Using original identifiers.")
-        else:
-            # Non-interactive mode - skip Auth0 data fetch
-            pass
-    elif data_already_available and not skip_resolution:
-        print(f"CSV already contains {output_type} data. No Auth0 API calls needed.")
-
-    return identifiers
 
 
 def _check_if_data_available(identifiers: List[str], output_type: str) -> bool:
