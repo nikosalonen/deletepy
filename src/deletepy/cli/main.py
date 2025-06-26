@@ -33,10 +33,9 @@ def cli(ctx: click.Context) -> None:
 def doctor(env: str, test_api: bool) -> None:
     """Test Auth0 credentials and API access."""
     try:
-        from ..core.auth import doctor as auth_doctor
-        check_env_file()
-        result = auth_doctor(env, test_api)
-        if not result["success"]:
+        handler = OperationHandler()
+        success = handler.handle_doctor(env, test_api)
+        if not success:
             sys.exit(1)
     except AuthConfigError as e:
         click.echo(f"Authentication configuration error: {e}", err=True)
