@@ -156,7 +156,7 @@ def _process_email_batch(
     }
 
     for idx, email in enumerate(batch_emails, 1):
-        if shutdown_requested:
+        if shutdown_requested():
             break
 
         show_progress(idx, len(batch_emails), f"Batch {batch_number}")
@@ -393,7 +393,7 @@ def export_users_last_login_to_csv(
         if not _write_csv_batch(csv_data, output_file, batch_number):
             break
 
-        if shutdown_requested:
+        if shutdown_requested():
             break
 
     # Generate final summary

@@ -341,7 +341,6 @@ class OperationHandler:
                 click.echo("No valid social media IDs found to search.")
                 return
 
-            click.echo(f"\n{CYAN}Searching for users with {len(social_ids)} social media IDs...{RESET}")
             find_users_by_social_media_ids(
                 social_ids, token, base_url, env, auto_delete=True
             )

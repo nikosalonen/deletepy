@@ -1,28 +1,30 @@
-import requests
-import time
 import csv
+import time
 from contextlib import suppress
 from urllib.parse import quote
-from utils import (
-    RED,
-    GREEN,
-    YELLOW,
-    CYAN,
-    RESET,
-    shutdown_requested,
-    show_progress,
-    safe_file_write,
-    FileOperationError,
-)
+
+import requests
+
 from rate_limit_config import (
     API_RATE_LIMIT,
     API_TIMEOUT,
-    MAX_RETRIES,
     BASE_RETRY_DELAY,
+    MAX_RETRIES,
     MAX_RETRY_DELAY,
-    get_optimal_batch_size,
     get_estimated_processing_time,
+    get_optimal_batch_size,
     validate_rate_limit_config,
+)
+from utils import (
+    CYAN,
+    GREEN,
+    RED,
+    RESET,
+    YELLOW,
+    FileOperationError,
+    safe_file_write,
+    show_progress,
+    shutdown_requested,
 )
 
 
@@ -236,7 +238,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
             print(f"{YELLOW}No sessions found for user {CYAN}{user_id}{YELLOW}{RESET}")
             return
         for session in sessions:
-            if shutdown_requested:
+            if shutdown_requested():
                 break
             session_id = session.get("id")
             if not session_id:
@@ -288,7 +290,7 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
     total_users = len(user_ids)
 
     for idx, user_id in enumerate(user_ids, 1):
-        if shutdown_requested:
+        if shutdown_requested():
             break
         url = f"{base_url}/api/v2/users/{quote(user_id)}"
         headers = {
@@ -407,7 +409,7 @@ def _validate_and_setup_export(
             f"Output directory does not exist: {output_file}"
         ) from e
     except Exception as e:
-        raise IOError(f"Cannot write to output file: {output_file}") from e
+        raise OSError(f"Cannot write to output file: {output_file}") from e
 
     # Validate rate limit configuration
     if not validate_rate_limit_config():
@@ -547,7 +549,7 @@ def _process_email_batch(
     }
 
     for idx, email in enumerate(batch_emails, batch_start + 1):
-        if shutdown_requested:
+        if shutdown_requested():
             print(f"\n{YELLOW}Operation cancelled by user.{RESET}")
             break
 
@@ -994,7 +996,7 @@ def _handle_auto_delete_operations(
         if users_to_delete:
             print(f"\n{YELLOW}Deleting {len(users_to_delete)} users...{RESET}")
             for idx, user in enumerate(users_to_delete, 1):
-                if shutdown_requested:
+                if shutdown_requested():
                     break
 
                 show_progress(idx, len(users_to_delete), "Deleting users")
@@ -1018,7 +1020,7 @@ def _handle_auto_delete_operations(
                 f"\n{YELLOW}Unlinking {len(identities_to_unlink)} identities...{RESET}"
             )
             for idx, user in enumerate(identities_to_unlink, 1):
-                if shutdown_requested:
+                if shutdown_requested():
                     break
 
                 show_progress(idx, len(identities_to_unlink), "Unlinking identities")
@@ -1087,7 +1089,7 @@ def find_users_by_social_media_ids(
 
     # Search for users with each social ID
     for idx, social_id in enumerate(social_ids, 1):
-        if shutdown_requested:
+        if shutdown_requested():
             break
 
         show_progress(idx, total_ids, "Searching social IDs")
@@ -1187,7 +1189,7 @@ def export_users_last_login_to_csv(
         if not _write_csv_batch(csv_data, output_file, batch_number):
             break
 
-        if shutdown_requested:
+        if shutdown_requested():
             break
 
     # Generate final summary

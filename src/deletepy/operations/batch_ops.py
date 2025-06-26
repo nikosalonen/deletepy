@@ -31,7 +31,7 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
     total_users = len(user_ids)
 
     for idx, user_id in enumerate(user_ids, 1):
-        if shutdown_requested:
+        if shutdown_requested():
             break
         url = f"{base_url}/api/v2/users/{quote(user_id)}"
         headers = {
@@ -88,7 +88,7 @@ def find_users_by_social_media_ids(
 
     # Search for users with each social ID
     for idx, social_id in enumerate(social_ids, 1):
-        if shutdown_requested:
+        if shutdown_requested():
             break
 
         show_progress(idx, total_ids, "Searching social IDs")
@@ -148,6 +148,7 @@ def _search_users_by_social_id(social_id: str, token: str, base_url: str) -> lis
     # Search for users with this social ID in their identities
     params = {
         "q": f'identities.user_id:"{social_id}"',
+        "search_engine": "v3",
         "include_totals": "true",
         "page": "0",
         "per_page": "100"
@@ -356,7 +357,7 @@ def _handle_auto_delete_operations(
         if users_to_delete:
             print(f"\n{YELLOW}Deleting {len(users_to_delete)} users...{RESET}")
             for idx, user in enumerate(users_to_delete, 1):
-                if shutdown_requested:
+                if shutdown_requested():
                     break
 
                 show_progress(idx, len(users_to_delete), "Deleting users")
@@ -377,7 +378,7 @@ def _handle_auto_delete_operations(
         if identities_to_unlink:
             print(f"\n{YELLOW}Unlinking {len(identities_to_unlink)} identities...{RESET}")
             for idx, user in enumerate(identities_to_unlink, 1):
-                if shutdown_requested:
+                if shutdown_requested():
                     break
 
                 show_progress(idx, len(identities_to_unlink), "Unlinking identities")

@@ -43,7 +43,7 @@ def check_email_domains(
     total_emails = len(emails)
 
     for idx, email in enumerate(emails, 1):
-        if shutdown_requested:
+        if shutdown_requested():
             break
 
         show_progress(idx, total_emails, "Checking domains")
