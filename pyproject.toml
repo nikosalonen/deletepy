@@ -7,11 +7,11 @@ name = "auth0-user-manager"
 version = "1.0.0"
 description = "Auth0 User Management Tool for bulk operations"
 authors = [
-    {name = "Niko Salonen", email = "niko.salonen@example.com"}
+    {name = "Niko Salonen", email = "nikotsalonen@gmail.com"}
 ]
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.13"
 dependencies = [
     "requests>=2.32.0",
     "python-dotenv>=1.1.0",
@@ -31,7 +31,7 @@ auth0-manager = "deletepy.cli.main:main"
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py313"
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
@@ -50,7 +50,7 @@ ignore = [
 "__init__.py" = ["F401"]
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "3.13"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
