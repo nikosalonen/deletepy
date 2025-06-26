@@ -11,7 +11,7 @@ import requests
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
 from ..operations.batch_ops import check_unblocked_users, find_users_by_social_media_ids
-from email_domain_checker import check_domains_status_for_emails
+from ..operations.domain_ops import check_email_domains
 from ..operations.export_ops import export_users_last_login_to_csv
 from ..operations.user_ops import block_user, delete_user, get_user_details, get_user_email, get_user_id_from_email
 from ..utils.auth_utils import validate_auth0_user_id
@@ -292,7 +292,7 @@ class OperationHandler:
                 return
 
             click.echo(f"\n{CYAN}Checking {len(emails)} email domains...{RESET}")
-            results = check_domains_status_for_emails(emails)
+            results = check_email_domains(emails)
             self._print_domain_results(results, emails)
 
         except Exception as e:
