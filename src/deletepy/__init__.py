@@ -4,7 +4,6 @@
 # CLI
 from .cli import (
     csv_main,
-    csv_validate_auth0_user_id,
     parse_csv_arguments,
     print_csv_usage,
     process_csv_file,
@@ -205,5 +204,4 @@ __all__ = [
     "parse_csv_arguments",
     "print_csv_usage",
     "process_csv_file",
-    "csv_validate_auth0_user_id",
 ]

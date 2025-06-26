@@ -8,9 +8,6 @@ from .csv_commands import (
     print_csv_usage,
     process_csv_file,
 )
-from .csv_commands import (
-    validate_auth0_user_id as csv_validate_auth0_user_id,
-)
 from .validators import (
     validate_args,
     validate_connection_type,
@@ -26,7 +23,6 @@ __all__ = [
     "parse_csv_arguments",
     "print_csv_usage",
     "process_csv_file",
-    "csv_validate_auth0_user_id",
     # Validators
     "validate_args",
     "validate_connection_type",
