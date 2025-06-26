@@ -48,16 +48,16 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
             show_progress(idx, total_users, "Checking users")
             time.sleep(API_RATE_LIMIT)
         except requests.exceptions.RequestException as e:
-            print(f"{RED}Error checking user {CYAN}{user_id}{RED}: {e}{RESET}")
+            print_error(f"Error checking user {user_id}: {e}", user_id=user_id, operation="check_blocked")
             continue
 
     print("\n")  # Clear progress line
     if unblocked:
-        print(f"{YELLOW}Found {len(unblocked)} unblocked users:{RESET}")
+        print_warning(f"Found {len(unblocked)} unblocked users:", count=len(unblocked), operation="check_unblocked")
         for user_id in unblocked:
-            print(f"{CYAN}{user_id}{RESET}")
+            print_info(f"  {user_id}", user_id=user_id, status="unblocked")
     else:
-        print(f"{GREEN}All users are blocked.{RESET}")
+        print_success("All users are blocked.", operation="check_unblocked")
 
 
 def find_users_by_social_media_ids(
@@ -78,8 +78,9 @@ def find_users_by_social_media_ids(
         env: Environment (dev/prod) for confirmation prompts
         auto_delete: Whether to automatically delete users with main identity matches
     """
-    print(
-        f"{YELLOW}Searching for users with {len(social_ids)} social media IDs...{RESET}"
+    print_info(
+        f"Searching for users with {len(social_ids)} social media IDs...",
+        social_ids_count=len(social_ids), operation="social_search"
     )
 
     found_users = []
@@ -173,7 +174,7 @@ def _search_users_by_social_id(social_id: str, token: str, base_url: str) -> lis
         time.sleep(API_RATE_LIMIT)
 
     except requests.exceptions.RequestException as e:
-        print(f"{RED}Error searching for social ID {CYAN}{social_id}{RED}: {e}{RESET}")
+        print_error(f"Error searching for social ID {social_id}: {e}", social_id=social_id, operation="social_search")
 
     return found_users
 
@@ -286,35 +287,38 @@ def _display_search_results(
         auth0_main_protected: Users that are protected from deletion
         auto_delete: Whether auto-delete is enabled
     """
-    print(f"\n{GREEN}Search Results Summary:{RESET}")
-    print(f"Total social IDs searched: {total_ids}")
-    print(f"Users found: {len(found_users)}")
-    print(f"Social IDs not found: {len(not_found_ids)}")
+    print_info("\nSearch Results Summary:", operation="social_search_summary")
+    print_info(f"Total social IDs searched: {total_ids}", total_ids=total_ids)
+    print_info(f"Users found: {len(found_users)}", users_found=len(found_users))
+    print_info(f"Social IDs not found: {len(not_found_ids)}", not_found_count=len(not_found_ids))
 
     if not_found_ids:
-        print(f"\n{YELLOW}Social IDs not found:{RESET}")
+        print_warning("\nSocial IDs not found:", count=len(not_found_ids))
         for social_id in not_found_ids:
-            print(f"  {CYAN}{social_id}{RESET}")
+            print_info(f"  {social_id}", social_id=social_id, status="not_found")
 
-    print(f"\n{YELLOW}User Categories:{RESET}")
-    print(f"  Users to delete: {len(users_to_delete)}")
-    print(f"  Identities to unlink: {len(identities_to_unlink)}")
-    print(f"  Protected users: {len(auth0_main_protected)}")
+    print_info("\nUser Categories:", operation="categorization")
+    print_info(f"  Users to delete: {len(users_to_delete)}", delete_count=len(users_to_delete))
+    print_info(f"  Identities to unlink: {len(identities_to_unlink)}", unlink_count=len(identities_to_unlink))
+    print_info(f"  Protected users: {len(auth0_main_protected)}", protected_count=len(auth0_main_protected))
 
     if users_to_delete:
-        print(f"\n{YELLOW}Users that will be deleted:{RESET}")
+        print_warning("\nUsers that will be deleted:", count=len(users_to_delete))
         for user in users_to_delete:
-            print(f"  {CYAN}{user['user_id']}{RESET} ({user['email']}) - {user['reason']}")
+            print_info(f"  {user['user_id']} ({user['email']}) - {user['reason']}",
+                      user_id=user['user_id'], email=user['email'], reason=user['reason'], action="delete")
 
     if identities_to_unlink:
-        print(f"\n{YELLOW}Users where identities will be unlinked:{RESET}")
+        print_warning("\nUsers where identities will be unlinked:", count=len(identities_to_unlink))
         for user in identities_to_unlink:
-            print(f"  {CYAN}{user['user_id']}{RESET} ({user['email']}) - {user['reason']}")
+            print_info(f"  {user['user_id']} ({user['email']}) - {user['reason']}",
+                      user_id=user['user_id'], email=user['email'], reason=user['reason'], action="unlink")
 
     if auth0_main_protected:
-        print(f"\n{YELLOW}Protected users (Auth0 main identity):{RESET}")
+        print_warning("\nProtected users (Auth0 main identity):", count=len(auth0_main_protected))
         for user in auth0_main_protected:
-            print(f"  {CYAN}{user['user_id']}{RESET} ({user['email']}) - {user['reason']}")
+            print_info(f"  {user['user_id']} ({user['email']}) - {user['reason']}",
+                      user_id=user['user_id'], email=user['email'], reason=user['reason'], action="protected")
 
 
 def _handle_auto_delete_operations(
@@ -338,16 +342,17 @@ def _handle_auto_delete_operations(
     total_operations = len(users_to_delete) + len(identities_to_unlink)
 
     if total_operations == 0:
-        print(f"\n{GREEN}No operations to perform.{RESET}")
+        print_success("\nNo operations to perform.", operation="auto_delete")
         return
 
     if auto_delete:
         # Confirm operations for production environment
         if env == "prod":
-            print(f"\n{RED}WARNING: This will perform {total_operations} operations in PRODUCTION!{RESET}")
+            print_error(f"\nWARNING: This will perform {total_operations} operations in PRODUCTION!",
+                       total_operations=total_operations, environment="prod")
             confirm = input("Type 'CONFIRM' to proceed: ")
             if confirm != "CONFIRM":
-                print(f"{YELLOW}Operations cancelled.{RESET}")
+                print_warning("Operations cancelled.", operation="auto_delete")
                 return
 
         # Handle user deletions
@@ -355,7 +360,7 @@ def _handle_auto_delete_operations(
         failed_deletions = 0
 
         if users_to_delete:
-            print(f"\n{YELLOW}Deleting {len(users_to_delete)} users...{RESET}")
+            print_warning(f"\nDeleting {len(users_to_delete)} users...", count=len(users_to_delete), operation="delete_users")
             for idx, user in enumerate(users_to_delete, 1):
                 if shutdown_requested():
                     break
@@ -367,7 +372,8 @@ def _handle_auto_delete_operations(
                     delete_user(user["user_id"], token, base_url)
                     deleted_count += 1
                 except Exception as e:
-                    print(f"\n{RED}Failed to delete user {CYAN}{user['user_id']}{RED}: {e}{RESET}")
+                    print_error(f"\nFailed to delete user {user['user_id']}: {e}", 
+                               user_id=user['user_id'], operation="delete_user")
                     failed_deletions += 1
             print("\n")  # Clear progress line
 
@@ -376,7 +382,8 @@ def _handle_auto_delete_operations(
         failed_unlinks = 0
 
         if identities_to_unlink:
-            print(f"\n{YELLOW}Unlinking {len(identities_to_unlink)} identities...{RESET}")
+            print_warning(f"\nUnlinking {len(identities_to_unlink)} identities...", 
+                         count=len(identities_to_unlink), operation="unlink_identities")
             for idx, user in enumerate(identities_to_unlink, 1):
                 if shutdown_requested():
                     break
@@ -396,20 +403,22 @@ def _handle_auto_delete_operations(
                     else:
                         failed_unlinks += 1
                 except Exception as e:
-                    print(f"\n{RED}Failed to unlink identity {CYAN}{user['social_id']}{RED} from user {CYAN}{user['user_id']}{RED}: {e}{RESET}")
+                    print_error(f"\nFailed to unlink identity {user['social_id']} from user {user['user_id']}: {e}", 
+                               user_id=user['user_id'], social_id=user['social_id'], operation="unlink_identity")
                     failed_unlinks += 1
             print("\n")  # Clear progress line
 
         # Print summary
-        print(f"\n{GREEN}Operations Summary:{RESET}")
+        print_success("\nOperations Summary:", operation="operations_summary")
         if users_to_delete:
-            print(f"Users deleted: {deleted_count}")
-            print(f"Failed deletions: {failed_deletions}")
+            print_info(f"Users deleted: {deleted_count}", deleted_count=deleted_count)
+            print_info(f"Failed deletions: {failed_deletions}", failed_deletions=failed_deletions)
         if identities_to_unlink:
-            print(f"Identities unlinked: {unlinked_count}")
-            print(f"Failed unlinks: {failed_unlinks}")
+            print_info(f"Identities unlinked: {unlinked_count}", unlinked_count=unlinked_count)
+            print_info(f"Failed unlinks: {failed_unlinks}", failed_unlinks=failed_unlinks)
 
     elif total_operations > 0 and not auto_delete:
-        print(f"\n{YELLOW}Note: {total_operations} operations found, but auto_delete is disabled.{RESET}")
-        print(f"- {len(users_to_delete)} users would be deleted")
-        print(f"- {len(identities_to_unlink)} identities would be unlinked")
+        print_warning(f"\nNote: {total_operations} operations found, but auto_delete is disabled.", 
+                     total_operations=total_operations, auto_delete=False)
+        print_info(f"- {len(users_to_delete)} users would be deleted", delete_count=len(users_to_delete))
+        print_info(f"- {len(identities_to_unlink)} identities would be unlinked", unlink_count=len(identities_to_unlink))
