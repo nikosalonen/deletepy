@@ -118,16 +118,16 @@ def safe_file_read(file_path: str, encoding: str = "utf-8"):
     try:
         with open(path, "r", encoding=encoding) as file:
             yield file
-    except PermissionError:
-        raise FileOperationError(f"Permission denied reading file: {path}")
-    except IsADirectoryError:
-        raise FileOperationError(f"Path is a directory, not a file: {path}")
+    except PermissionError as e:
+        raise FileOperationError(f"Permission denied reading file: {path}") from e
+    except IsADirectoryError as e:
+        raise FileOperationError(f"Path is a directory, not a file: {path}") from e
     except UnicodeDecodeError as e:
-        raise FileOperationError(f"File encoding error in {path}: {e}")
+        raise FileOperationError(f"File encoding error in {path}: {e}") from e
     except OSError as e:
-        raise FileOperationError(f"OS error reading file {path}: {e}")
+        raise FileOperationError(f"OS error reading file {path}: {e}") from e
     except Exception as e:
-        raise FileOperationError(f"Unexpected error reading file {path}: {e}")
+        raise FileOperationError(f"Unexpected error reading file {path}: {e}") from e
 
 
 @contextmanager
@@ -167,7 +167,7 @@ def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
         if backup_path and backup_path.exists():
             backup_path.unlink()
 
-    except PermissionError:
+    except PermissionError as e:
         # Restore backup if available
         if backup_path and backup_path.exists():
             try:
@@ -176,7 +176,7 @@ def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
                 shutil.move(backup_path, path)
             except Exception:
                 pass
-        raise FileOperationError(f"Permission denied writing to file: {path}")
+        raise FileOperationError(f"Permission denied writing to file: {path}") from e
     except OSError as e:
         # Restore backup if available
         if backup_path and backup_path.exists():
@@ -186,7 +186,7 @@ def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
                 shutil.move(backup_path, path)
             except Exception:
                 pass
-        raise FileOperationError(f"OS error writing to file {path}: {e}")
+        raise FileOperationError(f"OS error writing to file {path}: {e}") from e
     except Exception as e:
         # Restore backup if available
         if backup_path and backup_path.exists():
@@ -196,7 +196,7 @@ def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
                 shutil.move(backup_path, path)
             except Exception:
                 pass
-        raise FileOperationError(f"Unexpected error writing to file {path}: {e}")
+        raise FileOperationError(f"Unexpected error writing to file {path}: {e}") from e
 
 
 def safe_file_copy(src_path: str, dst_path: str) -> bool:
