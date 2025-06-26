@@ -2,9 +2,9 @@
 
 import sys
 
+from ..utils.auth_utils import validate_auth0_user_id
 from ..utils.csv_utils import (
     extract_identifiers_from_csv,
-    is_auth0_user_id,
     write_identifiers_to_file,
 )
 from ..utils.display_utils import (
@@ -76,18 +76,6 @@ def print_csv_usage():
     print("  python cleanup_csv.py ids.csv dev")
     print("  python cleanup_csv.py ids.csv dev --output-type=email")
     print("  python cleanup_csv.py ids.csv --output-type=username")
-
-
-def validate_auth0_user_id(user_id: str) -> bool:
-    """Validate if a string is a valid Auth0 user ID.
-
-    Args:
-        user_id: String to validate
-
-    Returns:
-        True if valid Auth0 user ID format
-    """
-    return is_auth0_user_id(user_id)
 
 
 def process_csv_file(
