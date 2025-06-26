@@ -207,7 +207,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
             print(f"{YELLOW}No sessions found for user {CYAN}{user_id}{YELLOW}{RESET}")
             return
         for session in sessions:
-            if shutdown_requested:
+            if shutdown_requested():
                 break
             session_id = session.get("id")
             if not session_id:
