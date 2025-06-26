@@ -16,13 +16,44 @@ def mock_response():
 def mock_requests(request):
     """Create a mock requests module.
 
-    This fixture automatically determines which module to patch based on the test module name.
-    For example, test_auth.py will patch auth.requests, test_user_operations.py will patch user_operations.requests.
+    This fixture automatically determines which module(s) to patch based on the test module name.
+    For example, test_auth.py will patch src.deletepy.core.auth.requests.
+    For test_user_operations.py, patches multiple modules since functions are spread across them.
     """
-    # Extract the module name from the test file name
-    # e.g., test_auth.py -> auth, test_user_operations.py -> user_operations
+    # Extract the test file name and map to new module structure
     test_file = request.module.__file__
-    module_name = test_file.split("test_")[-1].replace(".py", "")
+    test_name = test_file.split("test_")[-1].replace(".py", "")
+    
+    # Map test files to their corresponding module paths
+    # Some test files need multiple modules patched
+    module_mapping = {
+        "auth": ["src.deletepy.core.auth"],
+        "user_operations": [
+            "src.deletepy.operations.user_ops", 
+            "src.deletepy.operations.batch_ops",
+            "src.deletepy.utils.request_utils"
+        ],
+        "utils": ["src.deletepy.utils.file_utils"],
+        "cleanup_csv": ["src.deletepy.utils.csv_utils"],
+        "email_domain_checker": ["src.deletepy.operations.domain_ops"],
+    }
+    
+    module_paths = module_mapping.get(test_name, [f"src.deletepy.{test_name}"])
 
-    with patch(f"{module_name}.requests") as mock:
-        yield mock
+    # If only one module, patch it directly
+    if len(module_paths) == 1:
+        with patch(f"{module_paths[0]}.requests") as mock:
+            yield mock
+    else:
+        # Multiple modules - patch all of them with the same mock
+        patches = []
+        try:
+            mock = MagicMock()
+            for module_path in module_paths:
+                patcher = patch(f"{module_path}.requests", mock)
+                patches.append(patcher)
+                patcher.start()
+            yield mock
+        finally:
+            for patcher in patches:
+                patcher.stop()
