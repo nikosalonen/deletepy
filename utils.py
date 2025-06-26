@@ -2,7 +2,10 @@ import sys
 import signal
 import argparse
 import re
+import os
+from pathlib import Path
 from typing import List, Generator
+from contextlib import contextmanager
 
 # ANSI color codes
 RESET = "\033[0m"
@@ -11,8 +14,284 @@ GREEN = "\033[92m"
 YELLOW = "\033[93m"
 CYAN = "\033[96m"
 
+# Auth0 user ID prefixes
+AUTH0_USER_ID_PREFIXES = (
+    "auth0|",
+    "google-oauth2|",
+    "facebook|",
+    "github|",
+    "twitter|",
+    "linkedin|",
+    "apple|",
+    "microsoft|",
+    "windowslive|",
+    "line|",
+    "samlp|",
+    "oidc|",
+)
+
 # Graceful shutdown handler
 shutdown_requested = False
+
+
+def is_auth0_user_id(identifier: str) -> bool:
+    """Check if a string is an Auth0 user ID.
+
+    Args:
+        identifier: String to check
+
+    Returns:
+        True if the string starts with a known Auth0 user ID prefix
+    """
+    return identifier.startswith(AUTH0_USER_ID_PREFIXES)
+
+
+class FileOperationError(Exception):
+    """Custom exception for file operation errors."""
+
+    pass
+
+
+def validate_file_path(file_path: str, operation: str = "access") -> Path:
+    """Validate a file path for the specified operation.
+
+    Args:
+        file_path: Path to validate
+        operation: Type of operation (read, write, access)
+
+    Returns:
+        Path object if valid
+
+    Raises:
+        FileOperationError: If path is invalid for the operation
+    """
+    try:
+        path = Path(file_path).resolve()
+    except (OSError, ValueError) as e:
+        raise FileOperationError(f"Invalid file path '{file_path}': {e}")
+
+    if operation == "read":
+        if not path.exists():
+            raise FileOperationError(f"File not found: {path}")
+        if not path.is_file():
+            raise FileOperationError(f"Path is not a file: {path}")
+        if not os.access(path, os.R_OK):
+            raise FileOperationError(f"Permission denied reading file: {path}")
+    elif operation == "write":
+        # Check if parent directory exists and is writable
+        parent = path.parent
+        if not parent.exists():
+            raise FileOperationError(f"Directory does not exist: {parent}")
+        if not parent.is_dir():
+            raise FileOperationError(f"Parent path is not a directory: {parent}")
+        if not os.access(parent, os.W_OK):
+            raise FileOperationError(
+                f"Permission denied writing to directory: {parent}"
+            )
+
+        # If file exists, check if it's writable
+        if path.exists():
+            if not path.is_file():
+                raise FileOperationError(f"Path exists but is not a file: {path}")
+            if not os.access(path, os.W_OK):
+                raise FileOperationError(f"Permission denied writing to file: {path}")
+
+    return path
+
+
+@contextmanager
+def safe_file_read(file_path: str, encoding: str = "utf-8"):
+    """Context manager for safe file reading with comprehensive error handling.
+
+    Args:
+        file_path: Path to the file to read
+        encoding: File encoding (default: utf-8)
+
+    Yields:
+        File object for reading
+
+    Raises:
+        FileOperationError: If file cannot be read
+    """
+    path = validate_file_path(file_path, "read")
+
+    try:
+        with open(path, "r", encoding=encoding) as file:
+            yield file
+    except PermissionError:
+        raise FileOperationError(f"Permission denied reading file: {path}")
+    except IsADirectoryError:
+        raise FileOperationError(f"Path is a directory, not a file: {path}")
+    except UnicodeDecodeError as e:
+        raise FileOperationError(f"File encoding error in {path}: {e}")
+    except OSError as e:
+        raise FileOperationError(f"OS error reading file {path}: {e}")
+    except Exception as e:
+        raise FileOperationError(f"Unexpected error reading file {path}: {e}")
+
+
+@contextmanager
+def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
+    """Context manager for safe file writing with comprehensive error handling.
+
+    Args:
+        file_path: Path to the file to write
+        encoding: File encoding (default: utf-8)
+        mode: File mode (default: w)
+
+    Yields:
+        File object for writing
+
+    Raises:
+        FileOperationError: If file cannot be written
+    """
+    path = validate_file_path(file_path, "write")
+
+    # Create a backup if file exists and we're overwriting
+    backup_path = None
+    if mode in ["w", "wt"] and path.exists():
+        backup_path = path.with_suffix(path.suffix + ".backup")
+        try:
+            import shutil
+
+            shutil.copy2(path, backup_path)
+        except Exception:
+            # Continue without backup if backup creation fails
+            backup_path = None
+
+    try:
+        with open(path, mode, encoding=encoding) as file:
+            yield file
+
+        # Remove backup on successful write
+        if backup_path and backup_path.exists():
+            backup_path.unlink()
+
+    except PermissionError:
+        # Restore backup if available
+        if backup_path and backup_path.exists():
+            try:
+                import shutil
+
+                shutil.move(backup_path, path)
+            except Exception:
+                pass
+        raise FileOperationError(f"Permission denied writing to file: {path}")
+    except OSError as e:
+        # Restore backup if available
+        if backup_path and backup_path.exists():
+            try:
+                import shutil
+
+                shutil.move(backup_path, path)
+            except Exception:
+                pass
+        raise FileOperationError(f"OS error writing to file {path}: {e}")
+    except Exception as e:
+        # Restore backup if available
+        if backup_path and backup_path.exists():
+            try:
+                import shutil
+
+                shutil.move(backup_path, path)
+            except Exception:
+                pass
+        raise FileOperationError(f"Unexpected error writing to file {path}: {e}")
+
+
+def safe_file_copy(src_path: str, dst_path: str) -> bool:
+    """Safely copy a file with error handling.
+
+    Args:
+        src_path: Source file path
+        dst_path: Destination file path
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        src = validate_file_path(src_path, "read")
+        dst = validate_file_path(dst_path, "write")
+
+        import shutil
+
+        shutil.copy2(src, dst)
+        print(f"{GREEN}Successfully copied {src} to {dst}{RESET}")
+        return True
+
+    except FileOperationError as e:
+        print(f"{RED}File copy error: {e}{RESET}")
+        return False
+    except Exception as e:
+        print(f"{RED}Unexpected error copying file: {e}{RESET}")
+        return False
+
+
+def safe_file_move(src_path: str, dst_path: str) -> bool:
+    """Safely move a file with error handling.
+
+    Args:
+        src_path: Source file path
+        dst_path: Destination file path
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        src = validate_file_path(src_path, "read")
+        dst = validate_file_path(dst_path, "write")
+
+        import shutil
+
+        shutil.move(src, dst)
+        print(f"{GREEN}Successfully moved {src} to {dst}{RESET}")
+        return True
+
+    except FileOperationError as e:
+        print(f"{RED}File move error: {e}{RESET}")
+        return False
+    except Exception as e:
+        print(f"{RED}Unexpected error moving file: {e}{RESET}")
+        return False
+
+
+def safe_file_delete(file_path: str) -> bool:
+    """Safely delete a file with error handling.
+
+    Args:
+        file_path: Path to file to delete
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        path = Path(file_path).resolve()
+
+        if not path.exists():
+            print(f"{YELLOW}File does not exist: {path}{RESET}")
+            return True
+
+        if not path.is_file():
+            print(f"{RED}Path is not a file: {path}{RESET}")
+            return False
+
+        if not os.access(path, os.W_OK):
+            print(f"{RED}Permission denied deleting file: {path}{RESET}")
+            return False
+
+        path.unlink()
+        print(f"{GREEN}Successfully deleted {path}{RESET}")
+        return True
+
+    except PermissionError:
+        print(f"{RED}Permission denied deleting file: {file_path}{RESET}")
+        return False
+    except OSError as e:
+        print(f"{RED}OS error deleting file {file_path}: {e}{RESET}")
+        return False
+    except Exception as e:
+        print(f"{RED}Unexpected error deleting file {file_path}: {e}{RESET}")
+        return False
 
 
 def handle_shutdown(signum, frame):
@@ -34,7 +313,7 @@ signal.signal(signal.SIGINT, handle_shutdown)
 
 
 def read_user_ids(filepath: str) -> List[str]:
-    """Read user IDs from file.
+    """Read user IDs from file with enhanced error handling.
 
     Args:
         filepath: Path to the file containing user IDs
@@ -43,21 +322,20 @@ def read_user_ids(filepath: str) -> List[str]:
         List[str]: List of user IDs read from the file
 
     Raises:
-        FileNotFoundError: If the specified file does not exist
-        IOError: If there is an error reading the file
+        FileOperationError: If the file cannot be read
     """
     try:
-        with open(filepath, "r") as f:
+        with safe_file_read(filepath) as f:
             # Use a generator expression to read line by line
             return [line.strip() for line in f if line.strip()]
-    except FileNotFoundError as e:
-        raise FileNotFoundError(f"Error: File {filepath} not found") from e
-    except IOError as e:
-        raise IOError(f"Error reading file: {e}") from e
+    except FileOperationError:
+        raise  # Re-raise FileOperationError as-is
+    except Exception as e:
+        raise FileOperationError(f"Unexpected error reading file {filepath}: {e}")
 
 
 def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
-    """Read user IDs from file using a generator pattern.
+    """Read user IDs from file using a generator pattern with enhanced error handling.
 
     Args:
         filepath: Path to the file containing user IDs
@@ -66,19 +344,18 @@ def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
         str: User ID from the file
 
     Raises:
-        FileNotFoundError: If the specified file does not exist
-        IOError: If there is an error reading the file
+        FileOperationError: If the file cannot be read
     """
     try:
-        with open(filepath, "r") as f:
+        with safe_file_read(filepath) as f:
             for line in f:
                 line = line.strip()
                 if line:  # Skip empty lines
                     yield line
-    except FileNotFoundError:
-        raise FileNotFoundError(f"Error: File {filepath} not found") from None
-    except IOError as e:
-        raise IOError(f"Error reading file: {e}") from e
+    except FileOperationError:
+        raise  # Re-raise FileOperationError as-is
+    except Exception as e:
+        raise FileOperationError(f"Unexpected error reading file {filepath}: {e}")
 
 
 def validate_args() -> argparse.Namespace:

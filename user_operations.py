@@ -3,7 +3,17 @@ import time
 import csv
 from contextlib import suppress
 from urllib.parse import quote
-from utils import RED, GREEN, YELLOW, CYAN, RESET, shutdown_requested, show_progress
+from utils import (
+    RED,
+    GREEN,
+    YELLOW,
+    CYAN,
+    RESET,
+    shutdown_requested,
+    show_progress,
+    safe_file_write,
+    FileOperationError,
+)
 from rate_limit_config import (
     API_RATE_LIMIT,
     API_TIMEOUT,
@@ -573,7 +583,7 @@ def _write_csv_batch(csv_data: list[dict], output_file: str, batch_number: int) 
         return True
 
     try:
-        with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
+        with safe_file_write(output_file, mode="w") as csvfile:
             fieldnames = [
                 "email",
                 "user_id",
@@ -593,8 +603,14 @@ def _write_csv_batch(csv_data: list[dict], output_file: str, batch_number: int) 
         )
         return True
 
-    except IOError as e:
-        print(f"{RED}Error writing CSV file: {e}{RESET}")
+    except FileOperationError as e:
+        print(f"{RED}File operation error writing CSV: {e}{RESET}")
+        return False
+    except csv.Error as e:
+        print(f"{RED}CSV writing error: {e}{RESET}")
+        return False
+    except Exception as e:
+        print(f"{RED}Unexpected error writing CSV file: {e}{RESET}")
         return False
 
 
