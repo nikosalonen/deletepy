@@ -1,33 +1,35 @@
 import sys
-import requests
 from datetime import datetime
+
+import requests
+
+from auth import AuthConfigError, doctor, get_access_token
 from config import check_env_file, get_base_url
-from auth import get_access_token, AuthConfigError, doctor
-from utils import (
-    validate_args,
-    read_user_ids_generator,
-    validate_auth0_user_id,
-    CYAN,
-    RESET,
-    show_progress,
-    YELLOW,
-    RED,
-)
+from email_domain_checker import check_domains_status_for_emails
+from production_confirmation import confirm_production_operation
+from rate_limit_config import get_estimated_processing_time, get_optimal_batch_size
 from user_operations import (
-    delete_user,
     block_user,
-    revoke_user_grants,
     check_unblocked_users,
-    get_user_email,
-    revoke_user_sessions,
-    get_user_id_from_email,
-    get_user_details,
+    delete_user,
     export_users_last_login_to_csv,
     find_users_by_social_media_ids,
+    get_user_details,
+    get_user_email,
+    get_user_id_from_email,
+    revoke_user_grants,
+    revoke_user_sessions,
 )
-from email_domain_checker import check_domains_status_for_emails
-from rate_limit_config import get_optimal_batch_size, get_estimated_processing_time
-from production_confirmation import confirm_production_operation
+from utils import (
+    CYAN,
+    RED,
+    RESET,
+    YELLOW,
+    read_user_ids_generator,
+    show_progress,
+    validate_args,
+    validate_auth0_user_id,
+)
 
 
 def main():
@@ -275,7 +277,7 @@ def main():
     except FileNotFoundError as e:
         print(f"Error: {str(e)}")
         sys.exit(1)
-    except IOError as e:
+    except OSError as e:
         print(f"Error reading file: {str(e)}")
         sys.exit(1)
     except AuthConfigError as e:
