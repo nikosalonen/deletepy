@@ -3,9 +3,13 @@ from dotenv import load_dotenv
 
 from .config import get_env_config
 from .exceptions import AuthConfigError
+from ..utils.logging_utils import get_logger
 
 # API timeout in seconds for authentication requests
 API_TIMEOUT = 30
+
+# Module logger
+logger = get_logger(__name__)
 
 
 def get_access_token(env: str = "dev") -> str:
@@ -79,19 +83,25 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
         AuthConfigError: If authentication fails
     """
     try:
-        print(f"🔍 Testing credentials for {env.upper()} environment...")
+        logger.info(
+            f"🔍 Testing credentials for {env.upper()} environment...",
+            extra={'operation': 'doctor_check', 'environment': env}
+        )
 
         # Test getting access token
-        print("  📋 Checking environment variables...")
+        logger.info("  📋 Checking environment variables...")
         config = get_env_config(env)
-        print(f"    ✅ Client ID: {config['client_id'][:8]}...")
-        print(f"    ✅ Client Secret: {'*' * 8}...")
-        print(f"    ✅ Auth0 Domain: {config['auth0_domain']}")
-        print(f"    ✅ API URL: {config['api_url']}")
+        logger.info(f"    ✅ Client ID: {config['client_id'][:8]}...")
+        logger.info(f"    ✅ Client Secret: {'*' * 8}...")
+        logger.info(f"    ✅ Auth0 Domain: {config['auth0_domain']}")
+        logger.info(f"    ✅ API URL: {config['api_url']}")
 
-        print("  🔑 Getting access token...")
+        logger.info("  🔑 Getting access token...")
         token = get_access_token(env)
-        print("    ✅ Access token obtained successfully")
+        logger.info(
+            "    ✅ Access token obtained successfully",
+            extra={'operation': 'token_request', 'status': 'success'}
+        )
 
         result = {
             "success": True,
@@ -102,7 +112,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
         }
 
         if test_api:
-            print("  🌐 Testing API access...")
+            logger.info("  🌐 Testing API access...")
             base_url = f"https://{config['auth0_domain']}"
             headers = {
                 "Authorization": f"Bearer {token}",
@@ -117,23 +127,46 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             )
 
             if response.status_code == 200:
-                print("    ✅ API access successful")
+                logger.info(
+                    "    ✅ API access successful",
+                    extra={
+                        'operation': 'api_test',
+                        'status': 'success',
+                        'status_code': response.status_code,
+                        'api_endpoint': test_url
+                    }
+                )
                 result["api_tested"] = True
                 result["api_status"] = "success"
                 result["details"] = "Credentials and API access are working correctly"
             else:
-                print(f"    ⚠️  API access failed with status {response.status_code}")
+                logger.warning(
+                    f"    ⚠️  API access failed with status {response.status_code}",
+                    extra={
+                        'operation': 'api_test',
+                        'status': 'failed',
+                        'status_code': response.status_code,
+                        'api_endpoint': test_url
+                    }
+                )
                 result["api_tested"] = True
                 result["api_status"] = f"failed_{response.status_code}"
                 result["details"] = (
                     f"Token obtained but API access failed with status {response.status_code}"
                 )
 
-        print("✅ Doctor check completed successfully!")
+        logger.info(
+            "✅ Doctor check completed successfully!",
+            extra={'operation': 'doctor_check', 'status': 'completed', 'environment': env}
+        )
         return result
 
     except AuthConfigError as e:
-        print(f"❌ Authentication configuration error: {str(e)}")
+        logger.error(
+            f"❌ Authentication configuration error: {str(e)}",
+            extra={'operation': 'doctor_check', 'error_type': 'AuthConfigError', 'environment': env},
+            exc_info=True
+        )
         return {
             "success": False,
             "environment": env,
@@ -143,7 +176,11 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             "details": "Authentication configuration is invalid",
         }
     except requests.exceptions.RequestException as e:
-        print(f"❌ Network/API error: {str(e)}")
+        logger.error(
+            f"❌ Network/API error: {str(e)}",
+            extra={'operation': 'doctor_check', 'error_type': 'RequestException', 'environment': env},
+            exc_info=True
+        )
         return {
             "success": False,
             "environment": env,
@@ -153,7 +190,11 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
             "details": "Network or API request failed",
         }
     except Exception as e:
-        print(f"❌ Unexpected error: {str(e)}")
+        logger.error(
+            f"❌ Unexpected error: {str(e)}",
+            extra={'operation': 'doctor_check', 'error_type': 'UnexpectedError', 'environment': env},
+            exc_info=True
+        )
         return {
             "success": False,
             "environment": env,

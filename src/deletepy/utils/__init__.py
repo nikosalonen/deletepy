@@ -28,6 +28,14 @@ from .csv_utils import (
     write_identifiers_to_file,
 )
 from ..core.exceptions import FileOperationError
+from .logging_utils import get_logger, setup_logging, log_operation
+from .legacy_print import (
+    log_api_request,
+    log_batch_operation,
+    log_file_operation,
+    log_progress,
+    log_user_operation,
+)
 from .display_utils import (
     confirm_action,
     print_error,
@@ -108,4 +116,13 @@ __all__ = [
     "validate_file_path",
     # Exceptions
     "FileOperationError",
+    # Logging utilities
+    "get_logger",
+    "setup_logging",
+    "log_operation",
+    "log_api_request",
+    "log_batch_operation",
+    "log_file_operation",
+    "log_progress",
+    "log_user_operation",
 ]
