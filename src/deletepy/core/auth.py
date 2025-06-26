@@ -2,15 +2,10 @@ import requests
 from dotenv import load_dotenv
 
 from .config import get_env_config
+from .exceptions import AuthConfigError
 
 # API timeout in seconds for authentication requests
 API_TIMEOUT = 30
-
-
-class AuthConfigError(Exception):
-    """Exception raised for authentication configuration errors."""
-
-    pass
 
 
 def get_access_token(env: str = "dev") -> str:

@@ -6,7 +6,8 @@ from typing import Optional
 
 import click
 
-from ..core.auth import AuthConfigError, get_access_token
+from ..core.auth import get_access_token
+from ..core.exceptions import AuthConfigError
 from ..core.config import check_env_file, get_base_url
 from ..operations.batch_ops import check_unblocked_users
 from ..operations.domain_ops import check_email_domains

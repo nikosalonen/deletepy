@@ -16,6 +16,14 @@ from .cli import (
     validate_user_id_list,
 )
 from .core.auth import doctor, get_access_token
+from .core.exceptions import (
+    APIError,
+    Auth0ManagerError,
+    AuthConfigError,
+    FileOperationError,
+    UserOperationError,
+    ValidationError,
+)
 from .core.config import (
     API_RATE_LIMIT,
     API_TIMEOUT,
@@ -129,6 +137,13 @@ __all__ = [
     "get_optimal_batch_size",
     "get_estimated_processing_time",
     "validate_rate_limit_config",
+    # Exceptions
+    "Auth0ManagerError",
+    "AuthConfigError",
+    "UserOperationError",
+    "FileOperationError",
+    "APIError",
+    "ValidationError",
     # Operations
     "block_user",
     "delete_user",

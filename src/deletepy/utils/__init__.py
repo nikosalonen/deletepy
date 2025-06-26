@@ -27,8 +27,8 @@ from .csv_utils import (
     resolve_encoded_username,
     write_identifiers_to_file,
 )
+from ..core.exceptions import FileOperationError
 from .display_utils import (
-    FileOperationError,
     confirm_action,
     print_error,
     print_info,
@@ -39,9 +39,6 @@ from .display_utils import (
     setup_shutdown_handler,
     show_progress,
     shutdown_requested,
-)
-from .file_utils import (
-    FileOperationError as FileOpError,
 )
 from .file_utils import (
     check_shutdown_requested,
@@ -59,8 +56,7 @@ from .file_utils import (
     safe_file_write as safe_write,
 )
 
-# Re-export FileOperationError from display_utils as the primary source
-FileOperationError = FileOperationError
+# FileOperationError is imported from core.exceptions above
 
 __all__ = [
     # Auth utilities
