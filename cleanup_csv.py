@@ -39,19 +39,22 @@ def find_best_column(headers: List[str], output_type: str = "user_id") -> Option
         patterns = [r"user.*name", r"username", r"name", r"nickname"]
     else:  # user_id or fallback
         patterns = [
-            r"detail\.data\.",
             r"user.*id",
-            r"user.*name",
+            r"user.*name", 
             r"username",
             r"userid",
             r"email",
             r"identifier",
             r"subject",
             r"principal",
+            r"detail\.data\.user",  # More specific: detail.data.user_name, detail.data.user_id
         ]
 
     for pattern in patterns:
         for header in headers:
+            # Skip columns that are clearly not user identifiers
+            if re.search(r"ip|address|location|geo", header.lower()):
+                continue
             if re.search(pattern, header.lower()):
                 return header
 
@@ -95,8 +98,8 @@ def resolve_encoded_username(username: str, env: str = None) -> str:
             base_url = get_base_url(env)
 
             if token:
-                # Try to get user details using the encoded username as user_id
-                user_details = get_user_details(username, token, base_url)
+                # Search for user by encoded username
+                user_details = _search_user_by_field(username, token, base_url)
                 if user_details and user_details.get("email"):
                     return user_details["email"]
         except Exception:
@@ -105,20 +108,29 @@ def resolve_encoded_username(username: str, env: str = None) -> str:
 
     # Fallback to string replacement (but warn about potential issues)
     if "_at_" in username:
-        return username.replace("_at_", "@")
+        fallback = username.replace("_at_", "@")
+        if env:  # Only show warning if we tried API and failed
+            print(f"    ⚠️  API resolution failed for {username}, using fallback: {fallback}")
+        return fallback
     elif "__" in username:
         # This is problematic as noted - but we'll do it as fallback
-        return username.replace("__", "@")
+        fallback = username.replace("__", "@")
+        if env:  # Only show warning if we tried API and failed
+            print(f"    ⚠️  API resolution failed for {username}, using fallback: {fallback} (may be incomplete)")
+        return fallback
 
     return username
 
 
-def clean_identifier(value: str, env: str = None) -> str:
+def clean_identifier(
+    value: str, env: str = None, preserve_encoded: bool = False
+) -> str:
     """Clean and normalize user identifiers.
 
     Args:
         value: Raw identifier value
         env: Environment to use for Auth0 API resolution (optional)
+        preserve_encoded: If True, keep encoded usernames as-is instead of resolving
 
     Returns:
         Cleaned identifier
@@ -130,6 +142,9 @@ def clean_identifier(value: str, env: str = None) -> str:
 
     # Handle encoded usernames with Auth0 API resolution
     if "_at_" in value or "__" in value:
+        if preserve_encoded:
+            # Keep encoded usernames as-is
+            return value
         return resolve_encoded_username(value, env)
 
     return value
@@ -149,6 +164,7 @@ def extract_identifiers_from_csv(
         List of cleaned identifiers
     """
     identifiers = []
+    skip_resolution = False
 
     try:
         with safe_file_read(filename) as infile:
@@ -195,9 +211,34 @@ def extract_identifiers_from_csv(
 
             print(f"Using column: {best_column}")
 
+            # Check if we should skip encoded username resolution for this column
+            if (
+                output_type == "username"
+                and best_column
+                and "user_name" in best_column.lower()
+            ):
+                skip_resolution = True
+                print(
+                    f"CSV column '{best_column}' contains username data. Skipping encoded username resolution."
+                )
+            elif (
+                output_type == "email"
+                and best_column
+                and "email" in best_column.lower()
+            ):
+                skip_resolution = True
+                print(
+                    f"CSV column '{best_column}' contains email data. Skipping encoded username resolution."
+                )
+
             for row in reader:
                 if best_column in row:
-                    cleaned = clean_identifier(row[best_column], env)
+                    # Preserve encoded usernames if we're looking for username output and found username column
+                    preserve_encoded = skip_resolution and output_type == "username"
+                    env_for_cleaning = None if skip_resolution else env
+                    cleaned = clean_identifier(
+                        row[best_column], env_for_cleaning, preserve_encoded
+                    )
                     if cleaned:
                         identifiers.append(cleaned)
 
@@ -212,12 +253,21 @@ def extract_identifiers_from_csv(
         return []
 
     # Check if we need to fetch additional data from Auth0
-    # Skip if CSV already contains the requested data type
+    # Skip if CSV already contains the requested data type or we already handled it above
     data_already_available = _check_if_data_available(identifiers, output_type)
 
-    if not data_already_available and output_type != "user_id" and env:
+    # If we haven't already handled column matching above, check here
+    if (
+        not skip_resolution
+        and not data_already_available
+        and env
+    ):
         identifiers = _convert_to_output_type(identifiers, output_type, env)
-    elif not data_already_available and output_type != "user_id" and not env:
+    elif (
+        not skip_resolution
+        and not data_already_available
+        and not env
+    ):
         print(
             f"\nWarning: Requested output type '{output_type}' but no environment specified."
         )
@@ -232,7 +282,7 @@ def extract_identifiers_from_csv(
             identifiers = _convert_to_output_type(identifiers, output_type, response)
         else:
             print("Skipping Auth0 data fetch. Using original identifiers.")
-    elif data_already_available:
+    elif data_already_available and not skip_resolution:
         print(f"CSV already contains {output_type} data. No Auth0 API calls needed.")
 
     return identifiers
@@ -320,9 +370,6 @@ def _convert_to_output_type(
     Returns:
         List of converted identifiers
     """
-    if output_type == "user_id":
-        return identifiers  # Already in correct format
-
     print(f"\nFetching {output_type} data from Auth0 API...")
 
     try:
@@ -336,41 +383,67 @@ def _convert_to_output_type(
     total = len(identifiers)
 
     for idx, identifier in enumerate(identifiers, 1):
-        if idx % 10 == 0 or idx == total:
+        if idx % 5 == 0 or idx == total:
             print(f"Processing {idx}/{total}...", end="\r")
 
         try:
-            # First ensure the identifier is cleaned (in case it wasn't processed yet)
+            # Check if identifier is an encoded username (before cleaning)
+            is_encoded_username = "_at_" in identifier or "__" in identifier
+            
+            if idx <= 3:  # Show details for first few items
+                print(f"\n[{idx}] Processing: {identifier[:50]}{'...' if len(identifier) > 50 else ''}")
+                if is_encoded_username:
+                    print(f"    → Detected encoded username pattern")
+
+            # Clean the identifier
             cleaned_identifier = clean_identifier(identifier, env)
+            
+            if idx <= 3 and cleaned_identifier != identifier:
+                print(f"    → Resolved to: {cleaned_identifier}")
 
             # Check if identifier is already a user_id
             if is_auth0_user_id(cleaned_identifier):
+                if idx <= 3:
+                    print(f"    → Looking up user details by user_id")
                 # Use get_user_details for user_id lookups
                 user_details = get_user_details(cleaned_identifier, token, base_url)
             else:
-                # Use search API for email/username lookups
-                user_details = _search_user_by_field(
-                    cleaned_identifier, token, base_url
-                )
+                # For encoded usernames, search by the original encoded value as username
+                search_value = identifier if is_encoded_username else cleaned_identifier
+                if idx <= 3:
+                    print(f"    → Searching Auth0 for: {search_value}")
+                user_details = _search_user_by_field(search_value, token, base_url)
 
             if user_details:
+                if idx <= 3:
+                    print(f"    → Found user: {user_details.get('email', 'N/A')}")
                 if output_type == "email":
                     value = user_details.get("email", identifier)
                 elif output_type == "username":
                     value = user_details.get(
                         "username", user_details.get("email", identifier)
                     )
+                elif output_type == "user_id":
+                    value = user_details.get("user_id", identifier)
                 else:
                     value = identifier
                 converted.append(value)
+                if idx <= 3:
+                    print(f"    → Output ({output_type}): {value}")
             else:
                 # If we can't fetch details, keep original identifier
+                if idx <= 3:
+                    print(f"    → User not found, keeping original: {identifier}")
                 converted.append(identifier)
-        except Exception:
+        except Exception as e:
             # On error, keep original identifier
+            if idx <= 3:
+                print(f"    → Error occurred: {str(e)[:50]}{'...' if len(str(e)) > 50 else ''}, keeping original")
             converted.append(identifier)
 
     print(f"\nCompleted processing {total} identifiers")
+    success_count = sum(1 for orig, conv in zip(identifiers, converted) if orig != conv or is_auth0_user_id(conv))
+    print(f"Successfully resolved: {success_count}/{total} identifiers")
     return converted
 
 
