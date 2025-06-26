@@ -40,7 +40,7 @@ def find_best_column(headers: List[str], output_type: str = "user_id") -> Option
     else:  # user_id or fallback
         patterns = [
             r"user.*id",
-            r"user.*name", 
+            r"user.*name",
             r"username",
             r"userid",
             r"email",
@@ -110,13 +110,17 @@ def resolve_encoded_username(username: str, env: str = None) -> str:
     if "_at_" in username:
         fallback = username.replace("_at_", "@")
         if env:  # Only show warning if we tried API and failed
-            print(f"    ⚠️  API resolution failed for {username}, using fallback: {fallback}")
+            print(
+                f"    ⚠️  API resolution failed for {username}, using fallback: {fallback}"
+            )
         return fallback
     elif "__" in username:
         # This is problematic as noted - but we'll do it as fallback
         fallback = username.replace("__", "@")
         if env:  # Only show warning if we tried API and failed
-            print(f"    ⚠️  API resolution failed for {username}, using fallback: {fallback} (may be incomplete)")
+            print(
+                f"    ⚠️  API resolution failed for {username}, using fallback: {fallback} (may be incomplete)"
+            )
         return fallback
 
     return username
@@ -151,7 +155,10 @@ def clean_identifier(
 
 
 def extract_identifiers_from_csv(
-    filename: str = "ids.csv", env: str = None, output_type: str = "user_id"
+    filename: str = "ids.csv",
+    env: str = None,
+    output_type: str = "user_id",
+    interactive: bool = True,
 ) -> List[str]:
     """Extract user identifiers from CSV with fuzzy column matching.
 
@@ -159,6 +166,7 @@ def extract_identifiers_from_csv(
         filename: Input CSV file path
         env: Environment for Auth0 API resolution (dev/prod) - optional but recommended for encoded usernames
         output_type: Type of output desired (username|email|user_id)
+        interactive: Whether to prompt user for input (default True, set False for testing)
 
     Returns:
         List of cleaned identifiers
@@ -257,31 +265,29 @@ def extract_identifiers_from_csv(
     data_already_available = _check_if_data_available(identifiers, output_type)
 
     # If we haven't already handled column matching above, check here
-    if (
-        not skip_resolution
-        and not data_already_available
-        and env
-    ):
+    if not skip_resolution and not data_already_available and env:
         identifiers = _convert_to_output_type(identifiers, output_type, env)
-    elif (
-        not skip_resolution
-        and not data_already_available
-        and not env
-    ):
-        print(
-            f"\nWarning: Requested output type '{output_type}' but no environment specified."
-        )
-        response = (
-            input(
-                "Do you want to fetch this data from Auth0? Specify environment (dev/prod) or press Enter to skip: "
+    elif not skip_resolution and not data_already_available and not env:
+        if interactive:
+            print(
+                f"\nWarning: Requested output type '{output_type}' but no environment specified."
             )
-            .strip()
-            .lower()
-        )
-        if response in ["dev", "prod"]:
-            identifiers = _convert_to_output_type(identifiers, output_type, response)
+            response = (
+                input(
+                    "Do you want to fetch this data from Auth0? Specify environment (dev/prod) or press Enter to skip: "
+                )
+                .strip()
+                .lower()
+            )
+            if response in ["dev", "prod"]:
+                identifiers = _convert_to_output_type(
+                    identifiers, output_type, response
+                )
+            else:
+                print("Skipping Auth0 data fetch. Using original identifiers.")
         else:
-            print("Skipping Auth0 data fetch. Using original identifiers.")
+            # Non-interactive mode - skip Auth0 data fetch
+            pass
     elif data_already_available and not skip_resolution:
         print(f"CSV already contains {output_type} data. No Auth0 API calls needed.")
 
@@ -389,22 +395,24 @@ def _convert_to_output_type(
         try:
             # Check if identifier is an encoded username (before cleaning)
             is_encoded_username = "_at_" in identifier or "__" in identifier
-            
+
             if idx <= 3:  # Show details for first few items
-                print(f"\n[{idx}] Processing: {identifier[:50]}{'...' if len(identifier) > 50 else ''}")
+                print(
+                    f"\n[{idx}] Processing: {identifier[:50]}{'...' if len(identifier) > 50 else ''}"
+                )
                 if is_encoded_username:
-                    print(f"    → Detected encoded username pattern")
+                    print("    → Detected encoded username pattern")
 
             # Clean the identifier
             cleaned_identifier = clean_identifier(identifier, env)
-            
+
             if idx <= 3 and cleaned_identifier != identifier:
                 print(f"    → Resolved to: {cleaned_identifier}")
 
             # Check if identifier is already a user_id
             if is_auth0_user_id(cleaned_identifier):
                 if idx <= 3:
-                    print(f"    → Looking up user details by user_id")
+                    print("    → Looking up user details by user_id")
                 # Use get_user_details for user_id lookups
                 user_details = get_user_details(cleaned_identifier, token, base_url)
             else:
@@ -438,11 +446,17 @@ def _convert_to_output_type(
         except Exception as e:
             # On error, keep original identifier
             if idx <= 3:
-                print(f"    → Error occurred: {str(e)[:50]}{'...' if len(str(e)) > 50 else ''}, keeping original")
+                print(
+                    f"    → Error occurred: {str(e)[:50]}{'...' if len(str(e)) > 50 else ''}, keeping original"
+                )
             converted.append(identifier)
 
     print(f"\nCompleted processing {total} identifiers")
-    success_count = sum(1 for orig, conv in zip(identifiers, converted) if orig != conv or is_auth0_user_id(conv))
+    success_count = sum(
+        1
+        for orig, conv in zip(identifiers, converted)
+        if orig != conv or is_auth0_user_id(conv)
+    )
     print(f"Successfully resolved: {success_count}/{total} identifiers")
     return converted
 

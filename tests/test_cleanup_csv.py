@@ -1,8 +1,12 @@
-import pytest
 import tempfile
 import os
 import csv
-from cleanup_csv import find_best_column, clean_identifier, extract_identifiers_from_csv, write_identifiers_to_file
+from cleanup_csv import (
+    find_best_column,
+    clean_identifier,
+    extract_identifiers_from_csv,
+    write_identifiers_to_file,
+)
 
 
 class TestFindBestColumn:
@@ -132,7 +136,10 @@ class TestExtractIdentifiersFromCSV:
             temp_path = temp.name
 
         try:
-            result = extract_identifiers_from_csv(temp_path)
+            # Use non-interactive mode to avoid prompts during testing
+            result = extract_identifiers_from_csv(
+                temp_path, env=None, output_type="user_id", interactive=False
+            )
             assert len(result) == 2
             assert result == ["user@example.com", "test@domain.org"]
         finally:
@@ -169,13 +176,13 @@ class TestExtractIdentifiersFromCSV:
 class TestWriteIdentifiersToFile:
     def test_writes_identifiers_to_file(self):
         identifiers = ["auth0|123456789", "user@example.com", "auth0|987654321"]
-        
+
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as temp:
             temp_path = temp.name
 
         try:
             write_identifiers_to_file(identifiers, temp_path)
-            
+
             with open(temp_path, "r") as f:
                 content = f.read().strip()
                 lines = content.split("\n")
@@ -186,13 +193,13 @@ class TestWriteIdentifiersToFile:
 
     def test_writes_empty_list(self):
         identifiers = []
-        
+
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as temp:
             temp_path = temp.name
 
         try:
             write_identifiers_to_file(identifiers, temp_path)
-            
+
             with open(temp_path, "r") as f:
                 content = f.read()
                 assert content == ""
