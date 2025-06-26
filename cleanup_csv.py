@@ -458,6 +458,187 @@ def write_identifiers_to_file(
         return False
 
 
+def _show_progress(current: int, total: int) -> None:
+    """Show progress indicator for conversion process.
+
+    Args:
+        current: Current item number
+        total: Total number of items
+    """
+    if current % 5 == 0 or current == total:
+        print(f"Processing {current}/{total}...", end="\r")
+
+
+def _show_detailed_progress(
+    idx: int, identifier: str, is_encoded_username: bool
+) -> None:
+    """Show detailed progress for first few items.
+
+    Args:
+        idx: Current index (1-based)
+        identifier: Identifier being processed
+        is_encoded_username: Whether identifier has encoded username pattern
+    """
+    if idx <= 3:  # Show details for first few items
+        print(
+            f"\n[{idx}] Processing: {identifier[:50]}{'...' if len(identifier) > 50 else ''}"
+        )
+        if is_encoded_username:
+            print("    → Detected encoded username pattern")
+
+
+def _show_conversion_details(
+    idx: int,
+    cleaned_identifier: str,
+    original_identifier: str,
+    search_value: str,
+    user_details: dict,
+    output_value: str,
+    output_type: str,
+) -> None:
+    """Show detailed conversion information for first few items.
+
+    Args:
+        idx: Current index (1-based)
+        cleaned_identifier: Cleaned version of identifier
+        original_identifier: Original identifier
+        search_value: Value used for Auth0 search
+        user_details: User details from Auth0 API
+        output_value: Final output value
+        output_type: Requested output type
+    """
+    if idx <= 3:
+        if cleaned_identifier != original_identifier:
+            print(f"    → Resolved to: {cleaned_identifier}")
+
+        if is_auth0_user_id(cleaned_identifier):
+            print("    → Looking up user details by user_id")
+        else:
+            print(f"    → Searching Auth0 for: {search_value}")
+
+        if user_details:
+            print(f"    → Found user: {user_details.get('email', 'N/A')}")
+            print(f"    → Output ({output_type}): {output_value}")
+        else:
+            print(f"    → User not found, keeping original: {original_identifier}")
+
+
+def _show_error_details(idx: int, error: Exception, identifier: str) -> None:
+    """Show error details for first few items.
+
+    Args:
+        idx: Current index (1-based)
+        error: Exception that occurred
+        identifier: Original identifier
+    """
+    if idx <= 3:
+        error_msg = str(error)
+        truncated_msg = f"{error_msg[:50]}{'...' if len(error_msg) > 50 else ''}"
+        print(f"    → Error occurred: {truncated_msg}, keeping original")
+
+
+def _extract_output_value(user_details: dict, output_type: str, fallback: str) -> str:
+    """Extract the requested value from user details.
+
+    Args:
+        user_details: User details from Auth0 API
+        output_type: Requested output type (email|username|user_id)
+        fallback: Fallback value if extraction fails
+
+    Returns:
+        Extracted value or fallback
+    """
+    if output_type == "email":
+        return user_details.get("email", fallback)
+    elif output_type == "username":
+        return user_details.get("username", user_details.get("email", fallback))
+    elif output_type == "user_id":
+        return user_details.get("user_id", fallback)
+    else:
+        return fallback
+
+
+def _convert_single_identifier(
+    identifier: str, idx: int, output_type: str, env: str, token: str, base_url: str
+) -> str:
+    """Convert a single identifier to the requested output type.
+
+    Args:
+        identifier: Identifier to convert
+        idx: Current index (1-based)
+        output_type: Requested output type
+        env: Environment for Auth0 API
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        Converted identifier or original if conversion fails
+    """
+    try:
+        # Check if identifier is an encoded username (before cleaning)
+        is_encoded_username = "_at_" in identifier or "__" in identifier
+
+        _show_detailed_progress(idx, identifier, is_encoded_username)
+
+        # Clean the identifier
+        cleaned_identifier = clean_identifier(identifier, env)
+
+        # Determine search strategy and get user details
+        if is_auth0_user_id(cleaned_identifier):
+            user_details = get_user_details(cleaned_identifier, token, base_url)
+        else:
+            # For encoded usernames, search by the original encoded value as username
+            search_value = identifier if is_encoded_username else cleaned_identifier
+            user_details = _search_user_by_field(search_value, token, base_url)
+
+        if user_details:
+            output_value = _extract_output_value(user_details, output_type, identifier)
+            _show_conversion_details(
+                idx,
+                cleaned_identifier,
+                identifier,
+                identifier if is_encoded_username else cleaned_identifier,
+                user_details,
+                output_value,
+                output_type,
+            )
+            return output_value
+        else:
+            _show_conversion_details(
+                idx,
+                cleaned_identifier,
+                identifier,
+                identifier if is_encoded_username else cleaned_identifier,
+                None,
+                identifier,
+                output_type,
+            )
+            return identifier
+
+    except Exception as e:
+        _show_error_details(idx, e, identifier)
+        return identifier
+
+
+def _print_summary(
+    total: int, original_identifiers: List[str], converted_identifiers: List[str]
+) -> None:
+    """Print conversion summary.
+
+    Args:
+        total: Total number of identifiers processed
+        original_identifiers: Original identifiers list
+        converted_identifiers: Converted identifiers list
+    """
+    print(f"\nCompleted processing {total} identifiers")
+    success_count = sum(
+        1
+        for orig, conv in zip(original_identifiers, converted_identifiers)
+        if orig != conv or is_auth0_user_id(conv)
+    )
+    print(f"Successfully resolved: {success_count}/{total} identifiers")
+
+
 def _convert_to_output_type(
     identifiers: List[str], output_type: str, env: str
 ) -> List[str]:
@@ -473,6 +654,7 @@ def _convert_to_output_type(
     """
     print(f"\nFetching {output_type} data from Auth0 API...")
 
+    # Get Auth0 credentials
     try:
         token = get_access_token(env)
         base_url = get_base_url(env)
@@ -480,79 +662,20 @@ def _convert_to_output_type(
         print(f"Error getting Auth0 credentials: {e}")
         return identifiers
 
+    # Process each identifier
     converted = []
     total = len(identifiers)
 
     for idx, identifier in enumerate(identifiers, 1):
-        if idx % 5 == 0 or idx == total:
-            print(f"Processing {idx}/{total}...", end="\r")
+        _show_progress(idx, total)
 
-        try:
-            # Check if identifier is an encoded username (before cleaning)
-            is_encoded_username = "_at_" in identifier or "__" in identifier
+        converted_identifier = _convert_single_identifier(
+            identifier, idx, output_type, env, token, base_url
+        )
+        converted.append(converted_identifier)
 
-            if idx <= 3:  # Show details for first few items
-                print(
-                    f"\n[{idx}] Processing: {identifier[:50]}{'...' if len(identifier) > 50 else ''}"
-                )
-                if is_encoded_username:
-                    print("    → Detected encoded username pattern")
-
-            # Clean the identifier
-            cleaned_identifier = clean_identifier(identifier, env)
-
-            if idx <= 3 and cleaned_identifier != identifier:
-                print(f"    → Resolved to: {cleaned_identifier}")
-
-            # Check if identifier is already a user_id
-            if is_auth0_user_id(cleaned_identifier):
-                if idx <= 3:
-                    print("    → Looking up user details by user_id")
-                # Use get_user_details for user_id lookups
-                user_details = get_user_details(cleaned_identifier, token, base_url)
-            else:
-                # For encoded usernames, search by the original encoded value as username
-                search_value = identifier if is_encoded_username else cleaned_identifier
-                if idx <= 3:
-                    print(f"    → Searching Auth0 for: {search_value}")
-                user_details = _search_user_by_field(search_value, token, base_url)
-
-            if user_details:
-                if idx <= 3:
-                    print(f"    → Found user: {user_details.get('email', 'N/A')}")
-                if output_type == "email":
-                    value = user_details.get("email", identifier)
-                elif output_type == "username":
-                    value = user_details.get(
-                        "username", user_details.get("email", identifier)
-                    )
-                elif output_type == "user_id":
-                    value = user_details.get("user_id", identifier)
-                else:
-                    value = identifier
-                converted.append(value)
-                if idx <= 3:
-                    print(f"    → Output ({output_type}): {value}")
-            else:
-                # If we can't fetch details, keep original identifier
-                if idx <= 3:
-                    print(f"    → User not found, keeping original: {identifier}")
-                converted.append(identifier)
-        except Exception as e:
-            # On error, keep original identifier
-            if idx <= 3:
-                print(
-                    f"    → Error occurred: {str(e)[:50]}{'...' if len(str(e)) > 50 else ''}, keeping original"
-                )
-            converted.append(identifier)
-
-    print(f"\nCompleted processing {total} identifiers")
-    success_count = sum(
-        1
-        for orig, conv in zip(identifiers, converted)
-        if orig != conv or is_auth0_user_id(conv)
-    )
-    print(f"Successfully resolved: {success_count}/{total} identifiers")
+    # Print summary
+    _print_summary(total, identifiers, converted)
     return converted
 
 
