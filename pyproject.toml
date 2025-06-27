@@ -27,7 +27,7 @@ dev = [
 ]
 
 [project.scripts]
-auth0-manager = "deletepy.cli.main:main"
+deletepy = "deletepy.cli.main:main"
 
 [tool.ruff]
 line-length = 88
