@@ -62,8 +62,8 @@ source venv/bin/activate
 # Install dependencies (modern approach)
 pip install -e .
 
-# Or traditional approach
-pip install -r requirements.txt
+# Or with development dependencies
+pip install -e ".[dev]"
 ```
 
 **Important**: Always ensure the virtual environment is activated before running any commands. You can tell it's active when you see `(venv)` at the beginning of your command prompt.
