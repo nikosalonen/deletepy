@@ -1,9 +1,8 @@
-# Auth0 User Management Tool
+# DeletePy - Auth0 User Management Tool
 
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/nikosalonen/deletepy?utm_source=oss&utm_medium=github&utm_campaign=nikosalonen%2Fdeletepy&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-
-A comprehensive Python tool for managing Auth0 users with support for bulk operations across development and production environments. This tool provides safe, rate-limited operations for user management, session control, and domain validation.
+A comprehensive Python tool for managing Auth0 users with support for bulk operations across development and production environments. DeletePy provides safe, rate-limited operations for user management, session control, identity management, and domain validation with a modern modular architecture.
 
 ## Features
 
@@ -14,15 +13,19 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Revoke application grants** - Invalidate all authorized applications and refresh tokens
 
 ### Advanced Operations
-- **Revoke-only mode** (`--revoke-grants-only`) - Revoke sessions and grants without blocking/deleting
-- **Block status checking** (`--check-unblocked`) - Identify users who are not currently blocked
-- **Domain validation** (`--check-domains`) - Check email domains against blocklists with optional bulk actions
-- **Data export** (`--export-last-login`) - Export user last login data to timestamped CSV files
-- **Credential testing** (`--doctor`) - Validate Auth0 API credentials and permissions
+- **Identity unlinking** (`find-social-ids`) - Smart social identity management:
+  - Unlinks social identities from multi-identity users
+  - Deletes users with only the matching social identity
+  - Protects users with Auth0 as main identity
+- **Revoke-only mode** (`revoke-grants-only`) - Revoke sessions and grants without blocking/deleting
+- **Block status checking** (`check-unblocked`) - Identify users who are not currently blocked
+- **Domain validation** (`check-domains`) - Check email domains against blocklists with optional bulk actions
+- **Data export** (`export-last-login`) - Export user last login data to timestamped CSV files
+- **Credential testing** (`doctor`) - Validate Auth0 API credentials and permissions
 
 ### Input & Safety Features
-- **Multiple input formats** - Support for Auth0 user IDs or email addresses
-- **CSV preprocessing** - Convert multi-column CSV files to single-column input using `cleanup_csv.py`
+- **Multiple input formats** - Support for Auth0 user IDs, email addresses, or social media IDs
+- **CSV preprocessing** - Convert multi-column CSV files to single-column input using cleanup utilities
 - **Email resolution** - Automatically resolve emails to Auth0 user IDs with multi-user detection
 - **Environment separation** - Separate development and production configurations
 - **Production safeguards** - Explicit confirmation required for production operations
@@ -30,29 +33,71 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Progress tracking** - Real-time progress indicators for bulk operations
 - **Graceful shutdown** - Handle interruption signals safely
 - **Memory efficient** - Generator-based file processing for large datasets
-- **Robust file operations** - Comprehensive error handling with automatic backup/restore for critical operations
+- **Robust error handling** - Comprehensive exception handling with detailed error reporting
 
-## Project Structure
+## Architecture
 
-The project is organized into several modules:
+DeletePy follows a modern modular architecture for maintainability and scalability:
 
-- `main.py`: Main entry point with operation routing and user confirmation logic
-- `auth.py`: Auth0 authentication and token management with timeout handling
-- `config.py`: Environment configuration management with dev/prod validation
-- `user_operations.py`: Core Auth0 API operations with advanced rate limiting
-- `utils.py`: Shared utilities for argument parsing, file reading, progress display, and Auth0 user ID validation
-- `email_domain_checker.py`: Domain validation and blocklist checking
-- `rate_limit_config.py`: Rate limiting configuration and batch optimization
-- `cleanup_csv.py`: CSV preprocessing utility for input file preparation
-- `export_last_login_example.py`: Example script for data export operations
+```
+deletepy/
+├── src/
+│   └── deletepy/
+│       ├── cli/                 # Command-line interface
+│       │   ├── main.py          # Click-based CLI entry point
+│       │   ├── commands.py      # Operation handlers
+│       │   └── validators.py    # Argument validation
+│       ├── core/                # Core functionality
+│       │   ├── auth.py          # Auth0 authentication
+│       │   ├── config.py        # Configuration management
+│       │   └── exceptions.py    # Custom exceptions
+│       ├── operations/          # Business operations
+│       │   ├── user_ops.py      # Core user operations
+│       │   ├── batch_ops.py     # Batch processing & social ID search
+│       │   ├── export_ops.py    # Export functionality
+│       │   └── domain_ops.py    # Domain checking
+│       ├── utils/               # Utilities
+│       │   ├── file_utils.py    # File operations
+│       │   ├── display_utils.py # Progress/output formatting
+│       │   ├── request_utils.py # HTTP request utilities
+│       │   └── auth_utils.py    # Authentication utilities
+│       └── models/              # Data models
+├── tests/                       # Test suite
+├── legacy files (main.py, etc.) # Backward compatibility
+└── pyproject.toml              # Modern Python packaging
+```
+
+### Key Benefits
+- **Modular design** - Clear separation of concerns for easier maintenance
+- **Type safety** - Comprehensive type hints throughout the codebase
+- **Modern CLI** - Click-based command-line interface with better UX
+- **Backward compatibility** - Legacy CLI still works with deprecation warnings
+- **Test coverage** - Comprehensive test suite with module-based mocking
 
 ## Prerequisites
 
-- Python 3.x
+- Python 3.9+
 - Auth0 account with appropriate API permissions
 - Auth0 Management API access
 
 ## Installation
+
+### Modern Installation (Recommended)
+
+1. Clone the repository and create virtual environment:
+   ```bash
+   git clone <repository-url>
+   cd deletepy
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+2. Install in development mode:
+   ```bash
+   pip install -e .
+   ```
+
+### Traditional Installation
 
 1. Create and activate virtual environment:
    ```bash
@@ -62,189 +107,227 @@ The project is organized into several modules:
 
 2. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
    ```
 
-3. Create a `.env` file with your Auth0 credentials:
+   Or with development dependencies:
    ```bash
-   # Authentication credentials
-   CLIENT_ID=your_client_id_here
-   CLIENT_SECRET=your_client_secret_here
-
-   # Development credentials
-   DEVELOPMENT_CLIENT_ID=your_client_id_here
-   DEVELOPMENT_CLIENT_SECRET=your_client_secret_here
-
-   # URLs
-   URL=your_custom_domain_here
-   DEV_URL=your_dev_custom_domain_here
-
-   AUTH0_DOMAIN=your_auth0_domain_here
-   DEV_AUTH0_DOMAIN=your_dev_auth0_domain_here
+   pip install -e ".[dev]"
    ```
 
-   There's also a `.env.example` file that you can use as a template.
+### Environment Configuration
+
+Create a `.env` file with your Auth0 credentials:
+```bash
+# Production credentials
+CLIENT_ID=your_prod_client_id_here
+CLIENT_SECRET=your_prod_client_secret_here
+AUTH0_DOMAIN=your_auth0_domain_here
+URL=your_custom_domain_here
+
+# Development credentials
+DEV_CLIENT_ID=your_dev_client_id_here
+DEV_CLIENT_SECRET=your_dev_client_secret_here
+DEV_AUTH0_DOMAIN=your_dev_auth0_domain_here
+DEV_URL=your_dev_custom_domain_here
+```
+
+There's also a `.env.example` file that you can use as a template.
+
+## Usage
+
+### Modern CLI (Recommended)
+
+```bash
+# Check authentication configuration
+python -m src.deletepy.cli.main doctor [dev|prod]
+
+# Check if specified users are unblocked
+python -m src.deletepy.cli.main check-unblocked users.txt [dev|prod]
+
+# Check email domains for specified users
+python -m src.deletepy.cli.main check-domains users.txt [dev|prod]
+
+# Export user last_login data to CSV
+python -m src.deletepy.cli.main export-last-login emails.txt [dev|prod] [--connection CONNECTION]
+
+# Find users by social media IDs (unlinks identities or deletes users)
+python -m src.deletepy.cli.main find-social-ids social_ids.txt [dev|prod]
+
+# User management operations
+python -m src.deletepy.cli.main users block users.txt [dev|prod]
+python -m src.deletepy.cli.main users delete users.txt [dev|prod]
+python -m src.deletepy.cli.main users revoke-grants-only users.txt [dev|prod]
+```
+
 
 ## Preparing Input Files
 
-If you have a CSV file (e.g., `ids.csv`) with columns like `ip,userId,userName,user_name_prefix,user_name_suffix`, use the provided `cleanup_csv.py` script to extract a single column of user IDs or emails:
+### CSV Cleanup Utility
 
-### Basic CSV Cleanup
+If you have a CSV file with columns like `ip,userId,userName,user_name_prefix,user_name_suffix`, use the provided `cleanup_csv.py` script:
+
 ```bash
+# Basic cleanup
 python cleanup_csv.py
-```
 
-### Advanced CSV Cleanup with Output Type Control
-```bash
-# Basic cleanup with specific output type
+# With specific output type
 python cleanup_csv.py --output-type=email
-python cleanup_csv.py --output-type=username  
+python cleanup_csv.py --output-type=username
 python cleanup_csv.py --output-type=user_id
 
 # With environment for Auth0 API resolution
 python cleanup_csv.py dev --output-type=email
 python cleanup_csv.py prod --output-type=username
-
-# Full syntax
-python cleanup_csv.py [filename] [env] [--output-type=type]
 ```
 
 **Enhanced Features:**
-- **Output type control** - Specify what type of identifiers you want in the output:
-  - `user_id`: Auth0 user IDs (default)
-  - `email`: User email addresses
-  - `username`: User usernames (falls back to email if no username exists)
-- **Smart column detection** - Automatically finds the best column based on requested output type
-- **Data availability checking** - Detects if CSV already contains the requested data type to avoid unnecessary API calls
-- **Interactive Auth0 fetching** - Prompts to fetch missing data from Auth0 API when environment isn't specified
-- **Automatic column detection** - Intelligently identifies user identifier columns using fuzzy matching
-- **Encoded username resolution** - Resolves Auth0 encoded usernames to actual email addresses:
-  - `user_at_example.com` → `user@example.com` 
-  - `user__domain.com` → Uses Auth0 API to fetch the actual email address
-- **Auth0 API integration** - When environment (`dev`/`prod`) is specified, uses Auth0 API to resolve problematic encoded usernames
-- **Multiple input formats** - Handles both CSV files and plain text files with identifiers
-- **Rate limiting** - API calls are properly rate-limited to prevent 429 errors
+- **Output type control** - Specify identifier type: `user_id`, `email`, or `username`
+- **Smart column detection** - Automatically finds the best column
+- **Auth0 API integration** - Resolves encoded usernames when environment is specified
+- **Rate limiting** - Proper API call throttling to prevent 429 errors
 
-**Important Note:** Auth0 usernames cannot contain `@` symbols. If a value contains `@`, it's treated as an email address. Encoded usernames with `_at_` or `__` patterns are resolved using the Auth0 API when possible, with string replacement as fallback.
+### Input File Formats
 
-The script will overwrite `ids.csv` with a single column (no header) suitable for use as input to the main script.
-
-## Usage
-
-1. Prepare a text file (e.g., `users.txt` or cleaned `ids.csv`) containing Auth0 user IDs or email addresses:
-   - One ID or email per line
-   - No headers or additional columns
-   - Example:
-     ```
-     auth0|123456789
-     user@example.com
-     ```
-
-2. Run the script:
-   ```bash
-   python main.py <input_file> [env] [operation_flag]
+1. **User Management Files** - Auth0 user IDs or email addresses:
+   ```
+   auth0|123456789
+   user@example.com
    ```
 
-   Parameters:
-   - `<input_file>`: Path to your file containing user IDs or email addresses
-   - `[env]`: Optional environment parameter
-     - `dev` (default): Uses development credentials and API
-     - `prod`: Uses production credentials and API
-   - **Operation flag (required, choose one):**
-     - `--block`: Block users instead of deleting them
-     - `--delete`: Delete users from Auth0
-     - `--revoke-grants-only`: Revoke all application grants and sessions without blocking/deleting
-     - `--check-unblocked`: Check which users are not blocked
-     - `--check-domains`: Check email domains for block status with optional bulk actions
-     - `--export-last-login`: Export user last login data to timestamped CSV
-     - `--doctor`: Test Auth0 credentials and API access
+2. **Social ID Files** - Social media IDs for identity management:
+   ```
+   10157490928027692
+   115346286307134396784
+   ```
 
-   **Note:** You must specify exactly one operation flag. Using more than one will result in an error.
-
-## Usage Examples
-
-### Basic Operations
-
-```bash
-# Block users in development environment
-python main.py users.txt dev --block
-
-# Delete users in production (requires confirmation)
-python main.py users.txt prod --delete
-
-# Revoke sessions and grants only (don't block/delete)
-python main.py users.txt dev --revoke-grants-only
-```
-
-### Checking Operations
-
-```bash
-# Check which users are not blocked
-python main.py users.txt dev --check-unblocked
-
-# Check email domains for blocklist status
-python main.py emails.txt dev --check-domains
-
-# Export user login data to CSV
-python main.py emails.txt dev --export-last-login
-```
-
-### Credential Testing
-
-```bash
-# Test development credentials
-python main.py dev --doctor
-
-# Test production credentials with API access
-python main.py prod --doctor --test-api
-```
+3. **Email Files** - Email addresses for domain checking or export:
+   ```
+   user1@example.com
+   user2@company.org
+   ```
 
 ## Operation Details
 
-### Domain Checking (`--check-domains`)
+### Social Identity Management (`find-social-ids`)
+
+DeletePy provides sophisticated social identity management:
+
+- **Single Identity Users**: Users with only the matching social identity are deleted entirely
+- **Multi-Identity Users**: Only the matching social identity is unlinked, preserving the user account
+- **Protected Users**: Users with Auth0 as main identity are protected from deletion
+- **Production Safety**: Explicit confirmation required with operation counts
+
+Example workflow:
+1. Provide a file with social media IDs (Facebook, Google, LinkedIn, etc.)
+2. DeletePy searches Auth0 for users with those identities
+3. Categorizes users based on their identity configuration
+4. Performs safe unlinking or deletion based on user type
+
+### Domain Checking (`check-domains`)
+
 1. Fetches email addresses for each user in the input file
 2. Checks each domain against blocklist APIs
 3. Categorizes results: BLOCKED, ALLOWED, UNRESOLVABLE, INVALID, ERROR
 4. Provides summary with counts for each category
 5. For blocked domains, prompts for bulk block/revoke action
-6. Temporary result files are cleaned up automatically
 
-### Data Export (`--export-last-login`)
+### Data Export (`export-last-login`)
+
 1. Processes email addresses from input file in configurable batches
 2. Resolves emails to Auth0 user IDs with comprehensive error handling
 3. Fetches user details including last_login timestamps
-4. Exports to timestamped CSV with columns:
-   - email, user_id, last_login, created_at, updated_at, status
+4. Exports to timestamped CSV with columns: email, user_id, last_login, created_at, updated_at, status
 5. Handles edge cases: NOT_FOUND, MULTIPLE_USERS, ERROR_FETCHING_DETAILS
-6. Provides time estimates and progress tracking for large datasets
-7. Automatic batch size optimization based on dataset size
+6. Automatic batch size optimization based on dataset size
 
 ### Production Safety
-- All production operations require explicit "yes" confirmation
+
+- All production operations require explicit confirmation
 - Clear warnings about irreversible actions
 - Separate credential sets prevent accidental cross-environment operations
+- Detailed operation summaries before execution
 
-## Notes
+## API Permissions
 
-- The script requires appropriate Auth0 API permissions:
-  - `delete:users` for deletion
-  - `update:users` for blocking
-  - `delete:sessions` for session revocation (Enterprise plan)
-  - `delete:grants` for grant revocation
-- **Session revocation** logs the user out of all Auth0 SSO/browser sessions (if supported by your plan).
-- **Grant revocation** invalidates all refresh tokens and prevents applications from obtaining new access tokens for the user.
-- **Access tokens** already issued remain valid until they expire.
-- **Refresh token revocation** is now handled by grant revocation; there is no separate refresh token revocation step.
-- Production operations require explicit confirmation
-- Advanced rate limiting with exponential backoff prevents API throttling
-- All operations are logged with color-coded output
-- Multiple user detection for email addresses provides connection details
-- Temporary files are automatically cleaned up after operations
-- Memory-efficient processing handles large input files
+The tool requires appropriate Auth0 Management API scopes:
 
-## Testing
+- `read:users` - for user lookups and identity management
+- `delete:users` - for user deletion
+- `update:users` - for user blocking
+- `delete:sessions` - for session revocation (Enterprise plan)
+- `delete:grants` - for application grant revocation
 
-Run the test suite with:
+## Development
+
+### Running Tests
+
 ```bash
+# Install test dependencies
+pip install -e .[dev]
+
+# Run all tests
 pytest
+
+# Run with coverage
+pytest --cov=src/deletepy
+
+# Run specific test file
+pytest tests/test_auth.py
 ```
+
+### Code Quality
+
+```bash
+# Format code
+ruff format .
+
+# Lint code
+ruff check .
+
+# Fix auto-fixable issues
+ruff check --fix .
+
+# Type checking (if mypy is installed)
+mypy src/
+```
+
+## Technical Notes
+
+### Rate Limiting & Performance
+- Advanced rate limiting with exponential backoff prevents API throttling
+- Memory-efficient generator-based processing for large datasets
+- Automatic batch size optimization for export operations
+- Graceful handling of interruption signals
+
+### Error Handling
+- Comprehensive exception hierarchy for structured error handling
+- Detailed error reporting with color-coded output
+- Automatic cleanup of temporary files
+- Multiple user detection for email addresses with connection details
+
+### Session & Grant Management
+- **Session revocation** logs users out of all Auth0 SSO/browser sessions
+- **Grant revocation** invalidates all refresh tokens and prevents new access tokens
+- **Access tokens** already issued remain valid until they expire
+- Grant revocation now handles refresh token invalidation automatically
+
+## Migration from Legacy CLI
+
+The legacy CLI (`main.py`) continues to work with deprecation warnings. To migrate to the modern CLI:
+
+1. Replace `python main.py` with `python -m src.deletepy.cli.main`
+2. Use the new command structure with subcommands
+3. Update any scripts or automation to use the new syntax
+
+## Contributing
+
+1. Follow the established module boundaries
+2. Maintain test coverage at 100%
+3. Use type hints throughout
+4. Follow the function complexity guidelines (max 50 lines per function)
+5. Run code quality checks before submitting PRs
+
+## License
+
+[Add your license information here]

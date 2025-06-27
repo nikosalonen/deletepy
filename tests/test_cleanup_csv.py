@@ -1,10 +1,11 @@
-import tempfile
-import os
 import csv
-from cleanup_csv import (
-    find_best_column,
+import os
+import tempfile
+
+from src.deletepy.utils.csv_utils import (
     clean_identifier,
     extract_identifiers_from_csv,
+    find_best_column,
     write_identifiers_to_file,
 )
 
@@ -183,7 +184,7 @@ class TestWriteIdentifiersToFile:
         try:
             write_identifiers_to_file(identifiers, temp_path)
 
-            with open(temp_path, "r") as f:
+            with open(temp_path) as f:
                 content = f.read().strip()
                 lines = content.split("\n")
                 assert len(lines) == 3
@@ -200,7 +201,7 @@ class TestWriteIdentifiersToFile:
         try:
             write_identifiers_to_file(identifiers, temp_path)
 
-            with open(temp_path, "r") as f:
+            with open(temp_path) as f:
                 content = f.read()
                 assert content == ""
         finally:
