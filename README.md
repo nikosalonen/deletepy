@@ -109,7 +109,7 @@ deletepy/
    ```bash
    pip install -e .
    ```
-   
+
    Or with development dependencies:
    ```bash
    pip install -e ".[dev]"
@@ -160,18 +160,6 @@ python -m src.deletepy.cli.main users delete users.txt [dev|prod]
 python -m src.deletepy.cli.main users revoke-grants-only users.txt [dev|prod]
 ```
 
-### Legacy CLI (Backward Compatibility)
-
-```bash
-# Legacy CLI still works with deprecation warnings
-python main.py doctor [dev|prod]
-python main.py users.txt dev --block
-python main.py users.txt prod --delete
-python main.py users.txt dev --revoke-grants-only
-python main.py users.txt dev --check-unblocked
-python main.py users.txt dev --check-domains
-python main.py social_ids.txt dev --find-social-ids
-```
 
 ## Preparing Input Files
 
@@ -185,7 +173,7 @@ python cleanup_csv.py
 
 # With specific output type
 python cleanup_csv.py --output-type=email
-python cleanup_csv.py --output-type=username  
+python cleanup_csv.py --output-type=username
 python cleanup_csv.py --output-type=user_id
 
 # With environment for Auth0 API resolution
