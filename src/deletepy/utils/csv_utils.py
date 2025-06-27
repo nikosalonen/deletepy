@@ -2,7 +2,7 @@
 
 import csv
 import re
-from typing import Any
+from typing import Any, NamedTuple
 
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
@@ -15,6 +15,14 @@ from ..utils.display_utils import (
 from ..utils.request_utils import make_rate_limited_request
 from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
 from .file_utils import FileOperationError, safe_file_read, safe_file_write
+
+
+class CsvRowData(NamedTuple):
+    """Data structure to hold CSV row information for enhanced processing."""
+
+    identifier: str
+    user_id: str | None
+    row_data: dict[str, str]
 
 
 def find_best_column(headers: list[str], output_type: str = "user_id") -> str | None:
@@ -43,7 +51,8 @@ def find_best_column(headers: list[str], output_type: str = "user_id") -> str | 
 
     # Then use fuzzy matching patterns based on output type
     if output_type == "email":
-        patterns = [r"email", r"mail"]
+        # For email output, prefer user_name column since it often contains email-like data
+        patterns = [r"user.*name", r"username", r"email", r"mail"]
     elif output_type == "username":
         patterns = [r"user.*name", r"username", r"name", r"nickname"]
     else:  # user_id or fallback
@@ -62,7 +71,9 @@ def find_best_column(headers: list[str], output_type: str = "user_id") -> str | 
     for pattern in patterns:
         for header in headers:
             # Skip columns that are clearly not user identifiers
-            if re.search(r"ip|address|location|geo", header.lower()):
+            if re.search(
+                r"ip|address|location|geo|timestamp|time|date", header.lower()
+            ):
                 continue
             if re.search(pattern, header.lower()):
                 return header
@@ -174,10 +185,43 @@ def _detect_file_type(first_line: str) -> str:
     """
     first_line = first_line.strip()
 
-    # If first line looks like an Auth0 ID or email, treat as plain text file
+    # Check if it's a CSV header line (contains commas and looks like column names)
+    if "," in first_line:
+        # If it contains commas, likely CSV - check if it looks like headers
+        parts = first_line.split(",")
+        if len(parts) > 1:
+            # Check if parts look like column headers (contain descriptive text)
+            header_indicators = [
+                "timestamp",
+                "ip",
+                "user",
+                "data",
+                "type",
+                "id",
+                "name",
+                "email",
+            ]
+            if any(
+                indicator in part.lower()
+                for part in parts
+                for indicator in header_indicators
+            ):
+                return "csv"
+            # If comma-separated but doesn't look like headers, check if first part is an identifier
+            first_part = parts[0].strip()
+            if (
+                first_part.startswith(AUTH0_USER_ID_PREFIXES)
+                or ("@" in first_part and "." in first_part)  # email-like
+                or "__" in first_part
+                or "_at_" in first_part
+            ):
+                return "plain_text"
+        return "csv"
+
+    # If no commas, check if it looks like a single identifier
     if (
         first_line.startswith(AUTH0_USER_ID_PREFIXES)
-        or "@" in first_line
+        or ("@" in first_line and "." in first_line)  # email-like pattern
         or "__" in first_line
         or "_at_" in first_line
     ):
@@ -209,8 +253,8 @@ def _process_plain_text(infile, env: str = None) -> list[str]:
 
 def _process_csv_file(
     infile, output_type: str = "user_id", env: str = None
-) -> tuple[list[str], bool]:
-    """Process CSV file and extract identifiers.
+) -> tuple[list[str | CsvRowData], bool]:
+    """Process CSV file and extract identifiers with row context.
 
     Args:
         infile: File object to read from
@@ -218,7 +262,7 @@ def _process_csv_file(
         env: Environment for Auth0 API resolution
 
     Returns:
-        Tuple of (identifiers list, skip_resolution flag)
+        Tuple of (identifiers/row_data list, skip_resolution flag)
     """
     identifiers = []
     skip_resolution = False
@@ -247,6 +291,13 @@ def _process_csv_file(
 
     print_info(f"Using column: {best_column}")
 
+    # Find user_id column for fallback lookup
+    user_id_column = None
+    for header in headers:
+        if header.lower() == "user_id":
+            user_id_column = header
+            break
+
     # Check if we should skip encoded username resolution for this column
     skip_resolution = _should_skip_resolution(best_column, output_type)
     if skip_resolution:
@@ -264,7 +315,18 @@ def _process_csv_file(
                 row[best_column], env_for_cleaning, preserve_encoded
             )
             if cleaned:
-                identifiers.append(cleaned)
+                # If we have Auth0 API env and user_id column, store row data for enhanced processing
+                if env and user_id_column and user_id_column in row:
+                    user_id = (
+                        row[user_id_column].strip() if row[user_id_column] else None
+                    )
+                    identifiers.append(
+                        CsvRowData(
+                            identifier=cleaned, user_id=user_id, row_data=dict(row)
+                        )
+                    )
+                else:
+                    identifiers.append(cleaned)
 
     return identifiers, skip_resolution
 
@@ -287,11 +349,13 @@ def _should_skip_resolution(best_column: str, output_type: str) -> bool:
     return False
 
 
-def _check_if_data_available(identifiers: list[str], output_type: str) -> bool:
+def _check_if_data_available(
+    identifiers: list[str | CsvRowData], output_type: str
+) -> bool:
     """Check if the identifiers already contain the requested data type.
 
     Args:
-        identifiers: List of identifiers from CSV
+        identifiers: List of identifiers from CSV or CsvRowData
         output_type: Requested output type (username|email|user_id)
 
     Returns:
@@ -304,28 +368,33 @@ def _check_if_data_available(identifiers: list[str], output_type: str) -> bool:
     sample_size = min(5, len(identifiers))
     sample = identifiers[:sample_size]
 
+    # Extract actual identifiers from CsvRowData if needed
+    sample_identifiers = [
+        item.identifier if isinstance(item, CsvRowData) else item for item in sample
+    ]
+
     if output_type == "email":
         # Check if most samples are email addresses
         email_count = sum(
             1
-            for item in sample
+            for item in sample_identifiers
             if "@" in item and not item.startswith(AUTH0_USER_ID_PREFIXES)
         )
-        return email_count >= len(sample) * 0.8  # 80% threshold
+        return email_count >= len(sample_identifiers) * 0.8  # 80% threshold
     elif output_type == "user_id":
         # Check if most samples are Auth0 user IDs
         user_id_count = sum(
-            1 for item in sample if item.startswith(AUTH0_USER_ID_PREFIXES)
+            1 for item in sample_identifiers if item.startswith(AUTH0_USER_ID_PREFIXES)
         )
-        return user_id_count >= len(sample) * 0.8
+        return user_id_count >= len(sample_identifiers) * 0.8
     elif output_type == "username":
         # Check if samples look like usernames (not emails, not user_ids)
         username_count = sum(
             1
-            for item in sample
+            for item in sample_identifiers
             if "@" not in item and not item.startswith(AUTH0_USER_ID_PREFIXES)
         )
-        return username_count >= len(sample) * 0.8
+        return username_count >= len(sample_identifiers) * 0.8
 
     return False
 
@@ -365,9 +434,10 @@ def extract_identifiers_from_csv(
 
                 # Handle conversion if needed
                 if _needs_conversion(skip_resolution, identifiers, output_type):
-                    identifiers = _handle_conversion(
+                    converted_identifiers = _handle_conversion(
                         identifiers, output_type, env, interactive
                     )
+                    return converted_identifiers
                 elif not skip_resolution and _check_if_data_available(
                     identifiers, output_type
                 ):
@@ -375,7 +445,12 @@ def extract_identifiers_from_csv(
                         f"CSV already contains {output_type} data. No Auth0 API calls needed."
                     )
 
-                return identifiers
+                # Extract just the identifiers from CsvRowData objects for final output
+                final_identifiers = [
+                    item.identifier if isinstance(item, CsvRowData) else item
+                    for item in identifiers
+                ]
+                return final_identifiers
 
     except FileOperationError as e:
         print_error(f"Error reading file {filename}: {e}")
@@ -409,12 +484,15 @@ def _needs_conversion(
 
 
 def _handle_conversion(
-    identifiers: list[str], output_type: str, env: str = None, interactive: bool = True
+    identifiers: list[str | CsvRowData],
+    output_type: str,
+    env: str = None,
+    interactive: bool = True,
 ) -> list[str]:
     """Handle conversion of identifiers to requested output type.
 
     Args:
-        identifiers: List of identifiers to convert
+        identifiers: List of identifiers or CsvRowData to convert
         output_type: Requested output type
         env: Environment for Auth0 API
         interactive: Whether to prompt user for input
@@ -440,7 +518,10 @@ def _handle_conversion(
         else:
             print_info("Skipping Auth0 data fetch. Using original identifiers.")
     # Non-interactive mode or user declined - return original identifiers
-    return identifiers
+    return [
+        item.identifier if isinstance(item, CsvRowData) else item
+        for item in identifiers
+    ]
 
 
 def write_identifiers_to_file(
@@ -540,12 +621,17 @@ def _extract_output_value(
 
 
 def _convert_single_identifier(
-    identifier: str, idx: int, output_type: str, env: str, token: str, base_url: str
+    item: str | CsvRowData,
+    idx: int,
+    output_type: str,
+    env: str,
+    token: str,
+    base_url: str,
 ) -> str:
-    """Convert a single identifier to the requested output type.
+    """Convert a single identifier to the requested output type with fallback support.
 
     Args:
-        identifier: Identifier to convert
+        item: Identifier string or CsvRowData with fallback user_id
         idx: Current index (1-based)
         output_type: Requested output type
         env: Environment for Auth0 API
@@ -556,6 +642,14 @@ def _convert_single_identifier(
         Converted identifier or original if conversion fails
     """
     try:
+        # Extract identifier and fallback user_id
+        if isinstance(item, CsvRowData):
+            identifier = item.identifier
+            fallback_user_id = item.user_id
+        else:
+            identifier = item
+            fallback_user_id = None
+
         # Check if identifier is an encoded username (before cleaning)
         is_encoded_username = "_at_" in identifier or "__" in identifier
 
@@ -563,12 +657,21 @@ def _convert_single_identifier(
         cleaned_identifier = clean_identifier(identifier, env)
 
         # Determine search strategy and get user details
+        user_details = None
+
         if is_auth0_user_id(cleaned_identifier):
             user_details = get_user_details(cleaned_identifier, token, base_url)
         else:
             # For encoded usernames, search by the original encoded value as username
             search_value = identifier if is_encoded_username else cleaned_identifier
             user_details = _search_user_by_field(search_value, token, base_url)
+
+        # If primary lookup failed and we have a fallback user_id, try that
+        if not user_details and fallback_user_id and is_auth0_user_id(fallback_user_id):
+            print_info(
+                f"Primary lookup failed for '{identifier}', trying fallback user_id: {fallback_user_id}"
+            )
+            user_details = get_user_details(fallback_user_id, token, base_url)
 
         if user_details:
             output_value = _extract_output_value(user_details, output_type, identifier)
@@ -578,16 +681,16 @@ def _convert_single_identifier(
 
     except Exception as e:
         print_warning(f"Error converting identifier {identifier}: {e}")
-        return identifier
+        return identifier if isinstance(item, str) else item.identifier
 
 
 def _convert_to_output_type(
-    identifiers: list[str], output_type: str, env: str
+    identifiers: list[str | CsvRowData], output_type: str, env: str
 ) -> list[str]:
     """Convert identifiers to the requested output type using Auth0 API.
 
     Args:
-        identifiers: List of user identifiers (emails, user_ids, etc.)
+        identifiers: List of user identifiers (emails, user_ids, etc.) or CsvRowData with fallback
         output_type: Desired output type (username|email|user_id)
         env: Environment for Auth0 API calls
 
@@ -602,14 +705,17 @@ def _convert_to_output_type(
         base_url = get_base_url(env)
     except Exception as e:
         print_error(f"Error getting Auth0 credentials: {e}")
-        return identifiers
+        return [
+            item.identifier if isinstance(item, CsvRowData) else item
+            for item in identifiers
+        ]
 
     # Process each identifier
     converted = []
 
-    for idx, identifier in enumerate(identifiers, 1):
+    for idx, item in enumerate(identifiers, 1):
         converted_identifier = _convert_single_identifier(
-            identifier, idx, output_type, env, token, base_url
+            item, idx, output_type, env, token, base_url
         )
         converted.append(converted_identifier)
 

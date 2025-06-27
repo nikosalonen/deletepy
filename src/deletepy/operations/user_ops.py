@@ -108,7 +108,7 @@ def get_user_id_from_email(
         print_error(
             f"Error fetching user_id for email {email}: Request failed after retries",
             email=email,
-            operation="get_user_id_from_email"
+            operation="get_user_id_from_email",
         )
         return None
 
@@ -134,8 +134,8 @@ def get_user_id_from_email(
                             # Fallback: identities not included, skip this user to avoid API call
                             print_warning(
                                 f"Connection info not available for user {user['user_id']}, skipping",
-                                user_id=user['user_id'],
-                                operation="get_user_id_from_email"
+                                user_id=user["user_id"],
+                                operation="get_user_id_from_email",
                             )
                     else:
                         # No connection filter, include all users
@@ -149,7 +149,7 @@ def get_user_id_from_email(
             f"Error parsing response for email {email}: {e}",
             email=email,
             error=str(e),
-            operation="get_user_id_from_email"
+            operation="get_user_id_from_email",
         )
         return None
 
@@ -182,7 +182,7 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
             f"Error fetching email for user {user_id}: {e}",
             user_id=user_id,
             error=str(e),
-            operation="get_user_email"
+            operation="get_user_email",
         )
         return None
 
@@ -210,7 +210,7 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] 
         print_error(
             f"Error fetching details for user {user_id}: Request failed after retries",
             user_id=user_id,
-            operation="get_user_details"
+            operation="get_user_details",
         )
         return None
 
@@ -222,7 +222,7 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] 
             f"Error parsing response for user {user_id}: {e}",
             user_id=user_id,
             error=str(e),
-            operation="get_user_details"
+            operation="get_user_details",
         )
         return None
 
@@ -243,7 +243,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
             print_info(
                 f"No sessions found for user {user_id}",
                 user_id=user_id,
-                operation="revoke_user_sessions"
+                operation="revoke_user_sessions",
             )
             return
         for session in sessions:
@@ -261,7 +261,7 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
                     f"Revoked session {session_id} for user {user_id}",
                     user_id=user_id,
                     session_id=session_id,
-                    operation="revoke_user_sessions"
+                    operation="revoke_user_sessions",
                 )
             except requests.exceptions.RequestException as e:
                 print_warning(
@@ -269,14 +269,14 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
                     user_id=user_id,
                     session_id=session_id,
                     error=str(e),
-                    operation="revoke_user_sessions"
+                    operation="revoke_user_sessions",
                 )
     except requests.exceptions.RequestException as e:
         print_error(
             f"Error revoking sessions for user {user_id}: {e}",
             user_id=user_id,
             error=str(e),
-            operation="revoke_user_sessions"
+            operation="revoke_user_sessions",
         )
 
 
@@ -294,7 +294,7 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
         print_success(
             f"Revoked all application grants for user {user_id}",
             user_id=user_id,
-            operation="revoke_user_grants"
+            operation="revoke_user_grants",
         )
         time.sleep(API_RATE_LIMIT)
     except requests.exceptions.RequestException as e:
@@ -302,7 +302,7 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
             f"Error revoking grants for user {user_id}: {e}",
             user_id=user_id,
             error=str(e),
-            operation="revoke_user_grants"
+            operation="revoke_user_grants",
         )
 
 
@@ -335,7 +335,7 @@ def unlink_user_identity(
             user_id=user_id,
             provider=provider,
             user_identity_id=user_identity_id,
-            operation="unlink_user_identity"
+            operation="unlink_user_identity",
         )
         time.sleep(API_RATE_LIMIT)
         return True
@@ -346,6 +346,6 @@ def unlink_user_identity(
             provider=provider,
             user_identity_id=user_identity_id,
             error=str(e),
-            operation="unlink_user_identity"
+            operation="unlink_user_identity",
         )
         return False
