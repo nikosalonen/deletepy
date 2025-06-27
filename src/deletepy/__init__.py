@@ -180,7 +180,6 @@ __all__ = [
     "print_success",
     "print_info",
     "print_section_header",
-    "FileOperationError",
     # CLI
     "validate_args",
     "validate_environment",
