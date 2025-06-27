@@ -3,18 +3,45 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
-This is an Auth0 User Management Tool written in Python that allows bulk operations on Auth0 users including deletion, blocking, session/grant revocation, and domain checking. The tool supports both development and production environments with safety confirmations for production operations.
+This is DeletePy, an Auth0 User Management Tool written in Python that allows bulk operations on Auth0 users including deletion, blocking, session/grant revocation, identity unlinking, and domain checking. The tool supports both development and production environments with safety confirmations for production operations.
 
 ## Architecture
-The codebase follows a modular architecture with clear separation of concerns:
+The codebase follows a modern modular architecture with clear separation of concerns:
 
-- **main.py**: Entry point with argument validation, operation routing, and user confirmation logic
-- **auth.py**: Auth0 authentication handling and token management with timeout and error handling
-- **config.py**: Environment configuration management with validation for dev/prod environments
-- **user_operations.py**: Core Auth0 API operations (delete, block, revoke sessions/grants, user lookups)
-- **utils.py**: Shared utilities (argument parsing, file reading, progress display, color output)
-- **email_domain_checker.py**: Domain validation and blocking status checking
-- **cleanup_csv.py**: CSV preprocessing utility for input file preparation
+```
+deletepy/
+├── src/
+│   └── deletepy/
+│       ├── cli/                 # Command-line interface
+│       │   ├── main.py          # Click-based CLI entry point
+│       │   ├── commands.py      # Operation handlers
+│       │   └── validators.py    # Argument validation
+│       ├── core/                # Core functionality
+│       │   ├── auth.py          # Auth0 authentication
+│       │   ├── config.py        # Configuration management
+│       │   └── exceptions.py    # Custom exceptions
+│       ├── operations/          # Business operations
+│       │   ├── user_ops.py      # Core user operations
+│       │   ├── batch_ops.py     # Batch processing & social ID search
+│       │   ├── export_ops.py    # Export functionality
+│       │   └── domain_ops.py    # Domain checking
+│       ├── utils/               # Utilities
+│       │   ├── file_utils.py    # File operations
+│       │   ├── display_utils.py # Progress/output formatting
+│       │   ├── request_utils.py # HTTP request utilities
+│       │   └── auth_utils.py    # Authentication utilities
+│       └── models/              # Data models
+├── tests/                       # Test suite
+├── legacy files (main.py, etc.) # Backward compatibility
+└── pyproject.toml              # Modern Python packaging
+```
+
+### Key Components:
+- **CLI Layer** (`src/deletepy/cli/`): Click-based command-line interface with modern argument parsing
+- **Core Layer** (`src/deletepy/core/`): Authentication, configuration, and exception handling
+- **Operations Layer** (`src/deletepy/operations/`): Business logic for Auth0 operations
+- **Utils Layer** (`src/deletepy/utils/`): Shared utilities and helpers
+- **Models Layer** (`src/deletepy/models/`): Data structures and type definitions
 
 The application uses a generator pattern for memory-efficient file processing and implements rate limiting (0.2s between API calls) to prevent Auth0 API throttling.
 
@@ -32,8 +59,11 @@ The tool requires a `.env` file with separate credentials for dev and prod:
 python3 -m venv venv
 source venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install dependencies (modern approach)
+pip install -e .
+
+# Or with development dependencies
+pip install -e ".[dev]"
 ```
 
 **Important**: Always ensure the virtual environment is activated before running any commands. You can tell it's active when you see `(venv)` at the beginning of your command prompt.
@@ -56,30 +86,41 @@ pytest tests/test_auth.py
 pytest tests/test_auth.py::test_get_access_token_success
 ```
 
-### Main Operations
+### Main Operations (New CLI)
 ```bash
 # Make sure virtual environment is activated first!
 source venv/bin/activate
 
 # Check authentication configuration
+python -m src.deletepy.cli.main doctor [dev|prod]
+
+# Check if specified users are unblocked
+python -m src.deletepy.cli.main check-unblocked users.txt [dev|prod]
+
+# Check email domains for specified users
+python -m src.deletepy.cli.main check-domains users.txt [dev|prod]
+
+# Export user last_login data to CSV
+python -m src.deletepy.cli.main export-last-login emails.txt [dev|prod] [--connection CONNECTION]
+
+# Find users by social media IDs (unlinks identities or deletes users)
+python -m src.deletepy.cli.main find-social-ids social_ids.txt [dev|prod]
+
+# User management operations
+python -m src.deletepy.cli.main users block users.txt [dev|prod]
+python -m src.deletepy.cli.main users delete users.txt [dev|prod]
+python -m src.deletepy.cli.main users revoke-grants-only users.txt [dev|prod]
+```
+
+### Legacy Operations (Backward Compatibility)
+```bash
+# Legacy CLI still works with deprecation warnings
 python main.py doctor [dev|prod]
-
-# Block users (dev environment)
 python main.py users.txt dev --block
-
-# Delete users (production - requires confirmation)
 python main.py users.txt prod --delete
-
-# Revoke grants only
 python main.py users.txt dev --revoke-grants-only
-
-# Check unblocked users
 python main.py users.txt dev --check-unblocked
-
-# Check email domains
 python main.py users.txt dev --check-domains
-
-# Find users by social media IDs (deletes single-identity users, unlinks from multi-identity users)
 python main.py social_ids.txt dev --find-social-ids
 ```
 
@@ -93,6 +134,9 @@ ruff check .
 
 # Fix auto-fixable lint issues
 ruff check --fix .
+
+# Type checking (if mypy is installed)
+mypy src/
 ```
 
 ## Development Guidelines
@@ -100,7 +144,7 @@ ruff check --fix .
 ### Input File Handling
 - Input files should contain one Auth0 user ID or email per line
 - The tool handles both Auth0 user IDs (auth0|123456) and email addresses
-- Use `cleanup_csv.py` to prepare single-column files from CSV exports
+- Social ID files should contain one social media ID per line for find-social-ids operation
 - Large files are processed using generators to minimize memory usage
 
 ### Error Handling
@@ -108,12 +152,14 @@ ruff check --fix .
 - Rate limiting prevents API throttling
 - Production operations require explicit confirmation
 - Email resolution handles multiple users per email with detailed reporting
+- Custom exception hierarchy provides structured error handling
 
 ### Testing
 - Tests use pytest with fixtures for mock objects
 - `conftest.py` provides automatic module-based request mocking
 - Each module has corresponding test files following `test_*.py` naming
 - Tests cover both success and error scenarios for Auth0 API interactions
+- Test coverage should be maintained at 100%
 
 ### Function Complexity Guidelines
 To maintain code readability and testability, follow these rules for function complexity:
@@ -138,9 +184,30 @@ To maintain code readability and testability, follow these rules for function co
 - Repetitive code patterns within the function
 - Difficulty in writing focused unit tests
 
+### Social Identity Management
+The `find-social-ids` operation provides sophisticated identity management:
+- **Single Identity Users**: Users with only the matching social identity are deleted entirely
+- **Multi-Identity Users**: Only the matching social identity is unlinked, preserving the user account
+- **Protected Users**: Users with Auth0 as main identity are protected from deletion
+- Production operations require explicit confirmation with operation counts
+
 ### Auth0 API Requirements
 Required Auth0 Management API scopes:
 - `delete:users` - for user deletion
 - `update:users` - for user blocking
 - `delete:sessions` - for session revocation (Enterprise plan)
 - `delete:grants` - for application grant revocation
+- `read:users` - for user lookups and identity management
+
+### Module Import Guidelines
+When working with the modular structure:
+- Import from the new modular structure: `from deletepy.operations.user_ops import delete_user`
+- Use absolute imports within the package
+- Maintain backward compatibility by keeping legacy imports working
+- Follow the established module boundaries and don't cross-import between operation modules
+
+# Important Instructions
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

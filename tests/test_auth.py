@@ -1,11 +1,13 @@
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from auth import get_access_token, AuthConfigError, doctor
+
+from src.deletepy.core.auth import AuthConfigError, doctor, get_access_token
 
 
 @pytest.fixture
 def mock_config():
-    with patch("auth.get_env_config") as mock:
+    with patch("src.deletepy.core.auth.get_env_config") as mock:
         mock.return_value = {
             "client_id": "test_client_id",
             "client_secret": "test_client_secret",
@@ -98,8 +100,8 @@ def test_get_access_token_invalid_json(mock_requests, mock_response, mock_config
 def test_doctor_success():
     """Test doctor function with successful credentials."""
     with (
-        patch("auth.get_env_config") as mock_get_config,
-        patch("auth.get_access_token") as mock_get_token,
+        patch("src.deletepy.core.config.get_env_config") as mock_get_config,
+        patch("src.deletepy.core.auth.get_access_token") as mock_get_token,
     ):
         # Mock successful configuration
         mock_get_config.return_value = {
@@ -124,9 +126,9 @@ def test_doctor_success():
 def test_doctor_with_api_test_success():
     """Test doctor function with API test enabled and successful."""
     with (
-        patch("auth.get_env_config") as mock_get_config,
-        patch("auth.get_access_token") as mock_get_token,
-        patch("auth.requests.get") as mock_get,
+        patch("src.deletepy.core.config.get_env_config") as mock_get_config,
+        patch("src.deletepy.core.auth.get_access_token") as mock_get_token,
+        patch("src.deletepy.core.auth.requests.get") as mock_get,
     ):
         # Mock successful configuration
         mock_get_config.return_value = {
@@ -157,9 +159,9 @@ def test_doctor_with_api_test_success():
 def test_doctor_with_api_test_failure():
     """Test doctor function with API test enabled but API call fails."""
     with (
-        patch("auth.get_env_config") as mock_get_config,
-        patch("auth.get_access_token") as mock_get_token,
-        patch("auth.requests.get") as mock_get,
+        patch("src.deletepy.core.config.get_env_config") as mock_get_config,
+        patch("src.deletepy.core.auth.get_access_token") as mock_get_token,
+        patch("src.deletepy.core.auth.requests.get") as mock_get,
     ):
         # Mock successful configuration
         mock_get_config.return_value = {
@@ -189,7 +191,7 @@ def test_doctor_with_api_test_failure():
 
 def test_doctor_auth_config_error():
     """Test doctor function when authentication configuration fails."""
-    with patch("auth.get_env_config") as mock_get_config:
+    with patch("src.deletepy.core.auth.get_env_config") as mock_get_config:
         # Mock configuration error
         mock_get_config.side_effect = AuthConfigError("Missing client ID")
 
