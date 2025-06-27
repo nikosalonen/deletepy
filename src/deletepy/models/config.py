@@ -164,10 +164,9 @@ class ExportConfig:
         """
         if total_items > self.large_dataset_threshold:
             return 25
-        elif total_items > self.medium_dataset_threshold:
+        if total_items > self.medium_dataset_threshold:
             return 50
-        else:
-            return 100
+        return 100
 
 
 @dataclass
