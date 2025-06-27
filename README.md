@@ -165,20 +165,20 @@ deletepy users revoke-grants-only users.txt [dev|prod]
 
 ### CSV Cleanup Utility
 
-If you have a CSV file with columns like `ip,userId,userName,user_name_prefix,user_name_suffix`, use the provided `cleanup_csv.py` script:
+If you have a CSV file with columns like `ip,userId,userName,user_name_prefix,user_name_suffix`, use the built-in cleanup-csv command:
 
 ```bash
 # Basic cleanup
-python cleanup_csv.py
+deletepy cleanup-csv
 
 # With specific output type
-python cleanup_csv.py --output-type=email
-python cleanup_csv.py --output-type=username
-python cleanup_csv.py --output-type=user_id
+deletepy cleanup-csv --output-type=email
+deletepy cleanup-csv --output-type=username
+deletepy cleanup-csv --output-type=user_id
 
 # With environment for Auth0 API resolution
-python cleanup_csv.py dev --output-type=email
-python cleanup_csv.py prod --output-type=username
+deletepy cleanup-csv ids.csv dev --output-type=email
+deletepy cleanup-csv ids.csv prod --output-type=username
 ```
 
 **Enhanced Features:**
