@@ -23,6 +23,18 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
 
+    - name: Create dummy .env file for tests
+      run: |
+        cat > .env << 'EOF'
+        # Dummy credentials for CI testing
+        DEV_AUTH0_DOMAIN=dummy-domain.auth0.com
+        DEV_AUTH0_CLIENT_ID=dummy-client-id
+        DEV_AUTH0_CLIENT_SECRET=dummy-client-secret
+        AUTH0_DOMAIN=dummy-prod-domain.auth0.com
+        AUTH0_CLIENT_ID=dummy-prod-client-id
+        AUTH0_CLIENT_SECRET=dummy-prod-client-secret
+        EOF
+
     - name: Run tests
       run: |
         pytest tests/
