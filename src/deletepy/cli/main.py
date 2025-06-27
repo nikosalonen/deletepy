@@ -70,6 +70,26 @@ def find_social_ids(input_file: Path, env: str) -> None:
     handler.handle_find_social_ids(input_file, env)
 
 
+@cli.command()
+@click.argument(
+    "input_file", type=click.Path(exists=True, path_type=Path), default="ids.csv"
+)
+@click.argument("env", type=click.Choice(["dev", "prod"]), required=False)
+@click.option(
+    "--output-type",
+    type=click.Choice(["username", "email", "user_id"]),
+    default="user_id",
+    help="Type of output desired",
+)
+def cleanup_csv(input_file: Path, env: str | None, output_type: str) -> None:
+    """Process CSV file and extract/convert user identifiers."""
+    from .csv_commands import process_csv_file
+
+    success = process_csv_file(str(input_file), env, output_type, interactive=True)
+    if not success:
+        sys.exit(1)
+
+
 @cli.group()
 def users() -> None:
     """User management operations."""
