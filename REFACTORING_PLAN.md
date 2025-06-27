@@ -10,7 +10,7 @@ This document outlines a comprehensive refactoring plan to improve maintainabili
   - `cleanup_csv.py` (804 lines) - exceeds 50-line guideline by 16x
   - `main.py` (296 lines) - complex operation routing
 - **Structure**: Flat file organization with all modules in root
-- **Dependencies**: Basic requirements.txt setup
+- **Dependencies**: Legacy requirements.txt setup
 
 ## Target Architecture
 
@@ -47,8 +47,7 @@ deletepy/
 ├── tests/                       # Test suite
 ├── scripts/                     # Development/deployment scripts
 ├── docs/                        # Documentation
-├── pyproject.toml              # Modern Python packaging
-├── requirements.txt            # Dependencies (transitional)
+├── pyproject.toml              # Modern Python packaging with dependencies
 └── README.md
 ```
 

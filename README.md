@@ -107,7 +107,12 @@ deletepy/
 
 2. Install dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install -e .
+   ```
+   
+   Or with development dependencies:
+   ```bash
+   pip install -e ".[dev]"
    ```
 
 ### Environment Configuration
