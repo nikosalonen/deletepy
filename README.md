@@ -140,24 +140,24 @@ There's also a `.env.example` file that you can use as a template.
 
 ```bash
 # Check authentication configuration
-python -m src.deletepy.cli.main doctor [dev|prod]
+deletepy doctor [dev|prod]
 
 # Check if specified users are unblocked
-python -m src.deletepy.cli.main check-unblocked users.txt [dev|prod]
+deletepy check-unblocked users.txt [dev|prod]
 
 # Check email domains for specified users
-python -m src.deletepy.cli.main check-domains users.txt [dev|prod]
+deletepy check-domains users.txt [dev|prod]
 
 # Export user last_login data to CSV
-python -m src.deletepy.cli.main export-last-login emails.txt [dev|prod] [--connection CONNECTION]
+deletepy export-last-login emails.txt [dev|prod] [--connection CONNECTION]
 
 # Find users by social media IDs (unlinks identities or deletes users)
-python -m src.deletepy.cli.main find-social-ids social_ids.txt [dev|prod]
+deletepy find-social-ids social_ids.txt [dev|prod]
 
 # User management operations
-python -m src.deletepy.cli.main users block users.txt [dev|prod]
-python -m src.deletepy.cli.main users delete users.txt [dev|prod]
-python -m src.deletepy.cli.main users revoke-grants-only users.txt [dev|prod]
+deletepy users block users.txt [dev|prod]
+deletepy users delete users.txt [dev|prod]
+deletepy users revoke-grants-only users.txt [dev|prod]
 ```
 
 
@@ -316,7 +316,7 @@ mypy src/
 
 The legacy CLI (`main.py`) continues to work with deprecation warnings. To migrate to the modern CLI:
 
-1. Replace `python main.py` with `python -m src.deletepy.cli.main`
+1. Replace `python main.py` with `deletepy`
 2. Use the new command structure with subcommands
 3. Update any scripts or automation to use the new syntax
 
