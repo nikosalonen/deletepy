@@ -342,7 +342,7 @@ def _has_auth0_main_identity(identities: list[dict[str, Any]]) -> bool:
     """
     for identity in identities:
         if (identity.get("connection") == "auth0" and
-            identity.get("isSocial", False) is False):
+                identity.get("isSocial", False) is False):
             return True
     return False
 
