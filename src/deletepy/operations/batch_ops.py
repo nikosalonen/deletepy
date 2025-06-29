@@ -17,7 +17,7 @@ from ..utils.legacy_print import (
     print_success,
     print_warning,
 )
-from .user_ops import unlink_user_identity
+from .user_ops import delete_user, unlink_user_identity
 
 
 def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
@@ -432,8 +432,6 @@ def _handle_auto_delete_operations(
                 show_progress(idx, len(users_to_delete), "Deleting users")
 
                 try:
-                    from .user_ops import delete_user
-
                     delete_user(user["user_id"], token, base_url)
                     deleted_count += 1
                 except Exception as e:
@@ -485,7 +483,6 @@ def _handle_auto_delete_operations(
                                 operation="delete_orphaned_user",
                             )
                             try:
-                                from .user_ops import delete_user
                                 delete_user(user["user_id"], token, base_url)
                                 orphaned_users_deleted += 1
                                 print_success(
@@ -507,7 +504,6 @@ def _handle_auto_delete_operations(
                         )
                         for detached_user in detached_users:
                             try:
-                                from .user_ops import delete_user
                                 delete_user(detached_user["user_id"], token, base_url)
                                 orphaned_users_deleted += 1
                                 print_success(
@@ -619,12 +615,12 @@ def _has_social_id_as_primary_identity(
     user: dict[str, Any], social_id: str, connection: str
 ) -> bool:
     """Check if a user has the given social ID as their primary identity.
-    
+
     Args:
         user: User data from Auth0
         social_id: The social media ID to check
         connection: The connection name for the social ID
-        
+
     Returns:
         bool: True if the user has this social ID as their primary identity
     """
