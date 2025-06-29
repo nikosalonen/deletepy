@@ -570,39 +570,15 @@ def extract_identifiers_from_csv(
     """
     try:
         with safe_file_read(filename) as infile:
-            # Detect file type by peeking at first line
-            first_line = infile.readline()
-            infile.seek(0)
+            # Detect file type and process accordingly
+            identifiers, skip_resolution = _detect_and_process_file(
+                infile, output_type, env
+            )
 
-            file_type = _detect_file_type(first_line)
-
-            # Process file based on detected type
-            if file_type == "plain_text":
-                return _process_plain_text(infile, env)
-            else:
-                identifiers, skip_resolution = _process_csv_file(
-                    infile, output_type, env
-                )
-
-                # Handle conversion if needed
-                if _needs_conversion(skip_resolution, identifiers, output_type):
-                    converted_identifiers = _handle_conversion(
-                        identifiers, output_type, env, interactive
-                    )
-                    return converted_identifiers
-                elif not skip_resolution and _check_if_data_available(
-                    identifiers, output_type
-                ):
-                    print_info(
-                        f"CSV already contains {output_type} data. No Auth0 API calls needed."
-                    )
-
-                # Extract just the identifiers from CsvRowData objects for final output
-                final_identifiers = [
-                    item.identifier if isinstance(item, CsvRowData) else item
-                    for item in identifiers
-                ]
-                return final_identifiers
+            # Handle post-processing (conversion, extraction)
+            return _handle_post_processing(
+                identifiers, skip_resolution, output_type, env, interactive
+            )
 
     except FileOperationError as e:
         print_error(f"Error reading file {filename}: {e}")
@@ -613,6 +589,80 @@ def extract_identifiers_from_csv(
     except Exception as e:
         print_error(f"Unexpected error processing file {filename}: {e}")
         return []
+
+
+def _detect_and_process_file(
+    infile, output_type: str, env: str | None
+) -> tuple[list[str | CsvRowData], bool]:
+    """Detect file type and process file accordingly.
+
+    Args:
+        infile: File object to read from
+        output_type: Type of output desired
+        env: Environment for Auth0 API resolution
+
+    Returns:
+        Tuple of (identifiers, skip_resolution flag)
+    """
+    # Detect file type by peeking at first line
+    first_line = infile.readline()
+    infile.seek(0)
+
+    file_type = _detect_file_type(first_line)
+
+    # Process file based on detected type
+    if file_type == "plain_text":
+        plain_identifiers = _process_plain_text(infile, env)
+        # Plain text identifiers are already strings, not CsvRowData
+        return plain_identifiers, True  # Skip resolution since plain text is already processed
+    else:
+        return _process_csv_file(infile, output_type, env)
+
+
+def _handle_post_processing(
+    identifiers: list[str | CsvRowData],
+    skip_resolution: bool,
+    output_type: str,
+    env: str | None,
+    interactive: bool
+) -> list[str]:
+    """Handle post-processing of identifiers including conversion and extraction.
+
+    Args:
+        identifiers: List of identifiers or CsvRowData
+        skip_resolution: Whether resolution was skipped
+        output_type: Type of output desired
+        env: Environment for Auth0 API
+        interactive: Whether to prompt user for input
+
+    Returns:
+        Final list of processed identifiers
+    """
+    # Handle conversion if needed
+    if _needs_conversion(skip_resolution, identifiers, output_type):
+        return _handle_conversion(identifiers, output_type, env, interactive)
+    elif not skip_resolution and _check_if_data_available(identifiers, output_type):
+        print_info(
+            f"CSV already contains {output_type} data. No Auth0 API calls needed."
+        )
+
+    # Extract just the identifiers from CsvRowData objects for final output
+    return _extract_final_identifiers(identifiers)
+
+
+def _extract_final_identifiers(identifiers: list[str | CsvRowData]) -> list[str]:
+    """Extract final identifiers from mixed list of strings and CsvRowData.
+
+    Args:
+        identifiers: List of identifiers or CsvRowData objects
+
+    Returns:
+        List of string identifiers
+    """
+    return [
+        item.identifier if isinstance(item, CsvRowData) else item
+        for item in identifiers
+    ]
 
 
 def _needs_conversion(
