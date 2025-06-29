@@ -500,6 +500,29 @@ def _handle_auto_delete_operations(
                                     operation="delete_orphaned_user",
                                 )
                                 orphaned_users_failed += 1
+
+                        # Search for and delete separate user accounts with this social ID as primary identity
+                        detached_users = _find_users_with_primary_social_id(
+                            user["social_id"], user["matching_connection"], token, base_url
+                        )
+                        for detached_user in detached_users:
+                            try:
+                                from .user_ops import delete_user
+                                delete_user(detached_user["user_id"], token, base_url)
+                                orphaned_users_deleted += 1
+                                print_success(
+                                    f"Successfully deleted detached social user {detached_user['user_id']} with identity {user['social_id']}",
+                                    user_id=detached_user["user_id"],
+                                    social_id=user["social_id"],
+                                    operation="delete_detached_social_user",
+                                )
+                            except Exception as e:
+                                print_error(
+                                    f"Failed to delete detached social user {detached_user['user_id']}: {e}",
+                                    user_id=detached_user["user_id"],
+                                    operation="delete_detached_social_user",
+                                )
+                                orphaned_users_failed += 1
                     else:
                         failed_unlinks += 1
                 except Exception as e:
@@ -578,7 +601,9 @@ def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
         user_data = response.json()
 
         identities = user_data.get("identities", [])
-        return len(identities) if isinstance(identities, list) else 0
+        identity_count = len(identities) if isinstance(identities, list) else 0
+        
+        return identity_count
 
     except requests.exceptions.RequestException as e:
         print_error(
@@ -588,3 +613,78 @@ def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
             operation="get_user_identity_count",
         )
         return 0
+
+
+def _find_users_with_primary_social_id(
+    social_id: str,
+    connection: str,
+    token: str,
+    base_url: str,
+) -> list[dict[str, Any]]:
+    """Find users with a specific social media ID as their primary identity.
+
+    Args:
+        social_id: The social media ID to search for
+        connection: The connection name for the social ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        List[Dict[str, Any]]: List of users found with this social ID as primary identity
+    """
+    url = f"{base_url}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+    }
+
+    # Search for users with this social ID as their primary identity
+    params = {
+        "q": f'identities.user_id:"{social_id}" AND identities.connection:"{connection}"',
+        "search_engine": "v3",
+        "include_totals": "true",
+        "page": "0",
+        "per_page": "100",
+    }
+
+    found_users = []
+
+    try:
+        response = requests.get(
+            url, headers=headers, params=params, timeout=API_TIMEOUT
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        if "users" in data:
+            for user in data["users"]:
+                # Only include users where this social ID is their primary/main identity
+                if "identities" in user and isinstance(user["identities"], list):
+                    identities = user["identities"]
+                    
+                    # Check if this is the primary identity (usually the first one)
+                    # and if the user has this social ID as their main identity
+                    if len(identities) > 0:
+                        primary_identity = identities[0]
+                        if (primary_identity.get("user_id") == social_id and 
+                            primary_identity.get("connection") == connection):
+                            # This user has the social ID as their primary identity
+                            found_users.append(user)
+                            print_info(
+                                f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
+                                user_id=user.get('user_id', 'unknown'),
+                                social_id=social_id,
+                                operation="find_detached_social_user",
+                            )
+
+        time.sleep(API_RATE_LIMIT)
+
+    except requests.exceptions.RequestException as e:
+        print_error(
+            f"Error searching for social ID {social_id}: {e}",
+            social_id=social_id,
+            operation="social_search",
+        )
+
+    return found_users
