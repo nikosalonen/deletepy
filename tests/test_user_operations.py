@@ -400,9 +400,12 @@ def test_find_users_by_social_media_ids_multiple_identities_unlink(
         patch("builtins.print") as mock_print,
         patch("src.deletepy.utils.display_utils.show_progress"),
         patch("src.deletepy.operations.user_ops.delete_user") as mock_delete,
-        patch("src.deletepy.operations.user_ops.unlink_user_identity") as mock_unlink,
+        patch("src.deletepy.operations.batch_ops.unlink_user_identity") as mock_unlink,
+        patch("src.deletepy.operations.batch_ops._get_user_identity_count") as mock_identity_count,
     ):
         mock_unlink.return_value = True
+        # Patch so user is NOT orphaned after unlinking
+        mock_identity_count.return_value = 1
 
         find_users_by_social_media_ids(
             ["12345678901234567890"],
@@ -412,11 +415,8 @@ def test_find_users_by_social_media_ids_multiple_identities_unlink(
             auto_delete=True,
         )
 
-        # Verify delete_user was NOT called (user has multiple identities)
+        # Verify delete_user was NOT called (user has multiple identities after unlink)
         mock_delete.assert_not_called()
-
-        # Functionality verified via structured logging output
-        # unlink_user_identity is called but via local import, so mock verification is not reliable
 
         # Output verification is done via structured logging, behavior verification is more important
 
