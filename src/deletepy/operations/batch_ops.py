@@ -615,6 +615,32 @@ def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
         return 0
 
 
+def _has_social_id_as_primary_identity(
+    user: dict[str, Any], social_id: str, connection: str
+) -> bool:
+    """Check if a user has the given social ID as their primary identity.
+    
+    Args:
+        user: User data from Auth0
+        social_id: The social media ID to check
+        connection: The connection name for the social ID
+        
+    Returns:
+        bool: True if the user has this social ID as their primary identity
+    """
+    if "identities" not in user or not isinstance(user["identities"], list):
+        return False
+        
+    identities = user["identities"]
+    if len(identities) == 0:
+        return False
+        
+    # Check if this is the primary identity (usually the first one)
+    primary_identity = identities[0]
+    return (primary_identity.get("user_id") == social_id and
+            primary_identity.get("connection") == connection)
+
+
 def _find_users_with_primary_social_id(
     social_id: str,
     connection: str,
@@ -660,23 +686,15 @@ def _find_users_with_primary_social_id(
         if "users" in data:
             for user in data["users"]:
                 # Only include users where this social ID is their primary/main identity
-                if "identities" in user and isinstance(user["identities"], list):
-                    identities = user["identities"]
-
-                    # Check if this is the primary identity (usually the first one)
-                    # and if the user has this social ID as their main identity
-                    if len(identities) > 0:
-                        primary_identity = identities[0]
-                        if (primary_identity.get("user_id") == social_id and
-                            primary_identity.get("connection") == connection):
-                            # This user has the social ID as their primary identity
-                            found_users.append(user)
-                            print_info(
-                                f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
-                                user_id=user.get('user_id', 'unknown'),
-                                social_id=social_id,
-                                operation="find_detached_social_user",
-                            )
+                if _has_social_id_as_primary_identity(user, social_id, connection):
+                    # This user has the social ID as their primary identity
+                    found_users.append(user)
+                    print_info(
+                        f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
+                        user_id=user.get('user_id', 'unknown'),
+                        social_id=social_id,
+                        operation="find_detached_social_user",
+                    )
 
         time.sleep(API_RATE_LIMIT)
 
