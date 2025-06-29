@@ -934,8 +934,8 @@ def _has_social_id_as_primary_identity(
     # Check if this is the primary identity (usually the first one)
     primary_identity = identities[0]
     return (
-        primary_identity.get("user_id") == social_id
-        and primary_identity.get("connection") == connection
+        primary_identity.get("user_id") == social_id and
+        primary_identity.get("connection") == connection
     )
 
 
