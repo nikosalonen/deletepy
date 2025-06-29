@@ -381,8 +381,8 @@ class OperationHandler:
         except Exception as e:
             self._handle_operation_error(e, "Export last login")
 
-    def handle_find_social_ids(self, input_file: Path, env: str) -> None:
-        """Handle find social IDs operation."""
+    def handle_unlink_social_ids(self, input_file: Path, env: str) -> None:
+        """Handle unlink social IDs operation."""
         try:
             base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
 
