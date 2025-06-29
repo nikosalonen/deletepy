@@ -822,6 +822,84 @@ def _extract_output_value(
         return fallback
 
 
+def _extract_identifier_data(item: str | CsvRowData) -> tuple[str, str | None]:
+    """Extract identifier and fallback user_id from item.
+
+    Args:
+        item: Identifier string or CsvRowData with fallback user_id
+
+    Returns:
+        Tuple of (identifier, fallback_user_id)
+    """
+    if isinstance(item, CsvRowData):
+        return item.identifier, item.user_id
+    else:
+        return item, None
+
+
+def _get_user_details_with_fallback(
+    identifier: str, fallback_user_id: str | None, token: str, base_url: str, env: str
+) -> dict[str, Any] | None:
+    """Get user details with fallback strategy.
+
+    Args:
+        identifier: Original identifier
+        fallback_user_id: Fallback user ID to try if primary lookup fails
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        env: Environment for Auth0 API
+
+    Returns:
+        User details dict or None if not found
+    """
+    # Check if identifier is an encoded username (before cleaning)
+    is_encoded_username = "_at_" in identifier or "__" in identifier
+
+    # Clean the identifier
+    cleaned_identifier = clean_identifier(identifier, env)
+
+    # Try primary lookup
+    user_details = None
+    if is_auth0_user_id(cleaned_identifier):
+        user_details = get_user_details(cleaned_identifier, token, base_url)
+    else:
+        # For encoded usernames, search by the original encoded value as username
+        search_value = identifier if is_encoded_username else cleaned_identifier
+        user_details = _search_user_by_field(search_value, token, base_url)
+
+    # Try fallback if primary lookup failed
+    if not user_details and fallback_user_id and is_auth0_user_id(fallback_user_id):
+        print_info(
+            f"Primary lookup failed for '{identifier}', trying fallback user_id: {fallback_user_id}"
+        )
+        user_details = get_user_details(fallback_user_id, token, base_url)
+
+    return user_details
+
+
+def _handle_conversion_result(
+    user_details: dict[str, Any] | None,
+    output_type: str,
+    identifier: str,
+    item: str | CsvRowData
+) -> str:
+    """Handle conversion result extraction.
+
+    Args:
+        user_details: User details from Auth0 API or None
+        output_type: Requested output type
+        identifier: Original identifier
+        item: Original item for fallback
+
+    Returns:
+        Converted identifier or original if conversion fails
+    """
+    if user_details:
+        return _extract_output_value(user_details, output_type, identifier)
+    else:
+        return identifier
+
+
 def _convert_single_identifier(
     item: str | CsvRowData,
     idx: int,
@@ -844,42 +922,13 @@ def _convert_single_identifier(
         Converted identifier or original if conversion fails
     """
     try:
-        # Extract identifier and fallback user_id
-        if isinstance(item, CsvRowData):
-            identifier = item.identifier
-            fallback_user_id = item.user_id
-        else:
-            identifier = item
-            fallback_user_id = None
+        identifier, fallback_user_id = _extract_identifier_data(item)
 
-        # Check if identifier is an encoded username (before cleaning)
-        is_encoded_username = "_at_" in identifier or "__" in identifier
+        user_details = _get_user_details_with_fallback(
+            identifier, fallback_user_id, token, base_url, env
+        )
 
-        # Clean the identifier
-        cleaned_identifier = clean_identifier(identifier, env)
-
-        # Determine search strategy and get user details
-        user_details = None
-
-        if is_auth0_user_id(cleaned_identifier):
-            user_details = get_user_details(cleaned_identifier, token, base_url)
-        else:
-            # For encoded usernames, search by the original encoded value as username
-            search_value = identifier if is_encoded_username else cleaned_identifier
-            user_details = _search_user_by_field(search_value, token, base_url)
-
-        # If primary lookup failed and we have a fallback user_id, try that
-        if not user_details and fallback_user_id and is_auth0_user_id(fallback_user_id):
-            print_info(
-                f"Primary lookup failed for '{identifier}', trying fallback user_id: {fallback_user_id}"
-            )
-            user_details = get_user_details(fallback_user_id, token, base_url)
-
-        if user_details:
-            output_value = _extract_output_value(user_details, output_type, identifier)
-            return output_value
-        else:
-            return identifier
+        return _handle_conversion_result(user_details, output_type, identifier, item)
 
     except Exception as e:
         print_warning(f"Error converting identifier {identifier}: {e}")
