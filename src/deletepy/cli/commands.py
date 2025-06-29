@@ -3,6 +3,7 @@
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import click
 
@@ -163,6 +164,74 @@ class OperationHandler:
 
         return confirm_production_operation(operation, total_users)
 
+    def _initialize_processing_state(self) -> dict[str, Any]:
+        """Initialize the processing state tracking variables.
+
+        Returns:
+            dict: Initial processing state with counters and lists
+        """
+        return {
+            "multiple_users": {},
+            "not_found_users": [],
+            "invalid_user_ids": [],
+            "processed_count": 0,
+            "skipped_count": 0,
+        }
+
+    def _process_single_user(
+        self,
+        user_id: str,
+        token: str,
+        base_url: str,
+        operation: str,
+        state: dict[str, Any],
+    ) -> None:
+        """Process a single user identifier.
+
+        Args:
+            user_id: User identifier to process
+            token: Auth0 access token
+            base_url: Auth0 API base URL
+            operation: Operation to perform
+            state: Processing state to update
+        """
+        user_id = user_id.strip()
+
+        # Resolve email to user ID if needed
+        resolved_user_id = self._resolve_user_identifier(
+            user_id,
+            token,
+            base_url,
+            state["multiple_users"],
+            state["not_found_users"],
+            state["invalid_user_ids"],
+        )
+
+        if resolved_user_id is None:
+            state["skipped_count"] += 1
+            return
+
+        # Perform the operation
+        self._execute_user_operation(operation, resolved_user_id, token, base_url)
+        state["processed_count"] += 1
+
+    def _create_processing_results(self, state: dict[str, Any]) -> dict:
+        """Create the final processing results dictionary.
+
+        Args:
+            state: Processing state with counters and lists
+
+        Returns:
+            dict: Processing results
+        """
+        return {
+            "processed_count": state["processed_count"],
+            "skipped_count": state["skipped_count"],
+            "not_found_users": state["not_found_users"],
+            "invalid_user_ids": state["invalid_user_ids"],
+            "multiple_users": state["multiple_users"],
+        }
+
     def _process_users(
         self,
         user_ids: list[str],
@@ -183,44 +252,15 @@ class OperationHandler:
         Returns:
             dict: Processing results with counts and user lists
         """
-        multiple_users: dict[str, list[str]] = {}
-        not_found_users: list[str] = []
-        invalid_user_ids: list[str] = []
-        processed_count: int = 0
-        skipped_count: int = 0
+        state = self._initialize_processing_state()
         total_users = len(user_ids)
 
         for idx, user_id in enumerate(user_ids, 1):
             show_progress(idx, total_users, operation_display)
-            user_id = user_id.strip()
-
-            # Resolve email to user ID if needed
-            resolved_user_id = self._resolve_user_identifier(
-                user_id,
-                token,
-                base_url,
-                multiple_users,
-                not_found_users,
-                invalid_user_ids,
-            )
-
-            if resolved_user_id is None:
-                skipped_count += 1
-                continue
-
-            # Perform the operation
-            self._execute_user_operation(operation, resolved_user_id, token, base_url)
-            processed_count += 1
+            self._process_single_user(user_id, token, base_url, operation, state)
 
         click.echo("\n")  # Clear progress line
-
-        return {
-            "processed_count": processed_count,
-            "skipped_count": skipped_count,
-            "not_found_users": not_found_users,
-            "invalid_user_ids": invalid_user_ids,
-            "multiple_users": multiple_users,
-        }
+        return self._create_processing_results(state)
 
     def _resolve_user_identifier(
         self,
