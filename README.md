@@ -102,7 +102,7 @@ If you need to install or manage Python versions, we recommend using version man
 
 1. Clone the repository and create virtual environment:
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/nikosalonen/deletepy
    cd deletepy
    python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
