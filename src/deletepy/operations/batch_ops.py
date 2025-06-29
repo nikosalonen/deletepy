@@ -1,6 +1,7 @@
 """Batch processing operations for Auth0 user management."""
 
 import time
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
@@ -18,6 +19,15 @@ from ..utils.legacy_print import (
     print_warning,
 )
 from .user_ops import delete_user, unlink_user_identity
+
+
+@dataclass
+class SearchProcessingConfig:
+    """Configuration for search result processing operations."""
+    token: str
+    base_url: str
+    env: str
+    auto_delete: bool
 
 
 def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
@@ -110,10 +120,7 @@ def _process_search_results(
     found_users: list[dict[str, Any]],
     not_found_ids: list[str],
     total_ids: int,
-    token: str,
-    base_url: str,
-    env: str,
-    auto_delete: bool,
+    config: SearchProcessingConfig,
 ) -> None:
     """Process search results through categorization, display, and operations.
 
@@ -121,14 +128,11 @@ def _process_search_results(
         found_users: Users found during search
         not_found_ids: Social IDs that were not found
         total_ids: Total number of social IDs searched
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-        env: Environment for confirmation prompts
-        auto_delete: Whether to automatically delete users
+        config: Configuration containing token, base_url, env, and auto_delete settings
     """
     # Categorize users based on their identity configuration
     users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
-        found_users, auto_delete
+        found_users, config.auto_delete
     )
 
     # Display search results
@@ -139,12 +143,12 @@ def _process_search_results(
         users_to_delete,
         identities_to_unlink,
         auth0_main_protected,
-        auto_delete,
+        config.auto_delete,
     )
 
     # Handle auto-delete operations
     _handle_auto_delete_operations(
-        users_to_delete, identities_to_unlink, token, base_url, env, auto_delete
+        users_to_delete, identities_to_unlink, config.token, config.base_url, config.env, config.auto_delete
     )
 
 
@@ -176,8 +180,14 @@ def find_users_by_social_media_ids(
     found_users, not_found_ids = _search_all_social_ids(social_ids, token, base_url)
 
     # Process the search results
+    config = SearchProcessingConfig(
+        token=token,
+        base_url=base_url,
+        env=env,
+        auto_delete=auto_delete
+    )
     _process_search_results(
-        found_users, not_found_ids, len(social_ids), token, base_url, env, auto_delete
+        found_users, not_found_ids, len(social_ids), config
     )
 
 
