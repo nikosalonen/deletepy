@@ -217,80 +217,115 @@ def _categorize_users(
     auth0_main_protected = []
 
     for user in found_users:
-        user_id = user.get("user_id", "")
-        identities = user.get("identities", [])
-        social_id = user.get("social_id", "")
-
-        if not identities or not social_id:
-            continue
-
-        # Find the matching identity
-        matching_identity = None
-        for identity in identities:
-            if identity.get("user_id") == social_id:
-                matching_identity = identity
-                break
-
-        if not matching_identity:
-            continue
-
-        matching_connection = matching_identity.get("connection", "")
-
-        # Determine user category based on identity configuration
-        if len(identities) == 1:
-            # Only one identity - this is the main identity
-            if auto_delete:
-                users_to_delete.append(
-                    {
-                        "user_id": user_id,
-                        "email": user.get("email", ""),
-                        "matching_connection": matching_connection,
-                        "social_id": social_id,
-                        "reason": "Main identity",
-                    }
-                )
-            else:
-                auth0_main_protected.append(
-                    {
-                        "user_id": user_id,
-                        "email": user.get("email", ""),
-                        "matching_connection": matching_connection,
-                        "social_id": social_id,
-                        "reason": "Main identity (protected)",
-                    }
-                )
-        else:
-            # Multiple identities - check if Auth0 is the main identity
-            auth0_identity = None
-            for identity in identities:
-                if identity.get("connection") == "auth0":
-                    auth0_identity = identity
-                    break
-
-            if auth0_identity and auth0_identity.get("isSocial", False) is False:
-                # Auth0 is the main identity, protect the user
-                auth0_main_protected.append(
-                    {
-                        "user_id": user_id,
-                        "email": user.get("email", ""),
-                        "matching_connection": matching_connection,
-                        "social_id": social_id,
-                        "reason": "Auth0 main identity",
-                    }
-                )
-            else:
-                # Social identity can be safely unlinked
-                identities_to_unlink.append(
-                    {
-                        "user_id": user_id,
-                        "email": user.get("email", ""),
-                        "matching_connection": matching_connection,
-                        "social_id": social_id,
-                        "reason": "Secondary identity",
-                    }
-                )
+        category = _determine_user_category(user, auto_delete)
+        if category == "delete":
+            users_to_delete.append(_create_user_record(user, "Main identity"))
+        elif category == "unlink":
+            identities_to_unlink.append(_create_user_record(user, "Secondary identity"))
+        elif category == "protected":
+            reason = "Main identity (protected)" if not auto_delete else "Auth0 main identity"
+            auth0_main_protected.append(_create_user_record(user, reason))
 
     return users_to_delete, identities_to_unlink, auth0_main_protected
+
+
+def _determine_user_category(user: dict[str, Any], auto_delete: bool) -> str:
+    """Determine the category for a single user based on identity configuration.
+
+    Args:
+        user: User data with identities and social_id
+        auto_delete: Whether auto-delete is enabled
+
+    Returns:
+        str: Category - "delete", "unlink", "protected", or "skip"
+    """
+    identities = user.get("identities", [])
+    social_id = user.get("social_id", "")
+
+    if not identities or not social_id:
+        return "skip"
+
+    matching_identity = _find_matching_identity(identities, social_id)
+    if not matching_identity:
+        return "skip"
+
+    if _is_main_identity(identities):
+        # Only one identity - this is the main identity
+        return "delete" if auto_delete else "protected"
+    else:
+        # Multiple identities - check if Auth0 is the main identity
+        if _has_auth0_main_identity(identities):
+            return "protected"
+        else:
+            return "unlink"
+
+
+def _find_matching_identity(identities: list[dict[str, Any]], social_id: str) -> dict[str, Any] | None:
+    """Find the identity matching the given social ID.
+
+    Args:
+        identities: List of user identities
+        social_id: Social media ID to match
+
+    Returns:
+        dict | None: Matching identity or None if not found
+    """
+    for identity in identities:
+        if identity.get("user_id") == social_id:
+            return identity
+    return None
+
+
+def _is_main_identity(identities: list[dict[str, Any]]) -> bool:
+    """Check if this is the user's only/main identity.
+
+    Args:
+        identities: List of user identities
+
+    Returns:
+        bool: True if this is the main/only identity
+    """
+    return len(identities) == 1
+
+
+def _has_auth0_main_identity(identities: list[dict[str, Any]]) -> bool:
+    """Check if the user has Auth0 as their main identity.
+
+    Args:
+        identities: List of user identities
+
+    Returns:
+        bool: True if Auth0 is the main identity (non-social)
+    """
+    for identity in identities:
+        if (identity.get("connection") == "auth0" and
+            identity.get("isSocial", False) is False):
+            return True
+    return False
+
+
+def _create_user_record(user: dict[str, Any], reason: str) -> dict[str, str]:
+    """Create a standardized user record for categorization results.
+
+    Args:
+        user: User data
+        reason: Reason for categorization
+
+    Returns:
+        dict: Standardized user record
+    """
+    identities = user.get("identities", [])
+    social_id = user.get("social_id", "")
+    matching_identity = _find_matching_identity(identities, social_id)
+    matching_connection = matching_identity.get("connection", "") if matching_identity else ""
+
+    return {
+        "user_id": user.get("user_id", ""),
+        "email": user.get("email", ""),
+        "matching_connection": matching_connection,
+        "social_id": social_id,
+        "reason": reason,
+    }
 
 
 def _display_search_results(
