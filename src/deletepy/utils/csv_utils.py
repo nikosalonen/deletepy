@@ -264,18 +264,50 @@ def _process_csv_file(
     Returns:
         Tuple of (identifiers/row_data list, skip_resolution flag)
     """
-    identifiers = []
-    skip_resolution = False
+    reader, headers = _setup_csv_reader(infile)
+    if not headers:
+        return [], False
 
+    best_column, user_id_column = _determine_csv_columns(headers, output_type)
+    skip_resolution = _setup_processing_config(best_column, output_type)
+
+    identifiers = _process_csv_rows(
+        reader, best_column, user_id_column, output_type, env, skip_resolution
+    )
+
+    return identifiers, skip_resolution
+
+
+def _setup_csv_reader(infile) -> tuple[csv.DictReader | None, list[str] | None]:
+    """Setup CSV reader and validate headers.
+
+    Args:
+        infile: File object to read from
+
+    Returns:
+        Tuple of (reader, headers) or (None, None) if invalid
+    """
     reader = csv.DictReader(infile)
     headers = reader.fieldnames
 
     if not headers:
         print_error("No headers found in CSV file")
-        return identifiers, skip_resolution
+        return None, None
 
     print_info(f"Available columns: {', '.join(headers)}")
+    return reader, headers
 
+
+def _determine_csv_columns(headers: list[str], output_type: str) -> tuple[str, str | None]:
+    """Determine the best column to use and find user_id column for fallback.
+
+    Args:
+        headers: List of CSV headers
+        output_type: Type of output desired
+
+    Returns:
+        Tuple of (best_column, user_id_column)
+    """
     best_column = find_best_column(headers, output_type)
 
     if not best_column:
@@ -298,37 +330,99 @@ def _process_csv_file(
             user_id_column = header
             break
 
-    # Check if we should skip encoded username resolution for this column
+    return best_column, user_id_column
+
+
+def _setup_processing_config(best_column: str, output_type: str) -> bool:
+    """Setup processing configuration and determine if resolution should be skipped.
+
+    Args:
+        best_column: The selected column name
+        output_type: Type of output desired
+
+    Returns:
+        bool: True if resolution should be skipped
+    """
     skip_resolution = _should_skip_resolution(best_column, output_type)
     if skip_resolution:
         data_type = "username" if output_type == "username" else "email"
         print_info(
             f"CSV column '{best_column}' contains {data_type} data. Skipping encoded username resolution."
         )
+    return skip_resolution
+
+
+def _process_csv_rows(
+    reader: csv.DictReader,
+    best_column: str,
+    user_id_column: str | None,
+    output_type: str,
+    env: str | None,
+    skip_resolution: bool
+) -> list[str | CsvRowData]:
+    """Process CSV rows and extract identifiers.
+
+    Args:
+        reader: CSV DictReader instance
+        best_column: Column to extract data from
+        user_id_column: User ID column for fallback (if available)
+        output_type: Type of output desired
+        env: Environment for Auth0 API resolution
+        skip_resolution: Whether to skip encoded username resolution
+
+    Returns:
+        List of identifiers or CsvRowData objects
+    """
+    identifiers = []
 
     for row in reader:
         if best_column in row:
-            # Preserve encoded usernames if we're looking for username output and found username column
-            preserve_encoded = skip_resolution and output_type == "username"
-            env_for_cleaning = None if skip_resolution else env
-            cleaned = clean_identifier(
-                row[best_column], env_for_cleaning, preserve_encoded
+            identifier = _create_identifier_record(
+                row, best_column, user_id_column, output_type, env, skip_resolution
             )
-            if cleaned:
-                # If we have Auth0 API env and user_id column, store row data for enhanced processing
-                if env and user_id_column and user_id_column in row:
-                    user_id = (
-                        row[user_id_column].strip() if row[user_id_column] else None
-                    )
-                    identifiers.append(
-                        CsvRowData(
-                            identifier=cleaned, user_id=user_id, row_data=dict(row)
-                        )
-                    )
-                else:
-                    identifiers.append(cleaned)
+            if identifier:
+                identifiers.append(identifier)
 
-    return identifiers, skip_resolution
+    return identifiers
+
+
+def _create_identifier_record(
+    row: dict[str, str],
+    best_column: str,
+    user_id_column: str | None,
+    output_type: str,
+    env: str | None,
+    skip_resolution: bool
+) -> str | CsvRowData | None:
+    """Create an identifier record from a CSV row.
+
+    Args:
+        row: CSV row data
+        best_column: Column to extract data from
+        user_id_column: User ID column for fallback (if available)
+        output_type: Type of output desired
+        env: Environment for Auth0 API resolution
+        skip_resolution: Whether to skip encoded username resolution
+
+    Returns:
+        Identifier string, CsvRowData object, or None if empty
+    """
+    # Preserve encoded usernames if we're looking for username output and found username column
+    preserve_encoded = skip_resolution and output_type == "username"
+    env_for_cleaning = None if skip_resolution else env
+    cleaned = clean_identifier(row[best_column], env_for_cleaning, preserve_encoded)
+
+    if not cleaned:
+        return None
+
+    # If we have Auth0 API env and user_id column, store row data for enhanced processing
+    if env and user_id_column and user_id_column in row:
+        user_id = row[user_id_column].strip() if row[user_id_column] else None
+        return CsvRowData(
+            identifier=cleaned, user_id=user_id, row_data=dict(row)
+        )
+    else:
+        return cleaned
 
 
 def _should_skip_resolution(best_column: str, output_type: str) -> bool:
