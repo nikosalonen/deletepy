@@ -602,7 +602,7 @@ def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
 
         identities = user_data.get("identities", [])
         identity_count = len(identities) if isinstance(identities, list) else 0
-        
+
         return identity_count
 
     except requests.exceptions.RequestException as e:
@@ -662,12 +662,12 @@ def _find_users_with_primary_social_id(
                 # Only include users where this social ID is their primary/main identity
                 if "identities" in user and isinstance(user["identities"], list):
                     identities = user["identities"]
-                    
+
                     # Check if this is the primary identity (usually the first one)
                     # and if the user has this social ID as their main identity
                     if len(identities) > 0:
                         primary_identity = identities[0]
-                        if (primary_identity.get("user_id") == social_id and 
+                        if (primary_identity.get("user_id") == social_id and
                             primary_identity.get("connection") == connection):
                             # This user has the social ID as their primary identity
                             found_users.append(user)
