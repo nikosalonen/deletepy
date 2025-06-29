@@ -305,12 +305,11 @@ def _determine_user_category(user: dict[str, Any], auto_delete: bool) -> str:
     if _is_main_identity(identities):
         # Only one identity - this is the main identity
         return "delete" if auto_delete else "protected"
-    else:
-        # Multiple identities - check if Auth0 is the main identity
-        if _has_auth0_main_identity(identities):
-            return "protected"
-        else:
-            return "unlink"
+    
+    # Multiple identities - check if Auth0 is the main identity
+    if _has_auth0_main_identity(identities):
+        return "protected"
+    return "unlink"
 
 
 def _find_matching_identity(identities: list[dict[str, Any]], social_id: str) -> dict[str, Any] | None:
