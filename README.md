@@ -231,6 +231,7 @@ DeletePy provides sophisticated social identity management:
 
 - **Single Identity Users**: Users with only the matching social identity are deleted entirely
 - **Multi-Identity Users**: Only the matching social identity is unlinked, preserving the user account
+- **Detached Identity Cleanup**: After unlinking, if a user has no remaining identities, the user is automatically deleted
 - **Protected Users**: Users with Auth0 as main identity are protected from deletion
 - **Production Safety**: Explicit confirmation required with operation counts
 
@@ -239,6 +240,7 @@ Example workflow:
 2. DeletePy searches Auth0 for users with those identities
 3. Categorizes users based on their identity configuration
 4. Performs safe unlinking or deletion based on user type
+5. Automatically deletes users who become orphaned (no remaining identities) after unlinking
 
 ### Domain Checking (`check-domains`)
 
