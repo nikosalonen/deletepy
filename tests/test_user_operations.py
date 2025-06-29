@@ -16,7 +16,6 @@ from src.deletepy.operations.user_ops import (
     revoke_user_sessions,
     unlink_user_identity,
 )
-from src.deletepy.utils.display_utils import CYAN, RESET, YELLOW
 
 
 def test_delete_user(mock_requests, mock_response):
@@ -526,7 +525,7 @@ def test_find_users_by_social_media_ids_orphaned_user_deletion(
         mock_unlink.assert_called_once_with(
             "google-oauth2|123456789", "facebook", "12345678901234567890", "test_token", "http://test.com"
         )
-        
+
         # Verify delete_user was called for the orphaned user
         mock_delete.assert_called_once_with(
             "google-oauth2|123456789", "test_token", "http://test.com"
@@ -576,6 +575,6 @@ def test_find_users_by_social_media_ids_user_not_orphaned_after_unlink(
         mock_unlink.assert_called_once_with(
             "google-oauth2|123456789", "facebook", "12345678901234567890", "test_token", "http://test.com"
         )
-        
+
         # Verify delete_user was NOT called since user still has identities
         mock_delete.assert_not_called()
