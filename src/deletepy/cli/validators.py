@@ -84,11 +84,11 @@ def validate_args() -> argparse.Namespace:
         help="Test if credentials work",
     )
     operation_group.add_argument(
-        "--find-social-ids",
+        "--unlink-social-ids",
         action="store_const",
-        const="find-social-ids",
+        const="unlink-social-ids",
         dest="operation",
-        help="Find users by social media IDs from identities",
+        help="Unlink social identities from Auth0 users and delete detached accounts",
     )
 
     parser.add_argument(
@@ -156,7 +156,7 @@ def validate_operation(operation: str) -> str:
         "check-domains",
         "export-last-login",
         "doctor",
-        "find-social-ids",
+        "unlink-social-ids",
     ]
     if operation not in valid_operations:
         raise ValueError(f"Operation must be one of: {', '.join(valid_operations)}")

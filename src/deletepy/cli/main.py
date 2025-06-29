@@ -64,10 +64,10 @@ def export_last_login(input_file: Path, env: str, connection: str | None) -> Non
 @cli.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def find_social_ids(input_file: Path, env: str) -> None:
-    """Find users by social media IDs from identities."""
+def unlink_social_ids(input_file: Path, env: str) -> None:
+    """Unlink social identities from Auth0 users and delete detached accounts."""
     handler = OperationHandler()
-    handler.handle_find_social_ids(input_file, env)
+    handler.handle_unlink_social_ids(input_file, env)
 
 
 @cli.command()

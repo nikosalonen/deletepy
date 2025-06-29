@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 import requests
 
@@ -16,7 +16,6 @@ from src.deletepy.operations.user_ops import (
     revoke_user_sessions,
     unlink_user_identity,
 )
-from src.deletepy.utils.display_utils import CYAN, RESET, YELLOW
 
 
 def test_delete_user(mock_requests, mock_response):
@@ -359,9 +358,8 @@ def test_find_users_by_social_media_ids_single_identity_delete(
     mock_requests.get.return_value = mock_response
 
     with (
-        patch("builtins.print") as mock_print,
         patch("src.deletepy.utils.display_utils.show_progress"),
-        patch("src.deletepy.operations.user_ops.delete_user") as mock_delete,
+        patch("src.deletepy.operations.batch_ops.delete_user") as mock_delete,
     ):
         find_users_by_social_media_ids(
             ["12345678901234567890"],
@@ -389,6 +387,7 @@ def test_find_users_by_social_media_ids_multiple_identities_unlink(
                 "identities": [
                     {"user_id": "google_main_id", "connection": "google-oauth2"},
                     {"user_id": "12345678901234567890", "connection": "facebook"},
+                    {"user_id": "another_identity", "connection": "linkedin"},
                 ],
             }
         ],
@@ -397,12 +396,14 @@ def test_find_users_by_social_media_ids_multiple_identities_unlink(
     mock_requests.get.return_value = mock_response
 
     with (
-        patch("builtins.print") as mock_print,
         patch("src.deletepy.utils.display_utils.show_progress"),
-        patch("src.deletepy.operations.user_ops.delete_user") as mock_delete,
-        patch("src.deletepy.operations.user_ops.unlink_user_identity") as mock_unlink,
+        patch("src.deletepy.operations.batch_ops.delete_user") as mock_delete,
+        patch("src.deletepy.operations.batch_ops.unlink_user_identity") as mock_unlink,
+        patch("src.deletepy.operations.batch_ops._get_user_identity_count") as mock_identity_count,
     ):
         mock_unlink.return_value = True
+        # Patch so user is NOT orphaned after unlinking (should have 2 identities remaining)
+        mock_identity_count.return_value = 2
 
         find_users_by_social_media_ids(
             ["12345678901234567890"],
@@ -412,11 +413,8 @@ def test_find_users_by_social_media_ids_multiple_identities_unlink(
             auto_delete=True,
         )
 
-        # Verify delete_user was NOT called (user has multiple identities)
+        # Verify delete_user was NOT called (user has multiple identities after unlink)
         mock_delete.assert_not_called()
-
-        # Functionality verified via structured logging output
-        # unlink_user_identity is called but via local import, so mock verification is not reliable
 
         # Output verification is done via structured logging, behavior verification is more important
 
@@ -441,9 +439,8 @@ def test_find_users_by_social_media_ids_auth0_main_identity_protection(
     mock_requests.get.return_value = mock_response
 
     with (
-        patch("builtins.print") as mock_print,
         patch("src.deletepy.utils.display_utils.show_progress"),
-        patch("src.deletepy.operations.user_ops.delete_user") as mock_delete,
+        patch("src.deletepy.operations.batch_ops.delete_user") as mock_delete,
         patch("src.deletepy.operations.user_ops.unlink_user_identity") as mock_unlink,
     ):
         find_users_by_social_media_ids(
@@ -468,7 +465,6 @@ def test_find_users_by_social_media_ids_not_found(mock_requests, mock_response):
     mock_requests.get.return_value = mock_response
 
     with (
-        patch("builtins.print") as mock_print,
         patch("src.deletepy.utils.display_utils.show_progress"),
     ):
         find_users_by_social_media_ids(
@@ -481,3 +477,108 @@ def test_find_users_by_social_media_ids_not_found(mock_requests, mock_response):
 
         # No operations should be performed when no users are found
         # Output verification is done via structured logging
+
+
+def test_find_users_by_social_media_ids_orphaned_user_deletion(
+    mock_requests, mock_response
+):
+    # Mock response with a user that has multiple identities, one of which will be unlinked
+    mock_response.json.return_value = {
+        "users": [
+            {
+                "user_id": "google-oauth2|123456789",
+                "email": "test@example.com",
+                "identities": [
+                    {"user_id": "12345678901234567890", "connection": "facebook"},
+                    {"user_id": "another_social_id", "connection": "google-oauth2"},
+                ],
+            }
+        ],
+        "total": 1
+    }
+    mock_requests.get.return_value = mock_response
+
+    with (
+        patch("src.deletepy.utils.display_utils.show_progress"),
+        patch("src.deletepy.operations.batch_ops.delete_user") as mock_delete,
+        patch("src.deletepy.operations.batch_ops.unlink_user_identity") as mock_unlink,
+        patch("src.deletepy.operations.batch_ops._get_user_identity_count") as mock_identity_count,
+        patch("src.deletepy.operations.batch_ops._find_users_with_primary_social_id") as mock_find_detached,
+    ):
+        # Mock successful unlink
+        mock_unlink.return_value = True
+        # Mock that after unlinking, user has no remaining identities (orphaned)
+        mock_identity_count.return_value = 0
+        # Mock finding a detached social user with the same ID (simulating the new behavior)
+        mock_find_detached.return_value = [{"user_id": "google-oauth2|123456789"}]
+
+        find_users_by_social_media_ids(
+            ["12345678901234567890"],
+            "test_token",
+            "http://test.com",
+            "dev",
+            auto_delete=True,
+        )
+
+        # Verify unlink_user_identity was called
+        mock_unlink.assert_called_once_with(
+            "google-oauth2|123456789", "facebook", "12345678901234567890", "test_token", "http://test.com"
+        )
+
+        # Verify delete_user was called twice: once for orphaned user, once for detached social user
+        assert mock_delete.call_count == 2
+        expected_calls = [
+            call("google-oauth2|123456789", "test_token", "http://test.com"),  # Orphaned user deletion
+            call("google-oauth2|123456789", "test_token", "http://test.com"),  # Detached social user deletion
+        ]
+        mock_delete.assert_has_calls(expected_calls)
+
+
+def test_find_users_by_social_media_ids_user_not_orphaned_after_unlink(
+    mock_requests, mock_response
+):
+    # Mock response with a user that has multiple identities, one of which will be unlinked
+    mock_response.json.return_value = {
+        "users": [
+            {
+                "user_id": "google-oauth2|123456789",
+                "email": "test@example.com",
+                "identities": [
+                    {"user_id": "12345678901234567890", "connection": "facebook"},
+                    {"user_id": "another_social_id", "connection": "google-oauth2"},
+                ],
+            }
+        ],
+        "total": 1
+    }
+    mock_requests.get.return_value = mock_response
+
+    with (
+        patch("src.deletepy.utils.display_utils.show_progress"),
+        patch("src.deletepy.operations.batch_ops.delete_user") as mock_delete,
+        patch("src.deletepy.operations.batch_ops.unlink_user_identity") as mock_unlink,
+        patch("src.deletepy.operations.batch_ops._get_user_identity_count") as mock_identity_count,
+        patch("src.deletepy.operations.batch_ops._find_users_with_primary_social_id") as mock_find_detached,
+    ):
+        # Mock successful unlink
+        mock_unlink.return_value = True
+        # Mock that after unlinking, user still has remaining identities (not orphaned)
+        mock_identity_count.return_value = 1
+        # Mock no detached social users found (so no deletion should happen)
+        mock_find_detached.return_value = []
+
+        find_users_by_social_media_ids(
+            ["12345678901234567890"],
+            "test_token",
+            "http://test.com",
+            "dev",
+            auto_delete=True,
+        )
+
+        # Verify unlink_user_identity was called
+        mock_unlink.assert_called_once_with(
+            "google-oauth2|123456789", "facebook", "12345678901234567890", "test_token", "http://test.com"
+        )
+
+        # Verify delete_user was NOT called since user still has identities and no detached users found
+        mock_delete.assert_not_called()

@@ -13,7 +13,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Revoke application grants** - Invalidate all authorized applications and refresh tokens
 
 ### Advanced Operations
-- **Identity unlinking** (`find-social-ids`) - Smart social identity management:
+- **Identity unlinking** (`unlink-social-ids`) - Smart social identity management:
   - Unlinks social identities from multi-identity users
   - Deletes users with only the matching social identity
   - Protects users with Auth0 as main identity
@@ -168,7 +168,7 @@ deletepy check-domains users.txt [dev|prod]
 deletepy export-last-login emails.txt [dev|prod] [--connection CONNECTION]
 
 # Find users by social media IDs (unlinks identities or deletes users)
-deletepy find-social-ids social_ids.txt [dev|prod]
+deletepy unlink-social-ids social_ids.txt [dev|prod]
 
 # User management operations
 deletepy users block users.txt [dev|prod]
@@ -225,12 +225,14 @@ deletepy cleanup-csv ids.csv prod --output-type=username
 
 ## Operation Details
 
-### Social Identity Management (`find-social-ids`)
+### Social Identity Management (`unlink-social-ids`)
 
 DeletePy provides sophisticated social identity management:
 
 - **Single Identity Users**: Users with only the matching social identity are deleted entirely
 - **Multi-Identity Users**: Only the matching social identity is unlinked, preserving the user account
+- **Detached Identity Cleanup**: After unlinking, if a user has no remaining identities, the user is automatically deleted
+- **Detached Social User Deletion**: Separate user accounts that have the unlinked social ID as their primary identity are automatically deleted
 - **Protected Users**: Users with Auth0 as main identity are protected from deletion
 - **Production Safety**: Explicit confirmation required with operation counts
 
@@ -239,6 +241,8 @@ Example workflow:
 2. DeletePy searches Auth0 for users with those identities
 3. Categorizes users based on their identity configuration
 4. Performs safe unlinking or deletion based on user type
+5. Automatically deletes users who become orphaned (no remaining identities) after unlinking
+6. Searches for and deletes any separate user accounts that have the unlinked social ID as their primary identity
 
 ### Domain Checking (`check-domains`)
 
