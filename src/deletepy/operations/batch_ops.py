@@ -473,7 +473,7 @@ def _handle_auto_delete_operations(
                     )
                     if success:
                         unlinked_count += 1
-                        
+
                         # Check if user has no remaining identities after unlinking
                         remaining_identities = _get_user_identity_count(
                             user["user_id"], token, base_url
@@ -571,15 +571,15 @@ def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
         "Content-Type": "application/json",
         "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
     }
-    
+
     try:
         response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
         user_data = response.json()
-        
+
         identities = user_data.get("identities", [])
         return len(identities) if isinstance(identities, list) else 0
-        
+
     except requests.exceptions.RequestException as e:
         print_error(
             f"Error getting user identity count for {user_id}: {e}",
