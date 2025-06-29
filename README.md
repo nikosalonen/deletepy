@@ -13,7 +13,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Revoke application grants** - Invalidate all authorized applications and refresh tokens
 
 ### Advanced Operations
-- **Identity unlinking** (`find-social-ids`) - Smart social identity management:
+- **Identity unlinking** (`unlink-social-ids`) - Smart social identity management:
   - Unlinks social identities from multi-identity users
   - Deletes users with only the matching social identity
   - Protects users with Auth0 as main identity
@@ -168,7 +168,7 @@ deletepy check-domains users.txt [dev|prod]
 deletepy export-last-login emails.txt [dev|prod] [--connection CONNECTION]
 
 # Find users by social media IDs (unlinks identities or deletes users)
-deletepy find-social-ids social_ids.txt [dev|prod]
+deletepy unlink-social-ids social_ids.txt [dev|prod]
 
 # User management operations
 deletepy users block users.txt [dev|prod]
@@ -225,7 +225,7 @@ deletepy cleanup-csv ids.csv prod --output-type=username
 
 ## Operation Details
 
-### Social Identity Management (`find-social-ids`)
+### Social Identity Management (`unlink-social-ids`)
 
 DeletePy provides sophisticated social identity management:
 

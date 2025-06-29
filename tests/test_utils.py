@@ -109,7 +109,7 @@ def test_validate_args():
         ("--check-domains", "check-domains"),
         ("--export-last-login", "export-last-login"),
         ("--doctor", "doctor"),
-        ("--find-social-ids", "find-social-ids"),
+        ("--unlink-social-ids", "unlink-social-ids"),
     ],
 )
 def test_validate_args_operations(monkeypatch, flag, expected_operation):

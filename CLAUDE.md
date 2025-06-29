@@ -104,7 +104,7 @@ python -m src.deletepy.cli.main check-domains users.txt [dev|prod]
 python -m src.deletepy.cli.main export-last-login emails.txt [dev|prod] [--connection CONNECTION]
 
 # Find users by social media IDs (unlinks identities or deletes users)
-python -m src.deletepy.cli.main find-social-ids social_ids.txt [dev|prod]
+python -m src.deletepy.cli.main unlink-social-ids social_ids.txt [dev|prod]
 
 # User management operations
 python -m src.deletepy.cli.main users block users.txt [dev|prod]
@@ -121,7 +121,7 @@ python main.py users.txt prod --delete
 python main.py users.txt dev --revoke-grants-only
 python main.py users.txt dev --check-unblocked
 python main.py users.txt dev --check-domains
-python main.py social_ids.txt dev --find-social-ids
+python main.py social_ids.txt dev --unlink-social-ids
 ```
 
 ### Code Quality
@@ -144,7 +144,7 @@ mypy src/
 ### Input File Handling
 - Input files should contain one Auth0 user ID or email per line
 - The tool handles both Auth0 user IDs (auth0|123456) and email addresses
-- Social ID files should contain one social media ID per line for find-social-ids operation
+- Social ID files should contain one social media ID per line for unlink-social-ids operation
 - Large files are processed using generators to minimize memory usage
 
 ### Error Handling
@@ -185,7 +185,7 @@ To maintain code readability and testability, follow these rules for function co
 - Difficulty in writing focused unit tests
 
 ### Social Identity Management
-The `find-social-ids` operation provides sophisticated identity management:
+The `unlink-social-ids` operation provides sophisticated identity management:
 - **Single Identity Users**: Users with only the matching social identity are deleted entirely
 - **Multi-Identity Users**: Only the matching social identity is unlinked, preserving the user account
 - **Protected Users**: Users with Auth0 as main identity are protected from deletion
