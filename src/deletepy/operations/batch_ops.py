@@ -630,11 +630,11 @@ def _has_social_id_as_primary_identity(
     """
     if "identities" not in user or not isinstance(user["identities"], list):
         return False
-        
+
     identities = user["identities"]
     if len(identities) == 0:
         return False
-        
+
     # Check if this is the primary identity (usually the first one)
     primary_identity = identities[0]
     return (primary_identity.get("user_id") == social_id and
