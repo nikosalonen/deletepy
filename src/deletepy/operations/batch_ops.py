@@ -1,6 +1,7 @@
 """Batch processing operations for Auth0 user management."""
 
 import time
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
@@ -18,6 +19,15 @@ from ..utils.legacy_print import (
     print_warning,
 )
 from .user_ops import delete_user, unlink_user_identity
+
+
+@dataclass
+class SearchProcessingConfig:
+    """Configuration for search result processing operations."""
+    token: str
+    base_url: str
+    env: str
+    auto_delete: bool
 
 
 def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
@@ -69,6 +79,79 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
         print_success("All users are blocked.", operation="check_unblocked")
 
 
+def _search_all_social_ids(
+    social_ids: list[str], token: str, base_url: str
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Search for users with all provided social media IDs.
+
+    Args:
+        social_ids: List of social media IDs to search for
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        Tuple of (found_users, not_found_ids)
+    """
+    found_users = []
+    not_found_ids = []
+    total_ids = len(social_ids)
+
+    for idx, social_id in enumerate(social_ids, 1):
+        if shutdown_requested():
+            break
+
+        show_progress(idx, total_ids, "Searching social IDs")
+
+        # Search for users with this social ID
+        users_found = _search_users_by_social_id(social_id, token, base_url)
+        if users_found:
+            # Add social_id to each user for later processing
+            for user in users_found:
+                user["social_id"] = social_id
+            found_users.extend(users_found)
+        else:
+            not_found_ids.append(social_id.strip())
+
+    print("\n")  # Clear progress line
+    return found_users, not_found_ids
+
+
+def _process_search_results(
+    found_users: list[dict[str, Any]],
+    not_found_ids: list[str],
+    total_ids: int,
+    config: SearchProcessingConfig,
+) -> None:
+    """Process search results through categorization, display, and operations.
+
+    Args:
+        found_users: Users found during search
+        not_found_ids: Social IDs that were not found
+        total_ids: Total number of social IDs searched
+        config: Configuration containing token, base_url, env, and auto_delete settings
+    """
+    # Categorize users based on their identity configuration
+    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
+        found_users, config.auto_delete
+    )
+
+    # Display search results
+    _display_search_results(
+        total_ids,
+        found_users,
+        not_found_ids,
+        users_to_delete,
+        identities_to_unlink,
+        auth0_main_protected,
+        config.auto_delete,
+    )
+
+    # Handle auto-delete operations
+    _handle_auto_delete_operations(
+        users_to_delete, identities_to_unlink, config.token, config.base_url, config.env, config.auto_delete
+    )
+
+
 def find_users_by_social_media_ids(
     social_ids: list[str],
     token: str,
@@ -93,48 +176,18 @@ def find_users_by_social_media_ids(
         operation="social_search",
     )
 
-    found_users = []
-    not_found_ids = []
-    total_ids = len(social_ids)
-
     # Search for users with each social ID
-    for idx, social_id in enumerate(social_ids, 1):
-        if shutdown_requested():
-            break
+    found_users, not_found_ids = _search_all_social_ids(social_ids, token, base_url)
 
-        show_progress(idx, total_ids, "Searching social IDs")
-
-        # Search for users with this social ID
-        users_found = _search_users_by_social_id(social_id, token, base_url)
-        if users_found:
-            # Add social_id to each user for later processing
-            for user in users_found:
-                user["social_id"] = social_id
-            found_users.extend(users_found)
-        else:
-            not_found_ids.append(social_id.strip())
-
-    print("\n")  # Clear progress line
-
-    # Categorize users based on their identity configuration
-    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
-        found_users, auto_delete
+    # Process the search results
+    config = SearchProcessingConfig(
+        token=token,
+        base_url=base_url,
+        env=env,
+        auto_delete=auto_delete
     )
-
-    # Display search results
-    _display_search_results(
-        total_ids,
-        found_users,
-        not_found_ids,
-        users_to_delete,
-        identities_to_unlink,
-        auth0_main_protected,
-        auto_delete,
-    )
-
-    # Handle auto-delete operations
-    _handle_auto_delete_operations(
-        users_to_delete, identities_to_unlink, token, base_url, env, auto_delete
+    _process_search_results(
+        found_users, not_found_ids, len(social_ids), config
     )
 
 
@@ -217,80 +270,114 @@ def _categorize_users(
     auth0_main_protected = []
 
     for user in found_users:
-        user_id = user.get("user_id", "")
-        identities = user.get("identities", [])
-        social_id = user.get("social_id", "")
-
-        if not identities or not social_id:
-            continue
-
-        # Find the matching identity
-        matching_identity = None
-        for identity in identities:
-            if identity.get("user_id") == social_id:
-                matching_identity = identity
-                break
-
-        if not matching_identity:
-            continue
-
-        matching_connection = matching_identity.get("connection", "")
-
-        # Determine user category based on identity configuration
-        if len(identities) == 1:
-            # Only one identity - this is the main identity
-            if auto_delete:
-                users_to_delete.append(
-                    {
-                        "user_id": user_id,
-                        "email": user.get("email", ""),
-                        "matching_connection": matching_connection,
-                        "social_id": social_id,
-                        "reason": "Main identity",
-                    }
-                )
-            else:
-                auth0_main_protected.append(
-                    {
-                        "user_id": user_id,
-                        "email": user.get("email", ""),
-                        "matching_connection": matching_connection,
-                        "social_id": social_id,
-                        "reason": "Main identity (protected)",
-                    }
-                )
-        else:
-            # Multiple identities - check if Auth0 is the main identity
-            auth0_identity = None
-            for identity in identities:
-                if identity.get("connection") == "auth0":
-                    auth0_identity = identity
-                    break
-
-            if auth0_identity and auth0_identity.get("isSocial", False) is False:
-                # Auth0 is the main identity, protect the user
-                auth0_main_protected.append(
-                    {
-                        "user_id": user_id,
-                        "email": user.get("email", ""),
-                        "matching_connection": matching_connection,
-                        "social_id": social_id,
-                        "reason": "Auth0 main identity",
-                    }
-                )
-            else:
-                # Social identity can be safely unlinked
-                identities_to_unlink.append(
-                    {
-                        "user_id": user_id,
-                        "email": user.get("email", ""),
-                        "matching_connection": matching_connection,
-                        "social_id": social_id,
-                        "reason": "Secondary identity",
-                    }
-                )
+        category = _determine_user_category(user, auto_delete)
+        if category == "delete":
+            users_to_delete.append(_create_user_record(user, "Main identity"))
+        elif category == "unlink":
+            identities_to_unlink.append(_create_user_record(user, "Secondary identity"))
+        elif category == "protected":
+            reason = "Main identity (protected)" if not auto_delete else "Auth0 main identity"
+            auth0_main_protected.append(_create_user_record(user, reason))
 
     return users_to_delete, identities_to_unlink, auth0_main_protected
+
+
+def _determine_user_category(user: dict[str, Any], auto_delete: bool) -> str:
+    """Determine the category for a single user based on identity configuration.
+
+    Args:
+        user: User data with identities and social_id
+        auto_delete: Whether auto-delete is enabled
+
+    Returns:
+        str: Category - "delete", "unlink", "protected", or "skip"
+    """
+    identities = user.get("identities", [])
+    social_id = user.get("social_id", "")
+
+    if not identities or not social_id:
+        return "skip"
+
+    matching_identity = _find_matching_identity(identities, social_id)
+    if not matching_identity:
+        return "skip"
+
+    if _is_main_identity(identities):
+        # Only one identity - this is the main identity
+        return "delete" if auto_delete else "protected"
+    
+    # Multiple identities - check if Auth0 is the main identity
+    if _has_auth0_main_identity(identities):
+        return "protected"
+    return "unlink"
+
+
+def _find_matching_identity(identities: list[dict[str, Any]], social_id: str) -> dict[str, Any] | None:
+    """Find the identity matching the given social ID.
+
+    Args:
+        identities: List of user identities
+        social_id: Social media ID to match
+
+    Returns:
+        dict | None: Matching identity or None if not found
+    """
+    for identity in identities:
+        if identity.get("user_id") == social_id:
+            return identity
+    return None
+
+
+def _is_main_identity(identities: list[dict[str, Any]]) -> bool:
+    """Check if this is the user's only/main identity.
+
+    Args:
+        identities: List of user identities
+
+    Returns:
+        bool: True if this is the main/only identity
+    """
+    return len(identities) == 1
+
+
+def _has_auth0_main_identity(identities: list[dict[str, Any]]) -> bool:
+    """Check if the user has Auth0 as their main identity.
+
+    Args:
+        identities: List of user identities
+
+    Returns:
+        bool: True if Auth0 is the main identity (non-social)
+    """
+    for identity in identities:
+        if (identity.get("connection") == "auth0" and
+                identity.get("isSocial", False) is False):
+            return True
+    return False
+
+
+def _create_user_record(user: dict[str, Any], reason: str) -> dict[str, str]:
+    """Create a standardized user record for categorization results.
+
+    Args:
+        user: User data
+        reason: Reason for categorization
+
+    Returns:
+        dict: Standardized user record
+    """
+    identities = user.get("identities", [])
+    social_id = user.get("social_id", "")
+    matching_identity = _find_matching_identity(identities, social_id)
+    matching_connection = matching_identity.get("connection", "") if matching_identity else ""
+
+    return {
+        "user_id": user.get("user_id", ""),
+        "email": user.get("email", ""),
+        "matching_connection": matching_connection,
+        "social_id": social_id,
+        "reason": reason,
+    }
 
 
 def _display_search_results(
@@ -313,6 +400,22 @@ def _display_search_results(
         auth0_main_protected: Users that are protected from deletion
         auto_delete: Whether auto-delete is enabled
     """
+    _print_search_summary(total_ids, found_users, not_found_ids)
+    _print_not_found_ids(not_found_ids)
+    _print_category_counts(users_to_delete, identities_to_unlink, auth0_main_protected)
+    _print_category_details(users_to_delete, identities_to_unlink, auth0_main_protected)
+
+
+def _print_search_summary(
+    total_ids: int, found_users: list[dict[str, Any]], not_found_ids: list[str]
+) -> None:
+    """Print basic search results summary.
+
+    Args:
+        total_ids: Total number of social IDs searched
+        found_users: All users found with any of the social IDs
+        not_found_ids: Social IDs that were not found
+    """
     print_info("\nSearch Results Summary:", operation="social_search_summary")
     print_info(f"Total social IDs searched: {total_ids}", total_ids=total_ids)
     print_info(f"Users found: {len(found_users)}", users_found=len(found_users))
@@ -321,11 +424,31 @@ def _display_search_results(
         not_found_count=len(not_found_ids),
     )
 
+
+def _print_not_found_ids(not_found_ids: list[str]) -> None:
+    """Print list of social IDs that were not found.
+
+    Args:
+        not_found_ids: Social IDs that were not found
+    """
     if not_found_ids:
         print_warning("\nSocial IDs not found:", count=len(not_found_ids))
         for social_id in not_found_ids:
             print_info(f"  {social_id}", social_id=social_id, status="not_found")
 
+
+def _print_category_counts(
+    users_to_delete: list[dict[str, Any]],
+    identities_to_unlink: list[dict[str, Any]],
+    auth0_main_protected: list[dict[str, Any]]
+) -> None:
+    """Print user category counts.
+
+    Args:
+        users_to_delete: Users that will be deleted
+        identities_to_unlink: Users where identities will be unlinked
+        auth0_main_protected: Users that are protected from deletion
+    """
     print_info("\nUser Categories:", operation="categorization")
     print_info(
         f"  Users to delete: {len(users_to_delete)}", delete_count=len(users_to_delete)
@@ -339,43 +462,60 @@ def _display_search_results(
         protected_count=len(auth0_main_protected),
     )
 
+
+def _print_category_details(
+    users_to_delete: list[dict[str, Any]],
+    identities_to_unlink: list[dict[str, Any]],
+    auth0_main_protected: list[dict[str, Any]]
+) -> None:
+    """Print detailed user lists for each category.
+
+    Args:
+        users_to_delete: Users that will be deleted
+        identities_to_unlink: Users where identities will be unlinked
+        auth0_main_protected: Users that are protected from deletion
+    """
     if users_to_delete:
-        print_warning("\nUsers that will be deleted:", count=len(users_to_delete))
-        for user in users_to_delete:
-            print_info(
-                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                user_id=user["user_id"],
-                email=user["email"],
-                reason=user["reason"],
-                action="delete",
-            )
+        _print_user_list(
+            "\nUsers that will be deleted:",
+            users_to_delete,
+            "delete"
+        )
 
     if identities_to_unlink:
-        print_warning(
+        _print_user_list(
             "\nUsers where identities will be unlinked:",
-            count=len(identities_to_unlink),
+            identities_to_unlink,
+            "unlink"
         )
-        for user in identities_to_unlink:
-            print_info(
-                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                user_id=user["user_id"],
-                email=user["email"],
-                reason=user["reason"],
-                action="unlink",
-            )
 
     if auth0_main_protected:
-        print_warning(
-            "\nProtected users (Auth0 main identity):", count=len(auth0_main_protected)
+        _print_user_list(
+            "\nProtected users (Auth0 main identity):",
+            auth0_main_protected,
+            "protected"
         )
-        for user in auth0_main_protected:
-            print_info(
-                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                user_id=user["user_id"],
-                email=user["email"],
-                reason=user["reason"],
-                action="protected",
-            )
+
+
+def _print_user_list(
+    header: str, user_list: list[dict[str, Any]], action: str
+) -> None:
+    """Print a formatted list of users.
+
+    Args:
+        header: Header text for the list
+        user_list: List of user records to print
+        action: Action type for logging context
+    """
+    print_warning(header, count=len(user_list))
+    for user in user_list:
+        print_info(
+            f"  {user['user_id']} ({user['email']}) - {user['reason']}",
+            user_id=user["user_id"],
+            email=user["email"],
+            reason=user["reason"],
+            action=action,
+        )
 
 
 def _handle_auto_delete_operations(
@@ -403,174 +543,334 @@ def _handle_auto_delete_operations(
         return
 
     if auto_delete:
-        # Confirm operations for production environment
-        if env == "prod":
-            print_error(
-                f"\nWARNING: This will perform {total_operations} operations in PRODUCTION!",
-                total_operations=total_operations,
-                environment="prod",
-            )
-            confirm = input("Type 'CONFIRM' to proceed: ")
-            if confirm != "CONFIRM":
-                print_warning("Operations cancelled.", operation="auto_delete")
-                return
+        if not _confirm_production_operations(env, total_operations):
+            return
 
-        # Handle user deletions
-        deleted_count = 0
-        failed_deletions = 0
+        deletion_results = _handle_user_deletions(users_to_delete, token, base_url)
+        unlinking_results = _handle_identity_unlinking(
+            identities_to_unlink, token, base_url
+        )
 
-        if users_to_delete:
-            print_warning(
-                f"\nDeleting {len(users_to_delete)} users...",
-                count=len(users_to_delete),
-                operation="delete_users",
-            )
-            for idx, user in enumerate(users_to_delete, 1):
-                if shutdown_requested():
-                    break
-
-                show_progress(idx, len(users_to_delete), "Deleting users")
-
-                try:
-                    delete_user(user["user_id"], token, base_url)
-                    deleted_count += 1
-                except Exception as e:
-                    print_error(
-                        f"\nFailed to delete user {user['user_id']}: {e}",
-                        user_id=user["user_id"],
-                        operation="delete_user",
-                    )
-                    failed_deletions += 1
-            print("\n")  # Clear progress line
-
-        # Handle identity unlinking and check for orphaned users
-        unlinked_count = 0
-        failed_unlinks = 0
-        orphaned_users_deleted = 0
-        orphaned_users_failed = 0
-
-        if identities_to_unlink:
-            print_warning(
-                f"\nUnlinking {len(identities_to_unlink)} identities...",
-                count=len(identities_to_unlink),
-                operation="unlink_identities",
-            )
-            for idx, user in enumerate(identities_to_unlink, 1):
-                if shutdown_requested():
-                    break
-
-                show_progress(idx, len(identities_to_unlink), "Unlinking identities")
-
-                try:
-                    success = unlink_user_identity(
-                        user["user_id"],
-                        user["matching_connection"],
-                        user["social_id"],
-                        token,
-                        base_url,
-                    )
-                    if success:
-                        unlinked_count += 1
-
-                        # Check if user has no remaining identities after unlinking
-                        remaining_identities = _get_user_identity_count(
-                            user["user_id"], token, base_url
-                        )
-                        if remaining_identities == 0:
-                            print_warning(
-                                f"User {user['user_id']} has no remaining identities after unlinking, deleting...",
-                                user_id=user["user_id"],
-                                operation="delete_orphaned_user",
-                            )
-                            try:
-                                delete_user(user["user_id"], token, base_url)
-                                orphaned_users_deleted += 1
-                                print_success(
-                                    f"Successfully deleted orphaned user {user['user_id']}",
-                                    user_id=user["user_id"],
-                                    operation="delete_orphaned_user",
-                                )
-                            except Exception as e:
-                                print_error(
-                                    f"Failed to delete orphaned user {user['user_id']}: {e}",
-                                    user_id=user["user_id"],
-                                    operation="delete_orphaned_user",
-                                )
-                                orphaned_users_failed += 1
-
-                        # Search for and delete separate user accounts with this social ID as primary identity
-                        detached_users = _find_users_with_primary_social_id(
-                            user["social_id"], user["matching_connection"], token, base_url
-                        )
-                        for detached_user in detached_users:
-                            try:
-                                delete_user(detached_user["user_id"], token, base_url)
-                                orphaned_users_deleted += 1
-                                print_success(
-                                    f"Successfully deleted detached social user {detached_user['user_id']} with identity {user['social_id']}",
-                                    user_id=detached_user["user_id"],
-                                    social_id=user["social_id"],
-                                    operation="delete_detached_social_user",
-                                )
-                            except Exception as e:
-                                print_error(
-                                    f"Failed to delete detached social user {detached_user['user_id']}: {e}",
-                                    user_id=detached_user["user_id"],
-                                    operation="delete_detached_social_user",
-                                )
-                                orphaned_users_failed += 1
-                    else:
-                        failed_unlinks += 1
-                except Exception as e:
-                    print_error(
-                        f"\nFailed to unlink identity {user['social_id']} from user {user['user_id']}: {e}",
-                        user_id=user["user_id"],
-                        social_id=user["social_id"],
-                        operation="unlink_identity",
-                    )
-                    failed_unlinks += 1
-            print("\n")  # Clear progress line
-
-        # Print summary
-        print_success("\nOperations Summary:", operation="operations_summary")
-        if users_to_delete:
-            print_info(f"Users deleted: {deleted_count}", deleted_count=deleted_count)
-            print_info(
-                f"Failed deletions: {failed_deletions}",
-                failed_deletions=failed_deletions,
-            )
-        if identities_to_unlink:
-            print_info(
-                f"Identities unlinked: {unlinked_count}", unlinked_count=unlinked_count
-            )
-            print_info(
-                f"Failed unlinks: {failed_unlinks}", failed_unlinks=failed_unlinks
-            )
-            if orphaned_users_deleted > 0:
-                print_info(
-                    f"Orphaned users deleted: {orphaned_users_deleted}",
-                    orphaned_users_deleted=orphaned_users_deleted,
-                )
-            if orphaned_users_failed > 0:
-                print_info(
-                    f"Failed orphaned user deletions: {orphaned_users_failed}",
-                    orphaned_users_failed=orphaned_users_failed,
-                )
+        _print_operations_summary(
+            deletion_results, unlinking_results, users_to_delete, identities_to_unlink
+        )
 
     elif total_operations > 0 and not auto_delete:
-        print_warning(
-            f"\nNote: {total_operations} operations found, but auto_delete is disabled.",
+        _print_disabled_operations_notice(
+            total_operations, users_to_delete, identities_to_unlink
+        )
+
+
+def _confirm_production_operations(env: str, total_operations: int) -> bool:
+    """Confirm operations for production environment.
+
+    Args:
+        env: Environment (dev/prod)
+        total_operations: Total number of operations to perform
+
+    Returns:
+        bool: True if confirmed, False if cancelled
+    """
+    if env == "prod":
+        print_error(
+            f"\nWARNING: This will perform {total_operations} operations in PRODUCTION!",
             total_operations=total_operations,
-            auto_delete=False,
+            environment="prod",
+        )
+        confirm = input("Type 'CONFIRM' to proceed: ")
+        if confirm != "CONFIRM":
+            print_warning("Operations cancelled.", operation="auto_delete")
+            return False
+    return True
+
+
+def _handle_user_deletions(
+    users_to_delete: list[dict[str, Any]], token: str, base_url: str
+) -> dict[str, int]:
+    """Handle deletion of users marked for deletion.
+
+    Args:
+        users_to_delete: List of users to delete
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        dict: Results with deleted_count and failed_deletions
+    """
+    deleted_count = 0
+    failed_deletions = 0
+
+    if not users_to_delete:
+        return {"deleted_count": 0, "failed_deletions": 0}
+
+    print_warning(
+        f"\nDeleting {len(users_to_delete)} users...",
+        count=len(users_to_delete),
+        operation="delete_users",
+    )
+
+    for idx, user in enumerate(users_to_delete, 1):
+        if shutdown_requested():
+            break
+
+        show_progress(idx, len(users_to_delete), "Deleting users")
+
+        try:
+            delete_user(user["user_id"], token, base_url)
+            deleted_count += 1
+        except Exception as e:
+            print_error(
+                f"\nFailed to delete user {user['user_id']}: {e}",
+                user_id=user["user_id"],
+                operation="delete_user",
+            )
+            failed_deletions += 1
+
+    print("\n")  # Clear progress line
+    return {"deleted_count": deleted_count, "failed_deletions": failed_deletions}
+
+
+def _handle_identity_unlinking(
+    identities_to_unlink: list[dict[str, Any]], token: str, base_url: str
+) -> dict[str, int]:
+    """Handle unlinking of identities and cleanup of orphaned users.
+
+    Args:
+        identities_to_unlink: List of identities to unlink
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        dict: Results with counts for various operations
+    """
+    results = {
+        "unlinked_count": 0,
+        "failed_unlinks": 0,
+        "orphaned_users_deleted": 0,
+        "orphaned_users_failed": 0,
+    }
+
+    if not identities_to_unlink:
+        return results
+
+    print_warning(
+        f"\nUnlinking {len(identities_to_unlink)} identities...",
+        count=len(identities_to_unlink),
+        operation="unlink_identities",
+    )
+
+    for idx, user in enumerate(identities_to_unlink, 1):
+        if shutdown_requested():
+            break
+
+        show_progress(idx, len(identities_to_unlink), "Unlinking identities")
+        _process_single_identity_unlink(user, token, base_url, results)
+
+    print("\n")  # Clear progress line
+    return results
+
+
+def _process_single_identity_unlink(
+    user: dict[str, Any], token: str, base_url: str, results: dict[str, int]
+) -> None:
+    """Process unlinking of a single identity and handle orphaned users.
+
+    Args:
+        user: User data with identity information
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        results: Results dictionary to update
+    """
+    try:
+        success = unlink_user_identity(
+            user["user_id"],
+            user["matching_connection"],
+            user["social_id"],
+            token,
+            base_url,
+        )
+        if success:
+            results["unlinked_count"] += 1
+            _handle_orphaned_users_cleanup(user, token, base_url, results)
+        else:
+            results["failed_unlinks"] += 1
+    except Exception as e:
+        print_error(
+            f"\nFailed to unlink identity {user['social_id']} from user {user['user_id']}: {e}",
+            user_id=user["user_id"],
+            social_id=user["social_id"],
+            operation="unlink_identity",
+        )
+        results["failed_unlinks"] += 1
+
+
+def _handle_orphaned_users_cleanup(
+    user: dict[str, Any], token: str, base_url: str, results: dict[str, int]
+) -> None:
+    """Handle cleanup of orphaned users after identity unlinking.
+
+    Args:
+        user: User data with identity information
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        results: Results dictionary to update
+    """
+    # Check if user has no remaining identities after unlinking
+    remaining_identities = _get_user_identity_count(user["user_id"], token, base_url)
+    if remaining_identities == 0:
+        _delete_orphaned_user(user["user_id"], token, base_url, results)
+
+    # Search for and delete separate user accounts with this social ID as primary identity
+    detached_users = _find_users_with_primary_social_id(
+        user["social_id"], user["matching_connection"], token, base_url
+    )
+    for detached_user in detached_users:
+        _delete_detached_social_user(
+            detached_user, user["social_id"], token, base_url, results
+        )
+
+
+def _delete_orphaned_user(
+    user_id: str, token: str, base_url: str, results: dict[str, int]
+) -> None:
+    """Delete a user that has no remaining identities.
+
+    Args:
+        user_id: User ID to delete
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        results: Results dictionary to update
+    """
+    print_warning(
+        f"User {user_id} has no remaining identities after unlinking, deleting...",
+        user_id=user_id,
+        operation="delete_orphaned_user",
+    )
+    try:
+        delete_user(user_id, token, base_url)
+        results["orphaned_users_deleted"] += 1
+        print_success(
+            f"Successfully deleted orphaned user {user_id}",
+            user_id=user_id,
+            operation="delete_orphaned_user",
+        )
+    except Exception as e:
+        print_error(
+            f"Failed to delete orphaned user {user_id}: {e}",
+            user_id=user_id,
+            operation="delete_orphaned_user",
+        )
+        results["orphaned_users_failed"] += 1
+
+
+def _delete_detached_social_user(
+    detached_user: dict[str, Any],
+    social_id: str,
+    token: str,
+    base_url: str,
+    results: dict[str, int],
+) -> None:
+    """Delete a detached social user account.
+
+    Args:
+        detached_user: Detached user data
+        social_id: Social media ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        results: Results dictionary to update
+    """
+    try:
+        delete_user(detached_user["user_id"], token, base_url)
+        results["orphaned_users_deleted"] += 1
+        print_success(
+            f"Successfully deleted detached social user {detached_user['user_id']} with identity {social_id}",
+            user_id=detached_user["user_id"],
+            social_id=social_id,
+            operation="delete_detached_social_user",
+        )
+    except Exception as e:
+        print_error(
+            f"Failed to delete detached social user {detached_user['user_id']}: {e}",
+            user_id=detached_user["user_id"],
+            operation="delete_detached_social_user",
+        )
+        results["orphaned_users_failed"] += 1
+
+
+def _print_operations_summary(
+    deletion_results: dict[str, int],
+    unlinking_results: dict[str, int],
+    users_to_delete: list[dict[str, Any]],
+    identities_to_unlink: list[dict[str, Any]],
+) -> None:
+    """Print summary of completed operations.
+
+    Args:
+        deletion_results: Results from user deletions
+        unlinking_results: Results from identity unlinking
+        users_to_delete: Original list of users to delete
+        identities_to_unlink: Original list of identities to unlink
+    """
+    print_success("\nOperations Summary:", operation="operations_summary")
+
+    if users_to_delete:
+        print_info(
+            f"Users deleted: {deletion_results['deleted_count']}",
+            deleted_count=deletion_results["deleted_count"],
         )
         print_info(
-            f"- {len(users_to_delete)} users would be deleted",
-            delete_count=len(users_to_delete),
+            f"Failed deletions: {deletion_results['failed_deletions']}",
+            failed_deletions=deletion_results["failed_deletions"],
+        )
+
+    if identities_to_unlink:
+        print_info(
+            f"Identities unlinked: {unlinking_results['unlinked_count']}",
+            unlinked_count=unlinking_results["unlinked_count"],
         )
         print_info(
-            f"- {len(identities_to_unlink)} identities would be unlinked",
-            unlink_count=len(identities_to_unlink),
+            f"Failed unlinks: {unlinking_results['failed_unlinks']}",
+            failed_unlinks=unlinking_results["failed_unlinks"],
         )
+
+        if unlinking_results["orphaned_users_deleted"] > 0:
+            print_info(
+                f"Orphaned users deleted: {unlinking_results['orphaned_users_deleted']}",
+                orphaned_users_deleted=unlinking_results["orphaned_users_deleted"],
+            )
+
+        if unlinking_results["orphaned_users_failed"] > 0:
+            print_info(
+                f"Failed orphaned user deletions: {unlinking_results['orphaned_users_failed']}",
+                orphaned_users_failed=unlinking_results["orphaned_users_failed"],
+            )
+
+
+def _print_disabled_operations_notice(
+    total_operations: int,
+    users_to_delete: list[dict[str, Any]],
+    identities_to_unlink: list[dict[str, Any]],
+) -> None:
+    """Print notice when auto_delete is disabled but operations were found.
+
+    Args:
+        total_operations: Total number of operations found
+        users_to_delete: Users that would be deleted
+        identities_to_unlink: Identities that would be unlinked
+    """
+    print_warning(
+        f"\nNote: {total_operations} operations found, but auto_delete is disabled.",
+        total_operations=total_operations,
+        auto_delete=False,
+    )
+    print_info(
+        f"- {len(users_to_delete)} users would be deleted",
+        delete_count=len(users_to_delete),
+    )
+    print_info(
+        f"- {len(identities_to_unlink)} identities would be unlinked",
+        unlink_count=len(identities_to_unlink),
+    )
 
 
 def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
@@ -633,8 +933,10 @@ def _has_social_id_as_primary_identity(
 
     # Check if this is the primary identity (usually the first one)
     primary_identity = identities[0]
-    return (primary_identity.get("user_id") == social_id and
-            primary_identity.get("connection") == connection)
+    return (
+        primary_identity.get("user_id") == social_id and
+        primary_identity.get("connection") == connection
+    )
 
 
 def _find_users_with_primary_social_id(
@@ -687,7 +989,7 @@ def _find_users_with_primary_social_id(
                     found_users.append(user)
                     print_info(
                         f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
-                        user_id=user.get('user_id', 'unknown'),
+                        user_id=user.get("user_id", "unknown"),
                         social_id=social_id,
                         operation="find_detached_social_user",
                     )
