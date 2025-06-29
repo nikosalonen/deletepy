@@ -69,6 +69,85 @@ def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> Non
         print_success("All users are blocked.", operation="check_unblocked")
 
 
+def _search_all_social_ids(
+    social_ids: list[str], token: str, base_url: str
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Search for users with all provided social media IDs.
+
+    Args:
+        social_ids: List of social media IDs to search for
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        Tuple of (found_users, not_found_ids)
+    """
+    found_users = []
+    not_found_ids = []
+    total_ids = len(social_ids)
+
+    for idx, social_id in enumerate(social_ids, 1):
+        if shutdown_requested():
+            break
+
+        show_progress(idx, total_ids, "Searching social IDs")
+
+        # Search for users with this social ID
+        users_found = _search_users_by_social_id(social_id, token, base_url)
+        if users_found:
+            # Add social_id to each user for later processing
+            for user in users_found:
+                user["social_id"] = social_id
+            found_users.extend(users_found)
+        else:
+            not_found_ids.append(social_id.strip())
+
+    print("\n")  # Clear progress line
+    return found_users, not_found_ids
+
+
+def _process_search_results(
+    found_users: list[dict[str, Any]],
+    not_found_ids: list[str],
+    total_ids: int,
+    token: str,
+    base_url: str,
+    env: str,
+    auto_delete: bool,
+) -> None:
+    """Process search results through categorization, display, and operations.
+
+    Args:
+        found_users: Users found during search
+        not_found_ids: Social IDs that were not found
+        total_ids: Total number of social IDs searched
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        env: Environment for confirmation prompts
+        auto_delete: Whether to automatically delete users
+    """
+    # Categorize users based on their identity configuration
+    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
+        found_users, auto_delete
+    )
+
+    # Display search results
+    _display_search_results(
+        total_ids,
+        found_users,
+        not_found_ids,
+        users_to_delete,
+        identities_to_unlink,
+        auth0_main_protected,
+        auto_delete,
+    )
+
+    # Handle auto-delete operations
+    _handle_auto_delete_operations(
+        users_to_delete, identities_to_unlink, token, base_url, env, auto_delete
+    )
+
+
 def find_users_by_social_media_ids(
     social_ids: list[str],
     token: str,
@@ -93,48 +172,12 @@ def find_users_by_social_media_ids(
         operation="social_search",
     )
 
-    found_users = []
-    not_found_ids = []
-    total_ids = len(social_ids)
-
     # Search for users with each social ID
-    for idx, social_id in enumerate(social_ids, 1):
-        if shutdown_requested():
-            break
+    found_users, not_found_ids = _search_all_social_ids(social_ids, token, base_url)
 
-        show_progress(idx, total_ids, "Searching social IDs")
-
-        # Search for users with this social ID
-        users_found = _search_users_by_social_id(social_id, token, base_url)
-        if users_found:
-            # Add social_id to each user for later processing
-            for user in users_found:
-                user["social_id"] = social_id
-            found_users.extend(users_found)
-        else:
-            not_found_ids.append(social_id.strip())
-
-    print("\n")  # Clear progress line
-
-    # Categorize users based on their identity configuration
-    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
-        found_users, auto_delete
-    )
-
-    # Display search results
-    _display_search_results(
-        total_ids,
-        found_users,
-        not_found_ids,
-        users_to_delete,
-        identities_to_unlink,
-        auth0_main_protected,
-        auto_delete,
-    )
-
-    # Handle auto-delete operations
-    _handle_auto_delete_operations(
-        users_to_delete, identities_to_unlink, token, base_url, env, auto_delete
+    # Process the search results
+    _process_search_results(
+        found_users, not_found_ids, len(social_ids), token, base_url, env, auto_delete
     )
 
 
