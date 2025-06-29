@@ -348,6 +348,22 @@ def _display_search_results(
         auth0_main_protected: Users that are protected from deletion
         auto_delete: Whether auto-delete is enabled
     """
+    _print_search_summary(total_ids, found_users, not_found_ids)
+    _print_not_found_ids(not_found_ids)
+    _print_category_counts(users_to_delete, identities_to_unlink, auth0_main_protected)
+    _print_category_details(users_to_delete, identities_to_unlink, auth0_main_protected)
+
+
+def _print_search_summary(
+    total_ids: int, found_users: list[dict[str, Any]], not_found_ids: list[str]
+) -> None:
+    """Print basic search results summary.
+
+    Args:
+        total_ids: Total number of social IDs searched
+        found_users: All users found with any of the social IDs
+        not_found_ids: Social IDs that were not found
+    """
     print_info("\nSearch Results Summary:", operation="social_search_summary")
     print_info(f"Total social IDs searched: {total_ids}", total_ids=total_ids)
     print_info(f"Users found: {len(found_users)}", users_found=len(found_users))
@@ -356,11 +372,31 @@ def _display_search_results(
         not_found_count=len(not_found_ids),
     )
 
+
+def _print_not_found_ids(not_found_ids: list[str]) -> None:
+    """Print list of social IDs that were not found.
+
+    Args:
+        not_found_ids: Social IDs that were not found
+    """
     if not_found_ids:
         print_warning("\nSocial IDs not found:", count=len(not_found_ids))
         for social_id in not_found_ids:
             print_info(f"  {social_id}", social_id=social_id, status="not_found")
 
+
+def _print_category_counts(
+    users_to_delete: list[dict[str, Any]],
+    identities_to_unlink: list[dict[str, Any]],
+    auth0_main_protected: list[dict[str, Any]]
+) -> None:
+    """Print user category counts.
+
+    Args:
+        users_to_delete: Users that will be deleted
+        identities_to_unlink: Users where identities will be unlinked
+        auth0_main_protected: Users that are protected from deletion
+    """
     print_info("\nUser Categories:", operation="categorization")
     print_info(
         f"  Users to delete: {len(users_to_delete)}", delete_count=len(users_to_delete)
@@ -374,43 +410,60 @@ def _display_search_results(
         protected_count=len(auth0_main_protected),
     )
 
+
+def _print_category_details(
+    users_to_delete: list[dict[str, Any]],
+    identities_to_unlink: list[dict[str, Any]],
+    auth0_main_protected: list[dict[str, Any]]
+) -> None:
+    """Print detailed user lists for each category.
+
+    Args:
+        users_to_delete: Users that will be deleted
+        identities_to_unlink: Users where identities will be unlinked
+        auth0_main_protected: Users that are protected from deletion
+    """
     if users_to_delete:
-        print_warning("\nUsers that will be deleted:", count=len(users_to_delete))
-        for user in users_to_delete:
-            print_info(
-                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                user_id=user["user_id"],
-                email=user["email"],
-                reason=user["reason"],
-                action="delete",
-            )
+        _print_user_list(
+            "\nUsers that will be deleted:",
+            users_to_delete,
+            "delete"
+        )
 
     if identities_to_unlink:
-        print_warning(
+        _print_user_list(
             "\nUsers where identities will be unlinked:",
-            count=len(identities_to_unlink),
+            identities_to_unlink,
+            "unlink"
         )
-        for user in identities_to_unlink:
-            print_info(
-                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                user_id=user["user_id"],
-                email=user["email"],
-                reason=user["reason"],
-                action="unlink",
-            )
 
     if auth0_main_protected:
-        print_warning(
-            "\nProtected users (Auth0 main identity):", count=len(auth0_main_protected)
+        _print_user_list(
+            "\nProtected users (Auth0 main identity):",
+            auth0_main_protected,
+            "protected"
         )
-        for user in auth0_main_protected:
-            print_info(
-                f"  {user['user_id']} ({user['email']}) - {user['reason']}",
-                user_id=user["user_id"],
-                email=user["email"],
-                reason=user["reason"],
-                action="protected",
-            )
+
+
+def _print_user_list(
+    header: str, user_list: list[dict[str, Any]], action: str
+) -> None:
+    """Print a formatted list of users.
+
+    Args:
+        header: Header text for the list
+        user_list: List of user records to print
+        action: Action type for logging context
+    """
+    print_warning(header, count=len(user_list))
+    for user in user_list:
+        print_info(
+            f"  {user['user_id']} ({user['email']}) - {user['reason']}",
+            user_id=user["user_id"],
+            email=user["email"],
+            reason=user["reason"],
+            action=action,
+        )
 
 
 def _handle_auto_delete_operations(
