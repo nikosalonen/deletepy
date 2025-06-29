@@ -76,9 +76,25 @@ deletepy/
 
 ## Prerequisites
 
-- Python 3.9+
+- **Python 3.13+** - The tool requires Python 3.13 or higher
 - Auth0 account with appropriate API permissions
 - Auth0 Management API access
+
+### Python Version Management
+
+If you need to install or manage Python versions, we recommend using version managers:
+
+**For macOS:**
+- [pyenv](https://github.com/pyenv/pyenv) - Simple Python version management
+- [Homebrew](https://brew.sh/) - Package manager that can install Python versions
+
+**For Windows:**
+- [pyenv-win](https://github.com/pyenv-win/pyenv-win) - Python version management for Windows (install via `winget install pyenv-win` or download from GitHub)
+- [Python.org](https://www.python.org/downloads/) - Official Python installer
+
+**For Linux:**
+- [pyenv](https://github.com/pyenv/pyenv) - Simple Python version management
+- [asdf](https://asdf-vm.com/) - Extendable version manager with Python plugin
 
 ## Installation
 
