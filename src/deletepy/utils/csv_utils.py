@@ -94,39 +94,97 @@ def resolve_encoded_username(username: str, env: str = None) -> str:
     Returns:
         Resolved email address or original identifier if resolution fails
     """
-    if not username or not username.strip():
+    validated_username = _validate_username_input(username)
+    if not validated_username:
         return ""
 
-    username = username.strip()
+    if not _needs_username_resolution(validated_username):
+        return validated_username
 
+    # Try Auth0 API resolution if env is provided
+    if env:
+        resolved = _try_auth0_username_resolution(validated_username, env)
+        if resolved:
+            return resolved
+
+    # Fallback to string replacement
+    return _apply_username_fallback(validated_username, env)
+
+
+def _validate_username_input(username: str) -> str:
+    """Validate and clean username input.
+
+    Args:
+        username: Raw username input
+
+    Returns:
+        Cleaned username or empty string if invalid
+    """
+    if not username or not username.strip():
+        return ""
+    return username.strip()
+
+
+def _needs_username_resolution(username: str) -> bool:
+    """Check if username needs resolution to email.
+
+    Args:
+        username: Cleaned username
+
+    Returns:
+        True if resolution is needed, False if already resolved
+    """
     # If it contains '@', it's already an email address (Auth0 usernames cannot have '@')
     if "@" in username:
-        return username
+        return False
 
     # If it's an Auth0 ID format, return as-is
     if is_auth0_user_id(username):
-        return username
+        return False
 
     # Only try to resolve if it contains encoded patterns
     if "_at_" not in username and "__" not in username:
-        return username
+        return False
 
-    # Try to get Auth0 API access if env is provided
-    if env:
-        try:
-            token = get_access_token(env)
-            base_url = get_base_url(env)
+    return True
 
-            if token:
-                # Search for user by encoded username
-                user_details = _search_user_by_field(username, token, base_url)
-                if user_details and user_details.get("email"):
-                    return user_details["email"]
-        except Exception:
-            # If Auth0 API fails, fall back to string replacement
-            pass
 
-    # Fallback to string replacement (but warn about potential issues)
+def _try_auth0_username_resolution(username: str, env: str) -> str | None:
+    """Try to resolve username using Auth0 API.
+
+    Args:
+        username: Encoded username to resolve
+        env: Environment to use for Auth0 API
+
+    Returns:
+        Resolved email or None if resolution failed
+    """
+    try:
+        token = get_access_token(env)
+        base_url = get_base_url(env)
+
+        if token:
+            # Search for user by encoded username
+            user_details = _search_user_by_field(username, token, base_url)
+            if user_details and user_details.get("email"):
+                return user_details["email"]
+    except Exception:
+        # If Auth0 API fails, fall back to string replacement
+        pass
+
+    return None
+
+
+def _apply_username_fallback(username: str, env: str | None) -> str:
+    """Apply string replacement fallback for encoded usernames.
+
+    Args:
+        username: Encoded username
+        env: Environment (for warning context)
+
+    Returns:
+        Username with string replacement applied
+    """
     if "_at_" in username:
         fallback = username.replace("_at_", "@")
         if env:  # Only show warning if we tried API and failed
