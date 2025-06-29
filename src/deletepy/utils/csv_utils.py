@@ -94,39 +94,97 @@ def resolve_encoded_username(username: str, env: str = None) -> str:
     Returns:
         Resolved email address or original identifier if resolution fails
     """
-    if not username or not username.strip():
+    validated_username = _validate_username_input(username)
+    if not validated_username:
         return ""
 
-    username = username.strip()
+    if not _needs_username_resolution(validated_username):
+        return validated_username
 
+    # Try Auth0 API resolution if env is provided
+    if env:
+        resolved = _try_auth0_username_resolution(validated_username, env)
+        if resolved:
+            return resolved
+
+    # Fallback to string replacement
+    return _apply_username_fallback(validated_username, env)
+
+
+def _validate_username_input(username: str) -> str:
+    """Validate and clean username input.
+
+    Args:
+        username: Raw username input
+
+    Returns:
+        Cleaned username or empty string if invalid
+    """
+    if not username or not username.strip():
+        return ""
+    return username.strip()
+
+
+def _needs_username_resolution(username: str) -> bool:
+    """Check if username needs resolution to email.
+
+    Args:
+        username: Cleaned username
+
+    Returns:
+        True if resolution is needed, False if already resolved
+    """
     # If it contains '@', it's already an email address (Auth0 usernames cannot have '@')
     if "@" in username:
-        return username
+        return False
 
     # If it's an Auth0 ID format, return as-is
     if is_auth0_user_id(username):
-        return username
+        return False
 
     # Only try to resolve if it contains encoded patterns
     if "_at_" not in username and "__" not in username:
-        return username
+        return False
 
-    # Try to get Auth0 API access if env is provided
-    if env:
-        try:
-            token = get_access_token(env)
-            base_url = get_base_url(env)
+    return True
 
-            if token:
-                # Search for user by encoded username
-                user_details = _search_user_by_field(username, token, base_url)
-                if user_details and user_details.get("email"):
-                    return user_details["email"]
-        except Exception:
-            # If Auth0 API fails, fall back to string replacement
-            pass
 
-    # Fallback to string replacement (but warn about potential issues)
+def _try_auth0_username_resolution(username: str, env: str) -> str | None:
+    """Try to resolve username using Auth0 API.
+
+    Args:
+        username: Encoded username to resolve
+        env: Environment to use for Auth0 API
+
+    Returns:
+        Resolved email or None if resolution failed
+    """
+    try:
+        token = get_access_token(env)
+        base_url = get_base_url(env)
+
+        if token:
+            # Search for user by encoded username
+            user_details = _search_user_by_field(username, token, base_url)
+            if user_details and user_details.get("email"):
+                return user_details["email"]
+    except Exception:
+        # If Auth0 API fails, fall back to string replacement
+        pass
+
+    return None
+
+
+def _apply_username_fallback(username: str, env: str | None) -> str:
+    """Apply string replacement fallback for encoded usernames.
+
+    Args:
+        username: Encoded username
+        env: Environment (for warning context)
+
+    Returns:
+        Username with string replacement applied
+    """
     if "_at_" in username:
         fallback = username.replace("_at_", "@")
         if env:  # Only show warning if we tried API and failed
@@ -264,18 +322,50 @@ def _process_csv_file(
     Returns:
         Tuple of (identifiers/row_data list, skip_resolution flag)
     """
-    identifiers = []
-    skip_resolution = False
+    reader, headers = _setup_csv_reader(infile)
+    if not headers:
+        return [], False
 
+    best_column, user_id_column = _determine_csv_columns(headers, output_type)
+    skip_resolution = _setup_processing_config(best_column, output_type)
+
+    identifiers = _process_csv_rows(
+        reader, best_column, user_id_column, output_type, env, skip_resolution
+    )
+
+    return identifiers, skip_resolution
+
+
+def _setup_csv_reader(infile) -> tuple[csv.DictReader | None, list[str] | None]:
+    """Setup CSV reader and validate headers.
+
+    Args:
+        infile: File object to read from
+
+    Returns:
+        Tuple of (reader, headers) or (None, None) if invalid
+    """
     reader = csv.DictReader(infile)
     headers = reader.fieldnames
 
     if not headers:
         print_error("No headers found in CSV file")
-        return identifiers, skip_resolution
+        return None, None
 
     print_info(f"Available columns: {', '.join(headers)}")
+    return reader, headers
 
+
+def _determine_csv_columns(headers: list[str], output_type: str) -> tuple[str, str | None]:
+    """Determine the best column to use and find user_id column for fallback.
+
+    Args:
+        headers: List of CSV headers
+        output_type: Type of output desired
+
+    Returns:
+        Tuple of (best_column, user_id_column)
+    """
     best_column = find_best_column(headers, output_type)
 
     if not best_column:
@@ -298,37 +388,99 @@ def _process_csv_file(
             user_id_column = header
             break
 
-    # Check if we should skip encoded username resolution for this column
+    return best_column, user_id_column
+
+
+def _setup_processing_config(best_column: str, output_type: str) -> bool:
+    """Setup processing configuration and determine if resolution should be skipped.
+
+    Args:
+        best_column: The selected column name
+        output_type: Type of output desired
+
+    Returns:
+        bool: True if resolution should be skipped
+    """
     skip_resolution = _should_skip_resolution(best_column, output_type)
     if skip_resolution:
         data_type = "username" if output_type == "username" else "email"
         print_info(
             f"CSV column '{best_column}' contains {data_type} data. Skipping encoded username resolution."
         )
+    return skip_resolution
+
+
+def _process_csv_rows(
+    reader: csv.DictReader,
+    best_column: str,
+    user_id_column: str | None,
+    output_type: str,
+    env: str | None,
+    skip_resolution: bool
+) -> list[str | CsvRowData]:
+    """Process CSV rows and extract identifiers.
+
+    Args:
+        reader: CSV DictReader instance
+        best_column: Column to extract data from
+        user_id_column: User ID column for fallback (if available)
+        output_type: Type of output desired
+        env: Environment for Auth0 API resolution
+        skip_resolution: Whether to skip encoded username resolution
+
+    Returns:
+        List of identifiers or CsvRowData objects
+    """
+    identifiers = []
 
     for row in reader:
         if best_column in row:
-            # Preserve encoded usernames if we're looking for username output and found username column
-            preserve_encoded = skip_resolution and output_type == "username"
-            env_for_cleaning = None if skip_resolution else env
-            cleaned = clean_identifier(
-                row[best_column], env_for_cleaning, preserve_encoded
+            identifier = _create_identifier_record(
+                row, best_column, user_id_column, output_type, env, skip_resolution
             )
-            if cleaned:
-                # If we have Auth0 API env and user_id column, store row data for enhanced processing
-                if env and user_id_column and user_id_column in row:
-                    user_id = (
-                        row[user_id_column].strip() if row[user_id_column] else None
-                    )
-                    identifiers.append(
-                        CsvRowData(
-                            identifier=cleaned, user_id=user_id, row_data=dict(row)
-                        )
-                    )
-                else:
-                    identifiers.append(cleaned)
+            if identifier:
+                identifiers.append(identifier)
 
-    return identifiers, skip_resolution
+    return identifiers
+
+
+def _create_identifier_record(
+    row: dict[str, str],
+    best_column: str,
+    user_id_column: str | None,
+    output_type: str,
+    env: str | None,
+    skip_resolution: bool
+) -> str | CsvRowData | None:
+    """Create an identifier record from a CSV row.
+
+    Args:
+        row: CSV row data
+        best_column: Column to extract data from
+        user_id_column: User ID column for fallback (if available)
+        output_type: Type of output desired
+        env: Environment for Auth0 API resolution
+        skip_resolution: Whether to skip encoded username resolution
+
+    Returns:
+        Identifier string, CsvRowData object, or None if empty
+    """
+    # Preserve encoded usernames if we're looking for username output and found username column
+    preserve_encoded = skip_resolution and output_type == "username"
+    env_for_cleaning = None if skip_resolution else env
+    cleaned = clean_identifier(row[best_column], env_for_cleaning, preserve_encoded)
+
+    if not cleaned:
+        return None
+
+    # If we have Auth0 API env and user_id column, store row data for enhanced processing
+    if env and user_id_column and user_id_column in row:
+        user_id = row[user_id_column].strip() if row[user_id_column] else None
+        return CsvRowData(
+            identifier=cleaned, user_id=user_id, row_data=dict(row)
+        )
+    else:
+        return cleaned
 
 
 def _should_skip_resolution(best_column: str, output_type: str) -> bool:
@@ -418,39 +570,15 @@ def extract_identifiers_from_csv(
     """
     try:
         with safe_file_read(filename) as infile:
-            # Detect file type by peeking at first line
-            first_line = infile.readline()
-            infile.seek(0)
+            # Detect file type and process accordingly
+            identifiers, skip_resolution = _detect_and_process_file(
+                infile, output_type, env
+            )
 
-            file_type = _detect_file_type(first_line)
-
-            # Process file based on detected type
-            if file_type == "plain_text":
-                return _process_plain_text(infile, env)
-            else:
-                identifiers, skip_resolution = _process_csv_file(
-                    infile, output_type, env
-                )
-
-                # Handle conversion if needed
-                if _needs_conversion(skip_resolution, identifiers, output_type):
-                    converted_identifiers = _handle_conversion(
-                        identifiers, output_type, env, interactive
-                    )
-                    return converted_identifiers
-                elif not skip_resolution and _check_if_data_available(
-                    identifiers, output_type
-                ):
-                    print_info(
-                        f"CSV already contains {output_type} data. No Auth0 API calls needed."
-                    )
-
-                # Extract just the identifiers from CsvRowData objects for final output
-                final_identifiers = [
-                    item.identifier if isinstance(item, CsvRowData) else item
-                    for item in identifiers
-                ]
-                return final_identifiers
+            # Handle post-processing (conversion, extraction)
+            return _handle_post_processing(
+                identifiers, skip_resolution, output_type, env, interactive
+            )
 
     except FileOperationError as e:
         print_error(f"Error reading file {filename}: {e}")
@@ -461,6 +589,80 @@ def extract_identifiers_from_csv(
     except Exception as e:
         print_error(f"Unexpected error processing file {filename}: {e}")
         return []
+
+
+def _detect_and_process_file(
+    infile, output_type: str, env: str | None
+) -> tuple[list[str | CsvRowData], bool]:
+    """Detect file type and process file accordingly.
+
+    Args:
+        infile: File object to read from
+        output_type: Type of output desired
+        env: Environment for Auth0 API resolution
+
+    Returns:
+        Tuple of (identifiers, skip_resolution flag)
+    """
+    # Detect file type by peeking at first line
+    first_line = infile.readline()
+    infile.seek(0)
+
+    file_type = _detect_file_type(first_line)
+
+    # Process file based on detected type
+    if file_type == "plain_text":
+        plain_identifiers = _process_plain_text(infile, env)
+        # Plain text identifiers are already strings, not CsvRowData
+        return plain_identifiers, True  # Skip resolution since plain text is already processed
+    else:
+        return _process_csv_file(infile, output_type, env)
+
+
+def _handle_post_processing(
+    identifiers: list[str | CsvRowData],
+    skip_resolution: bool,
+    output_type: str,
+    env: str | None,
+    interactive: bool
+) -> list[str]:
+    """Handle post-processing of identifiers including conversion and extraction.
+
+    Args:
+        identifiers: List of identifiers or CsvRowData
+        skip_resolution: Whether resolution was skipped
+        output_type: Type of output desired
+        env: Environment for Auth0 API
+        interactive: Whether to prompt user for input
+
+    Returns:
+        Final list of processed identifiers
+    """
+    # Handle conversion if needed
+    if _needs_conversion(skip_resolution, identifiers, output_type):
+        return _handle_conversion(identifiers, output_type, env, interactive)
+    elif not skip_resolution and _check_if_data_available(identifiers, output_type):
+        print_info(
+            f"CSV already contains {output_type} data. No Auth0 API calls needed."
+        )
+
+    # Extract just the identifiers from CsvRowData objects for final output
+    return _extract_final_identifiers(identifiers)
+
+
+def _extract_final_identifiers(identifiers: list[str | CsvRowData]) -> list[str]:
+    """Extract final identifiers from mixed list of strings and CsvRowData.
+
+    Args:
+        identifiers: List of identifiers or CsvRowData objects
+
+    Returns:
+        List of string identifiers
+    """
+    return [
+        item.identifier if isinstance(item, CsvRowData) else item
+        for item in identifiers
+    ]
 
 
 def _needs_conversion(
@@ -620,6 +822,84 @@ def _extract_output_value(
         return fallback
 
 
+def _extract_identifier_data(item: str | CsvRowData) -> tuple[str, str | None]:
+    """Extract identifier and fallback user_id from item.
+
+    Args:
+        item: Identifier string or CsvRowData with fallback user_id
+
+    Returns:
+        Tuple of (identifier, fallback_user_id)
+    """
+    if isinstance(item, CsvRowData):
+        return item.identifier, item.user_id
+    else:
+        return item, None
+
+
+def _get_user_details_with_fallback(
+    identifier: str, fallback_user_id: str | None, token: str, base_url: str, env: str
+) -> dict[str, Any] | None:
+    """Get user details with fallback strategy.
+
+    Args:
+        identifier: Original identifier
+        fallback_user_id: Fallback user ID to try if primary lookup fails
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        env: Environment for Auth0 API
+
+    Returns:
+        User details dict or None if not found
+    """
+    # Check if identifier is an encoded username (before cleaning)
+    is_encoded_username = "_at_" in identifier or "__" in identifier
+
+    # Clean the identifier
+    cleaned_identifier = clean_identifier(identifier, env)
+
+    # Try primary lookup
+    user_details = None
+    if is_auth0_user_id(cleaned_identifier):
+        user_details = get_user_details(cleaned_identifier, token, base_url)
+    else:
+        # For encoded usernames, search by the original encoded value as username
+        search_value = identifier if is_encoded_username else cleaned_identifier
+        user_details = _search_user_by_field(search_value, token, base_url)
+
+    # Try fallback if primary lookup failed
+    if not user_details and fallback_user_id and is_auth0_user_id(fallback_user_id):
+        print_info(
+            f"Primary lookup failed for '{identifier}', trying fallback user_id: {fallback_user_id}"
+        )
+        user_details = get_user_details(fallback_user_id, token, base_url)
+
+    return user_details
+
+
+def _handle_conversion_result(
+    user_details: dict[str, Any] | None,
+    output_type: str,
+    identifier: str,
+    item: str | CsvRowData
+) -> str:
+    """Handle conversion result extraction.
+
+    Args:
+        user_details: User details from Auth0 API or None
+        output_type: Requested output type
+        identifier: Original identifier
+        item: Original item for fallback
+
+    Returns:
+        Converted identifier or original if conversion fails
+    """
+    if user_details:
+        return _extract_output_value(user_details, output_type, identifier)
+    else:
+        return identifier
+
+
 def _convert_single_identifier(
     item: str | CsvRowData,
     idx: int,
@@ -642,42 +922,13 @@ def _convert_single_identifier(
         Converted identifier or original if conversion fails
     """
     try:
-        # Extract identifier and fallback user_id
-        if isinstance(item, CsvRowData):
-            identifier = item.identifier
-            fallback_user_id = item.user_id
-        else:
-            identifier = item
-            fallback_user_id = None
+        identifier, fallback_user_id = _extract_identifier_data(item)
 
-        # Check if identifier is an encoded username (before cleaning)
-        is_encoded_username = "_at_" in identifier or "__" in identifier
+        user_details = _get_user_details_with_fallback(
+            identifier, fallback_user_id, token, base_url, env
+        )
 
-        # Clean the identifier
-        cleaned_identifier = clean_identifier(identifier, env)
-
-        # Determine search strategy and get user details
-        user_details = None
-
-        if is_auth0_user_id(cleaned_identifier):
-            user_details = get_user_details(cleaned_identifier, token, base_url)
-        else:
-            # For encoded usernames, search by the original encoded value as username
-            search_value = identifier if is_encoded_username else cleaned_identifier
-            user_details = _search_user_by_field(search_value, token, base_url)
-
-        # If primary lookup failed and we have a fallback user_id, try that
-        if not user_details and fallback_user_id and is_auth0_user_id(fallback_user_id):
-            print_info(
-                f"Primary lookup failed for '{identifier}', trying fallback user_id: {fallback_user_id}"
-            )
-            user_details = get_user_details(fallback_user_id, token, base_url)
-
-        if user_details:
-            output_value = _extract_output_value(user_details, output_type, identifier)
-            return output_value
-        else:
-            return identifier
+        return _handle_conversion_result(user_details, output_type, identifier, item)
 
     except Exception as e:
         print_warning(f"Error converting identifier {identifier}: {e}")
