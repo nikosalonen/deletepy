@@ -23,6 +23,15 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Data export** (`export-last-login`) - Export user last login data to timestamped CSV files
 - **Credential testing** (`doctor`) - Validate Auth0 API credentials and permissions
 
+### Dry-Run Preview
+- **Safe preview mode** (`--dry-run`) - Preview what would happen without executing operations
+- **Comprehensive analysis** - Shows success rates, potential issues, and user categorization
+- **User state detection** - Identifies already blocked users, invalid IDs, and API errors
+- **Multiple user detection** - Warns about emails with multiple Auth0 accounts
+- **Smart categorization** - For social unlink operations, shows what would be deleted vs unlinked
+- **Interactive confirmation** - After preview, choose whether to proceed with actual operation
+- **Error resilience** - Preview continues even if some API calls fail, showing partial results
+
 ### Input & Safety Features
 - **Multiple input formats** - Support for Auth0 user IDs, email addresses, or social media IDs
 - **CSV preprocessing** - Convert multi-column CSV files to single-column input using cleanup utilities
@@ -168,12 +177,12 @@ deletepy check-domains users.txt [dev|prod]
 deletepy export-last-login emails.txt [dev|prod] [--connection CONNECTION]
 
 # Find users by social media IDs (unlinks identities or deletes users)
-deletepy unlink-social-ids social_ids.txt [dev|prod]
+deletepy unlink-social-ids social_ids.txt [dev|prod] [--dry-run]
 
 # User management operations
-deletepy users block users.txt [dev|prod]
-deletepy users delete users.txt [dev|prod]
-deletepy users revoke-grants-only users.txt [dev|prod]
+deletepy users block users.txt [dev|prod] [--dry-run]
+deletepy users delete users.txt [dev|prod] [--dry-run]
+deletepy users revoke-grants-only users.txt [dev|prod] [--dry-run]
 ```
 
 
@@ -261,12 +270,66 @@ Example workflow:
 5. Handles edge cases: NOT_FOUND, MULTIPLE_USERS, ERROR_FETCHING_DETAILS
 6. Automatic batch size optimization based on dataset size
 
+### Dry-Run Preview Operations
+
+DeletePy includes comprehensive dry-run preview functionality for all destructive operations:
+
+#### User Operations Preview (`--dry-run`)
+
+```bash
+# Preview blocking users
+deletepy users block users.txt dev --dry-run
+
+# Preview deleting users
+deletepy users delete users.txt prod --dry-run
+
+# Preview revoking grants
+deletepy users revoke-grants-only users.txt dev --dry-run
+```
+
+**Preview Information Includes:**
+- **Success Analysis**: Number of users that would be processed successfully
+- **Success Rate**: Percentage of successful operations
+- **User Categorization**:
+  - ✅ Valid users that would be processed
+  - ⚠️ Users already in target state (e.g., already blocked)
+  - ❌ Invalid user IDs or malformed identifiers
+  - ❌ Users not found (emails that don't exist in Auth0)
+  - ⚠️ Emails with multiple users (requires manual resolution)
+  - ❌ API errors or network issues
+- **Detailed User Information**: Connection type, current blocked status, last login
+- **Interactive Confirmation**: Choose whether to proceed after preview
+
+#### Social Unlink Preview (`--dry-run`)
+
+```bash
+# Preview social identity operations
+deletepy unlink-social-ids social_ids.txt dev --dry-run
+```
+
+**Social Preview Shows:**
+- **Users to Delete**: Users where the social ID is their only/main identity
+- **Identities to Unlink**: Users with multiple identities where only the social identity will be removed
+- **Protected Users**: Users with Auth0 as main identity (will be skipped)
+- **Detailed Reasoning**: Why each user falls into their category
+- **Operation Counts**: Total numbers for each type of operation
+
+#### Preview Benefits
+
+1. **Risk Reduction**: See exactly what will happen before execution
+2. **Data Validation**: Identify invalid inputs or missing users early
+3. **Scope Verification**: Confirm you're targeting the right users
+4. **Error Detection**: Find API issues or authentication problems before bulk operations
+5. **Performance Estimation**: Understand how long the actual operation will take
+6. **Compliance**: Review operations for audit trails in sensitive environments
+
 ### Production Safety
 
 - All production operations require explicit confirmation
 - Clear warnings about irreversible actions
 - Separate credential sets prevent accidental cross-environment operations
 - Detailed operation summaries before execution
+- **Dry-run recommended** for all production operations
 
 ## API Permissions
 

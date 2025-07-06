@@ -64,10 +64,11 @@ def export_last_login(input_file: Path, env: str, connection: str | None) -> Non
 @cli.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def unlink_social_ids(input_file: Path, env: str) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+def unlink_social_ids(input_file: Path, env: str, dry_run: bool) -> None:
     """Unlink social identities from Auth0 users and delete detached accounts."""
     handler = OperationHandler()
-    handler.handle_unlink_social_ids(input_file, env)
+    handler.handle_unlink_social_ids(input_file, env, dry_run)
 
 
 @cli.command()
@@ -99,28 +100,31 @@ def users() -> None:
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def block(input_file: Path, env: str) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+def block(input_file: Path, env: str, dry_run: bool) -> None:
     """Block the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "block")
+    handler.handle_user_operations(input_file, env, "block", dry_run)
 
 
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def delete(input_file: Path, env: str) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+def delete(input_file: Path, env: str, dry_run: bool) -> None:
     """Delete the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "delete")
+    handler.handle_user_operations(input_file, env, "delete", dry_run)
 
 
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def revoke_grants_only(input_file: Path, env: str) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+def revoke_grants_only(input_file: Path, env: str, dry_run: bool) -> None:
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "revoke-grants-only")
+    handler.handle_user_operations(input_file, env, "revoke-grants-only", dry_run)
 
 
 def main() -> None:

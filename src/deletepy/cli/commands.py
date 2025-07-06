@@ -12,6 +12,10 @@ from ..core.config import get_base_url
 from ..operations.batch_ops import check_unblocked_users, find_users_by_social_media_ids
 from ..operations.domain_ops import check_email_domains
 from ..operations.export_ops import export_users_last_login_to_csv
+from ..operations.preview_ops import (
+    preview_social_unlink_operations,
+    preview_user_operations,
+)
 from ..operations.user_ops import (
     block_user,
     delete_user,
@@ -20,7 +24,15 @@ from ..operations.user_ops import (
     get_user_id_from_email,
 )
 from ..utils.auth_utils import validate_auth0_user_id
-from ..utils.display_utils import CYAN, GREEN, RED, RESET, YELLOW, show_progress
+from ..utils.display_utils import (
+    CYAN,
+    GREEN,
+    RED,
+    RESET,
+    YELLOW,
+    confirm_action,
+    show_progress,
+)
 from ..utils.file_utils import read_user_ids_generator
 
 
@@ -421,30 +433,8 @@ class OperationHandler:
         except Exception as e:
             self._handle_operation_error(e, "Export last login")
 
-    def handle_unlink_social_ids(self, input_file: Path, env: str) -> None:
-        """Handle unlink social IDs operation."""
-        try:
-            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
-
-            # For social media ID search, treat input as social media IDs
-            social_ids = [line.strip() for line in user_ids if line.strip()]
-
-            if not social_ids:
-                click.echo("No valid social media IDs found to search.")
-                return
-
-            find_users_by_social_media_ids(
-                social_ids, token, base_url, env, auto_delete=True
-            )
-
-        except KeyboardInterrupt:
-            click.echo(f"\n{YELLOW}Social media ID search interrupted by user.{RESET}")
-            sys.exit(0)
-        except Exception as e:
-            self._handle_operation_error(e, "Find social IDs")
-
     def handle_user_operations(
-        self, input_file: Path, env: str, operation: str
+        self, input_file: Path, env: str, operation: str, dry_run: bool = False
     ) -> None:
         """Handle user operations (block, delete, revoke-grants-only)."""
         try:
@@ -453,6 +443,11 @@ class OperationHandler:
 
             # Get operation display name
             operation_display = self._get_operation_display_name(operation)
+
+            if dry_run:
+                # Run dry-run preview
+                self._handle_dry_run_preview(user_ids, token, base_url, operation)
+                return
 
             # Request confirmation for production environment
             if env == "prod" and not self._confirm_production_operation(
@@ -481,6 +476,113 @@ class OperationHandler:
 
         except Exception as e:
             self._handle_operation_error(e, f"User {operation}")
+
+    def handle_unlink_social_ids(self, input_file: Path, env: str, dry_run: bool = False) -> None:
+        """Handle unlink social IDs operation."""
+        try:
+            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+
+            # For social media ID search, treat input as social media IDs
+            social_ids = [line.strip() for line in user_ids if line.strip()]
+
+            if not social_ids:
+                click.echo("No valid social media IDs found to search.")
+                return
+
+            if dry_run:
+                # Run dry-run preview for social unlink
+                self._handle_social_dry_run_preview(social_ids, token, base_url, env)
+                return
+
+            find_users_by_social_media_ids(
+                social_ids, token, base_url, env, auto_delete=True
+            )
+
+        except KeyboardInterrupt:
+            click.echo(f"\n{YELLOW}Social media ID search interrupted by user.{RESET}")
+            sys.exit(0)
+        except Exception as e:
+            self._handle_operation_error(e, "Find social IDs")
+
+    def _handle_dry_run_preview(
+        self, user_ids: list[str], token: str, base_url: str, operation: str
+    ) -> None:
+        """Handle dry-run preview for user operations."""
+        try:
+            result = preview_user_operations(
+                user_ids, token, base_url, operation, show_details=True
+            )
+
+            # Ask for confirmation to proceed with actual operation
+            if result.success_count > 0:
+                click.echo(f"\n{GREEN}Preview completed successfully!{RESET}")
+                if confirm_action(
+                    f"Do you want to proceed with {operation} operation on {result.success_count} users?",
+                    default=False
+                ):
+                    click.echo(f"\n{CYAN}Proceeding with actual {operation} operation...{RESET}")
+                    # Remove dry_run flag and call the actual operation
+                    self._execute_actual_operation(user_ids, token, base_url, operation)
+                else:
+                    click.echo("Operation cancelled by user.")
+            else:
+                click.echo(f"\n{YELLOW}No users would be processed. Operation cancelled.{RESET}")
+
+        except Exception as e:
+            click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
+
+    def _handle_social_dry_run_preview(
+        self, social_ids: list[str], token: str, base_url: str, env: str
+    ) -> None:
+        """Handle dry-run preview for social unlink operations."""
+        try:
+            results = preview_social_unlink_operations(
+                social_ids, token, base_url, show_details=True
+            )
+
+            total_operations = results['users_to_delete'] + results['identities_to_unlink']
+
+            # Ask for confirmation to proceed with actual operation
+            if total_operations > 0:
+                click.echo(f"\n{GREEN}Preview completed successfully!{RESET}")
+                if confirm_action(
+                    f"Do you want to proceed with the social unlink operation on {total_operations} items?",
+                    default=False
+                ):
+                    click.echo(f"\n{CYAN}Proceeding with actual social unlink operation...{RESET}")
+                    # Execute the actual operation
+                    find_users_by_social_media_ids(
+                        social_ids, token, base_url, env, auto_delete=True
+                    )
+                else:
+                    click.echo("Operation cancelled by user.")
+            else:
+                click.echo(f"\n{YELLOW}No operations would be performed. Operation cancelled.{RESET}")
+
+        except Exception as e:
+            click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
+
+    def _execute_actual_operation(
+        self, user_ids: list[str], token: str, base_url: str, operation: str
+    ) -> None:
+        """Execute the actual operation after dry-run preview."""
+        operation_display = self._get_operation_display_name(operation)
+
+        # Process users and collect results
+        results = self._process_users(
+            user_ids, token, base_url, operation, operation_display
+        )
+
+        # Print summary
+        self._print_operation_summary(
+            results["processed_count"],
+            results["skipped_count"],
+            results["not_found_users"],
+            results["invalid_user_ids"],
+            results["multiple_users"],
+            token,
+            base_url,
+        )
 
     def _print_domain_results(self, results: dict, emails: list) -> None:
         """Print domain check results summary."""
