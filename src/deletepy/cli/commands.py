@@ -713,7 +713,7 @@ class OperationHandler:
 
             if dry_run:
                 # Run dry-run preview for social unlink
-                self._handle_social_dry_run_preview(social_ids, token, base_url)
+                self._handle_social_dry_run_preview(social_ids, token, base_url, env)
                 return
 
             find_users_by_social_media_ids(
@@ -754,7 +754,7 @@ class OperationHandler:
             click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
 
     def _handle_social_dry_run_preview(
-        self, social_ids: list[str], token: str, base_url: str
+        self, social_ids: list[str], token: str, base_url: str, env: str
     ) -> None:
         """Handle dry-run preview for social unlink operations."""
         try:
@@ -774,7 +774,7 @@ class OperationHandler:
                     click.echo(f"\n{CYAN}Proceeding with actual social unlink operation...{RESET}")
                     # Execute the actual operation
                     find_users_by_social_media_ids(
-                        social_ids, token, base_url, "dev", auto_delete=True
+                        social_ids, token, base_url, env, auto_delete=True
                     )
                 else:
                     click.echo("Operation cancelled by user.")
