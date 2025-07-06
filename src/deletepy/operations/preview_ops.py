@@ -133,7 +133,11 @@ def _resolve_user_identifier(
 ) -> str | None:
     """Resolve user identifier (email or user ID) to a valid user ID."""
     # If input is an email, resolve to user_id
-    if "@" in user_id and user_id.count("@") == 1:
+    if (
+        "@" in user_id
+        and user_id.count("@") == 1
+        and len(user_id.split("@")[1]) > 0
+    ):
         try:
             resolved_ids = get_user_id_from_email(user_id, token, base_url)
             if not resolved_ids:
