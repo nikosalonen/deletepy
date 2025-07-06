@@ -62,6 +62,11 @@ from .operations.export_ops import (
     _write_csv_batch,
     export_users_last_login_to_csv,
 )
+from .operations.preview_ops import (
+    PreviewResult,
+    preview_social_unlink_operations,
+    preview_user_operations,
+)
 from .operations.user_ops import (
     block_user,
     delete_user,
@@ -148,6 +153,10 @@ __all__ = [
     "extract_domains_from_emails",
     "get_domain_statistics",
     "filter_emails_by_domain",
+    # Preview operations
+    "PreviewResult",
+    "preview_user_operations",
+    "preview_social_unlink_operations",
     # Utilities
     "AUTH0_USER_ID_PREFIXES",
     "is_auth0_user_id",
