@@ -7,6 +7,15 @@ from .batch_ops import (
     find_users_by_social_media_ids,
 )
 
+# Checkpoint operations
+from .checkpoint_ops import (
+    CheckpointData,
+    CheckpointService,
+    ResumableOperation,
+    display_checkpoint_summary,
+    list_available_checkpoints,
+)
+
 # Domain operations
 from .domain_ops import (
     check_email_domains,
@@ -44,6 +53,12 @@ __all__ = [
     # Batch operations
     "check_unblocked_users",
     "find_users_by_social_media_ids",
+    # Checkpoint operations
+    "CheckpointData",
+    "CheckpointService",
+    "ResumableOperation",
+    "display_checkpoint_summary",
+    "list_available_checkpoints",
     # Export operations
     "export_users_last_login_to_csv",
     # Domain operations

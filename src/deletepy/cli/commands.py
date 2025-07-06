@@ -10,6 +10,11 @@ import click
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
 from ..operations.batch_ops import check_unblocked_users, find_users_by_social_media_ids
+from ..operations.checkpoint_ops import (
+    CheckpointService,
+    ResumableOperation,
+    display_checkpoint_summary,
+)
 from ..operations.domain_ops import check_email_domains
 from ..operations.export_ops import export_users_last_login_to_csv
 from ..operations.user_ops import (
@@ -20,7 +25,15 @@ from ..operations.user_ops import (
     get_user_id_from_email,
 )
 from ..utils.auth_utils import validate_auth0_user_id
-from ..utils.display_utils import CYAN, GREEN, RED, RESET, YELLOW, show_progress
+from ..utils.display_utils import (
+    CYAN,
+    GREEN,
+    RED,
+    RESET,
+    YELLOW,
+    confirm_action,
+    show_progress,
+)
 from ..utils.file_utils import read_user_ids_generator
 
 
@@ -28,12 +41,13 @@ class OperationHandler:
     """Handles CLI operations for Auth0 user management.
 
     This class provides a centralized way to handle all Auth0 user management
-    operations with proper error handling, progress tracking, and user feedback.
+    operations with proper error handling, progress tracking, user feedback,
+    and checkpoint support for resumable operations.
     """
 
     def __init__(self):
         """Initialize the operation handler."""
-        pass
+        self.checkpoint_service = CheckpointService()
 
     def _setup_auth_and_files(
         self, input_file: Path, env: str
@@ -444,15 +458,26 @@ class OperationHandler:
             self._handle_operation_error(e, "Find social IDs")
 
     def handle_user_operations(
-        self, input_file: Path, env: str, operation: str
+        self, input_file: Path, env: str, operation: str, dry_run: bool = False,
+        resume_id: str | None = None, checkpoint: bool = True
     ) -> None:
         """Handle user operations (block, delete, revoke-grants-only)."""
         try:
+            # Handle resume operation
+            if resume_id:
+                self._handle_resume_operation(resume_id, env)
+                return
+
             base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
             total_users = len(user_ids)
 
             # Get operation display name
             operation_display = self._get_operation_display_name(operation)
+
+            if dry_run:
+                # Run dry-run preview (no checkpointing needed for dry-run)
+                self._handle_dry_run_preview(user_ids, token, base_url, operation)
+                return
 
             # Request confirmation for production environment
             if env == "prod" and not self._confirm_production_operation(
@@ -461,11 +486,128 @@ class OperationHandler:
                 click.echo("Operation cancelled by user.")
                 return
 
+            # Initialize resumable operation if checkpointing is enabled
+            resumable_op = None
+            if checkpoint and total_users > 10:  # Only checkpoint for larger operations
+                resumable_op = ResumableOperation(self.checkpoint_service)
+                operation_id = resumable_op.start_operation(
+                    operation, env, user_ids,
+                    metadata={
+                        'input_file': str(input_file),
+                        'operation_display': operation_display
+                    }
+                )
+                click.echo(f"\n{CYAN}💾 Checkpoint created: {operation_id}{RESET}")
+                click.echo(f"To resume if interrupted: deletepy resume {operation_id}")
+
             click.echo(f"\n{CYAN}{operation_display}...{RESET}")
 
-            # Process users and collect results
-            results = self._process_users(
-                user_ids, token, base_url, operation, operation_display
+            # Process users with checkpoint support
+            if resumable_op:
+                results = self._process_users_with_checkpoints(
+                    user_ids, token, base_url, operation, operation_display, resumable_op
+                )
+            else:
+                results = self._process_users(
+                    user_ids, token, base_url, operation, operation_display
+                )
+
+            # Print summary
+            self._print_operation_summary(
+                results["processed_count"],
+                results["skipped_count"],
+                results["not_found_users"],
+                results["invalid_user_ids"],
+                results["multiple_users"],
+                token,
+                base_url,
+            )
+
+            # Clean up checkpoint on successful completion
+            if resumable_op and resumable_op.is_complete():
+                resumable_op.cleanup_checkpoint()
+                click.echo(f"\n{GREEN}✅ Operation completed successfully. Checkpoint cleaned up.{RESET}")
+
+        except KeyboardInterrupt:
+            if resumable_op and resumable_op.current_checkpoint_id:
+                click.echo(f"\n{YELLOW}⏸️  Operation interrupted. Resume with: deletepy resume {resumable_op.current_checkpoint_id}{RESET}")
+            else:
+                click.echo(f"\n{YELLOW}Operation interrupted by user.{RESET}")
+            sys.exit(0)
+        except Exception as e:
+            self._handle_operation_error(e, f"User {operation}")
+
+    def handle_resume_operation(self, operation_id: str) -> None:
+        """Handle resuming an operation from checkpoint."""
+        self._handle_resume_operation(operation_id, None)
+
+    def handle_list_checkpoints(self, operation_type: str | None = None) -> None:
+        """Handle listing available checkpoints."""
+        from ..operations.checkpoint_ops import list_available_checkpoints
+        list_available_checkpoints(self.checkpoint_service)
+
+    def handle_cleanup_checkpoints(self, days: int = 7, confirm: bool = True) -> None:
+        """Handle cleaning up old checkpoints."""
+        if confirm:
+            checkpoints = self.checkpoint_service.list_checkpoints()
+            if not checkpoints:
+                click.echo(f"{YELLOW}No checkpoints found to clean up.{RESET}")
+                return
+
+            if not confirm_action(f"Delete checkpoints older than {days} days?", default=False):
+                click.echo("Cleanup cancelled.")
+                return
+
+        deleted_count = self.checkpoint_service.cleanup_old_checkpoints(days)
+        if deleted_count > 0:
+            click.echo(f"{GREEN}✅ Cleaned up {deleted_count} old checkpoints.{RESET}")
+        else:
+            click.echo(f"{YELLOW}No old checkpoints found to clean up.{RESET}")
+
+    def _handle_resume_operation(self, operation_id: str, env: str | None) -> None:
+        """Handle resuming an operation from checkpoint."""
+        checkpoint = self.checkpoint_service.load_checkpoint(operation_id)
+        if not checkpoint:
+            click.echo(f"{RED}❌ Checkpoint {operation_id} not found.{RESET}", err=True)
+            return
+
+        # Display checkpoint summary
+        display_checkpoint_summary(checkpoint)
+
+        if not checkpoint.remaining_items:
+            click.echo(f"\n{GREEN}✅ Operation is already complete.{RESET}")
+            if confirm_action("Delete this checkpoint?", default=True):
+                self.checkpoint_service.delete_checkpoint(operation_id)
+                click.echo(f"{GREEN}Checkpoint deleted.{RESET}")
+            return
+
+        # Confirm resume
+        if not confirm_action(
+            f"Resume {checkpoint.operation_type} operation with {len(checkpoint.remaining_items)} remaining items?",
+            default=True
+        ):
+            click.echo("Resume cancelled.")
+            return
+
+        # Use environment from checkpoint or provided parameter
+        environment = env or checkpoint.environment
+
+        try:
+            # Setup auth for the environment
+            base_url = get_base_url(environment)
+            token = get_access_token(environment)
+
+            # Create resumable operation
+            resumable_op = ResumableOperation(self.checkpoint_service)
+            resumable_op.resume_operation(operation_id)
+
+            operation_display = self._get_operation_display_name(checkpoint.operation_type)
+            click.echo(f"\n{CYAN}🔄 Resuming {operation_display}...{RESET}")
+
+            # Process remaining items
+            results = self._process_users_with_checkpoints(
+                checkpoint.remaining_items, token, base_url,
+                checkpoint.operation_type, operation_display, resumable_op
             )
 
             # Print summary
@@ -479,8 +621,101 @@ class OperationHandler:
                 base_url,
             )
 
+            # Clean up checkpoint on completion
+            if resumable_op.is_complete():
+                resumable_op.cleanup_checkpoint()
+                click.echo(f"\n{GREEN}✅ Operation completed successfully. Checkpoint cleaned up.{RESET}")
+
+        except KeyboardInterrupt:
+            click.echo(f"\n{YELLOW}⏸️  Operation interrupted again. Resume with: deletepy resume {operation_id}{RESET}")
+            sys.exit(0)
         except Exception as e:
-            self._handle_operation_error(e, f"User {operation}")
+            click.echo(f"{RED}Error resuming operation: {e}{RESET}", err=True)
+
+    def _process_users_with_checkpoints(
+        self,
+        user_ids: list[str],
+        token: str,
+        base_url: str,
+        operation: str,
+        operation_display: str,
+        resumable_op: ResumableOperation,
+    ) -> dict:
+        """Process users with checkpoint support."""
+        state = self._initialize_processing_state()
+
+        # Use remaining items from checkpoint if resuming
+        items_to_process = resumable_op.get_remaining_items() or user_ids
+        total_users = len(items_to_process)
+
+        for idx, user_id in enumerate(items_to_process, 1):
+            show_progress(idx, total_users, operation_display)
+
+            try:
+                self._process_single_user_with_checkpoint(
+                    user_id, token, base_url, operation, state, resumable_op
+                )
+            except Exception as e:
+                # Record failure in checkpoint
+                resumable_op.record_failure(user_id, {
+                    'error': str(e),
+                    'operation': operation
+                })
+                state["skipped_count"] += 1
+
+        click.echo("\n")  # Clear progress line
+        return self._create_processing_results(state)
+
+    def _process_single_user_with_checkpoint(
+        self,
+        user_id: str,
+        token: str,
+        base_url: str,
+        operation: str,
+        state: dict[str, Any],
+        resumable_op: ResumableOperation,
+    ) -> None:
+        """Process a single user with checkpoint support."""
+        user_id = user_id.strip()
+
+        # Resolve email to user ID if needed
+        resolved_user_id = self._resolve_user_identifier(
+            user_id,
+            token,
+            base_url,
+            state["multiple_users"],
+            state["not_found_users"],
+            state["invalid_user_ids"],
+        )
+
+        if resolved_user_id is None:
+            resumable_op.record_failure(user_id, {
+                'error': 'Could not resolve user identifier',
+                'operation': operation
+            })
+            state["skipped_count"] += 1
+            return
+
+        try:
+            # Perform the operation
+            self._execute_user_operation(operation, resolved_user_id, token, base_url)
+
+            # Record success in checkpoint
+            resumable_op.record_success(user_id, {
+                'resolved_user_id': resolved_user_id,
+                'operation': operation
+            })
+            state["processed_count"] += 1
+
+        except Exception as e:
+            # Record failure in checkpoint
+            resumable_op.record_failure(user_id, {
+                'error': str(e),
+                'resolved_user_id': resolved_user_id,
+                'operation': operation
+            })
+            state["skipped_count"] += 1
+            raise
 
     def _print_domain_results(self, results: dict, emails: list) -> None:
         """Print domain check results summary."""

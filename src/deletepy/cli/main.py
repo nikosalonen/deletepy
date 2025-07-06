@@ -99,28 +99,60 @@ def users() -> None:
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def block(input_file: Path, env: str) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+@click.option("--no-checkpoint", is_flag=True, help="Disable checkpoint creation for this operation")
+def block(input_file: Path, env: str, dry_run: bool, no_checkpoint: bool) -> None:
     """Block the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "block")
+    handler.handle_user_operations(input_file, env, "block", dry_run, checkpoint=not no_checkpoint)
 
 
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def delete(input_file: Path, env: str) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+@click.option("--no-checkpoint", is_flag=True, help="Disable checkpoint creation for this operation")
+def delete(input_file: Path, env: str, dry_run: bool, no_checkpoint: bool) -> None:
     """Delete the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "delete")
+    handler.handle_user_operations(input_file, env, "delete", dry_run, checkpoint=not no_checkpoint)
 
 
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def revoke_grants_only(input_file: Path, env: str) -> None:
+@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+@click.option("--no-checkpoint", is_flag=True, help="Disable checkpoint creation for this operation")
+def revoke_grants_only(input_file: Path, env: str, dry_run: bool, no_checkpoint: bool) -> None:
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "revoke-grants-only")
+    handler.handle_user_operations(input_file, env, "revoke-grants-only", dry_run, checkpoint=not no_checkpoint)
+
+
+@cli.command()
+@click.argument("operation_id", required=True)
+@click.option("--env", type=click.Choice(["dev", "prod"]), help="Override environment from checkpoint")
+def resume(operation_id: str, env: str | None) -> None:
+    """Resume an interrupted operation from checkpoint."""
+    handler = OperationHandler()
+    handler.handle_resume_operation(operation_id)
+
+
+@cli.command(name="list-checkpoints")
+@click.option("--type", "operation_type", help="Filter by operation type")
+def list_checkpoints(operation_type: str | None) -> None:
+    """List all available operation checkpoints."""
+    handler = OperationHandler()
+    handler.handle_list_checkpoints(operation_type)
+
+
+@cli.command(name="cleanup-checkpoints")
+@click.option("--days", default=7, help="Number of days to keep checkpoints (default: 7)")
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt")
+def cleanup_checkpoints(days: int, yes: bool) -> None:
+    """Clean up old checkpoint files."""
+    handler = OperationHandler()
+    handler.handle_cleanup_checkpoints(days, confirm=not yes)
 
 
 def main() -> None:
