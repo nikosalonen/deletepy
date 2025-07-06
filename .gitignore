@@ -193,3 +193,6 @@ domain_cache.json
 *.json
 *.csv
 *.txt
+
+# Shady files
+shady
