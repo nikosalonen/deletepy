@@ -29,6 +29,13 @@ from .domain_ops import (
 from .export_ops import (
     export_users_last_login_to_csv,
 )
+
+# Preview operations
+from .preview_ops import (
+    PreviewResult,
+    preview_social_unlink_operations,
+    preview_user_operations,
+)
 from .user_ops import (
     block_user,
     delete_user,
@@ -61,6 +68,10 @@ __all__ = [
     "list_available_checkpoints",
     # Export operations
     "export_users_last_login_to_csv",
+    # Preview operations
+    "PreviewResult",
+    "preview_user_operations",
+    "preview_social_unlink_operations",
     # Domain operations
     "check_email_domains",
     "validate_domain_format",

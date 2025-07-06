@@ -194,5 +194,4 @@ domain_cache.json
 *.csv
 *.txt
 
-# Shady files
 shady
