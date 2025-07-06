@@ -179,6 +179,14 @@ def _get_user_connection(user_details: dict[str, Any]) -> str:
 
 def _display_preview_results(result: PreviewResult) -> None:
     """Display detailed preview results."""
+    _display_preview_header(result)
+    _display_valid_users(result)
+    _display_skipped_users(result)
+    _display_error_categories(result)
+
+
+def _display_preview_header(result: PreviewResult) -> None:
+    """Display the preview results header with summary statistics."""
     print(f"\n{GREEN}📊 DRY RUN PREVIEW RESULTS{RESET}")
     print(f"Operation: {result.operation.upper()}")
     print(f"Total users analyzed: {result.total_users}")
@@ -188,61 +196,98 @@ def _display_preview_results(result: PreviewResult) -> None:
         f"Success rate: {GREEN if result.success_rate > 90 else YELLOW}{result.success_rate:.1f}%{RESET}"
     )
 
-    # Show users that would be processed
-    if result.valid_users:
+
+def _display_valid_users(result: PreviewResult) -> None:
+    """Display users that would be successfully processed."""
+    if not result.valid_users:
+        return
+
+    print(
+        f"\n{GREEN}✅ Users that would be {result.operation}d ({len(result.valid_users)}):{RESET}"
+    )
+    for i, user in enumerate(result.valid_users[:10], 1):  # Show first 10
+        blocked_indicator = " (BLOCKED)" if user["blocked"] else ""
         print(
-            f"\n{GREEN}✅ Users that would be {result.operation}d ({len(result.valid_users)}):{RESET}"
+            f"  {i}. {user['user_id']} ({user['email']}) - {user['connection']}{blocked_indicator}"
         )
-        for i, user in enumerate(result.valid_users[:10], 1):  # Show first 10
-            blocked_indicator = " (BLOCKED)" if user["blocked"] else ""
-            print(
-                f"  {i}. {user['user_id']} ({user['email']}) - {user['connection']}{blocked_indicator}"
-            )
 
-        if len(result.valid_users) > 10:
-            print(f"  ... and {len(result.valid_users) - 10} more users")
+    if len(result.valid_users) > 10:
+        print(f"  ... and {len(result.valid_users) - 10} more users")
 
-    # Show users that would be skipped
-    if result.blocked_users:
-        print(
-            f"\n{YELLOW}⚠️  Users already in target state ({len(result.blocked_users)}):{RESET}"
-        )
-        for user_id in result.blocked_users[:5]:  # Show first 5
-            print(f"  - {user_id}")
-        if len(result.blocked_users) > 5:
-            print(f"  ... and {len(result.blocked_users) - 5} more")
 
-    if result.not_found_users:
-        print(f"\n{RED}❌ Users not found ({len(result.not_found_users)}):{RESET}")
-        for email in result.not_found_users[:5]:  # Show first 5
-            print(f"  - {email}")
-        if len(result.not_found_users) > 5:
-            print(f"  ... and {len(result.not_found_users) - 5} more")
+def _display_skipped_users(result: PreviewResult) -> None:
+    """Display users that would be skipped."""
+    _display_simple_list(
+        result.blocked_users,
+        f"{YELLOW}⚠️  Users already in target state",
+        limit=5
+    )
 
-    if result.invalid_user_ids:
-        print(f"\n{RED}❌ Invalid user IDs ({len(result.invalid_user_ids)}):{RESET}")
-        for user_id in result.invalid_user_ids[:5]:  # Show first 5
-            print(f"  - {user_id}")
-        if len(result.invalid_user_ids) > 5:
-            print(f"  ... and {len(result.invalid_user_ids) - 5} more")
 
-    if result.multiple_users:
-        print(
-            f"\n{YELLOW}⚠️  Emails with multiple users ({len(result.multiple_users)}):{RESET}"
-        )
-        for email, user_ids in list(result.multiple_users.items())[:3]:  # Show first 3
-            print(f"  - {email}:")
-            for uid in user_ids:
-                print(f"    • {uid}")
-        if len(result.multiple_users) > 3:
-            print(f"  ... and {len(result.multiple_users) - 3} more")
+def _display_error_categories(result: PreviewResult) -> None:
+    """Display all error categories (not found, invalid, multiple users, errors)."""
+    _display_simple_list(
+        result.not_found_users,
+        f"{RED}❌ Users not found",
+        limit=5
+    )
 
-    if result.errors:
-        print(f"\n{RED}❌ Errors ({len(result.errors)}):{RESET}")
-        for error in result.errors[:5]:  # Show first 5
-            print(f"  - {error['identifier']}: {error['error']}")
-        if len(result.errors) > 5:
-            print(f"  ... and {len(result.errors) - 5} more")
+    _display_simple_list(
+        result.invalid_user_ids,
+        f"{RED}❌ Invalid user IDs",
+        limit=5
+    )
+
+    _display_multiple_users(result.multiple_users)
+
+    _display_error_list(result.errors)
+
+
+def _display_simple_list(
+    items: list[str],
+    header_template: str,
+    limit: int = 5
+) -> None:
+    """Display a simple list of items with header and limit."""
+    if not items:
+        return
+
+    print(f"\n{header_template} ({len(items)}):{RESET}")
+    for item in items[:limit]:
+        print(f"  - {item}")
+
+    if len(items) > limit:
+        print(f"  ... and {len(items) - limit} more")
+
+
+def _display_multiple_users(multiple_users: dict[str, list[str]]) -> None:
+    """Display emails with multiple users."""
+    if not multiple_users:
+        return
+
+    print(
+        f"\n{YELLOW}⚠️  Emails with multiple users ({len(multiple_users)}):{RESET}"
+    )
+    for email, user_ids in list(multiple_users.items())[:3]:  # Show first 3
+        print(f"  - {email}:")
+        for uid in user_ids:
+            print(f"    • {uid}")
+
+    if len(multiple_users) > 3:
+        print(f"  ... and {len(multiple_users) - 3} more")
+
+
+def _display_error_list(errors: list[dict[str, str]]) -> None:
+    """Display error list with identifier and error message."""
+    if not errors:
+        return
+
+    print(f"\n{RED}❌ Errors ({len(errors)}):{RESET}")
+    for error in errors[:5]:  # Show first 5
+        print(f"  - {error['identifier']}: {error['error']}")
+
+    if len(errors) > 5:
+        print(f"  ... and {len(errors) - 5} more")
 
 
 def preview_social_unlink_operations(
@@ -296,34 +341,60 @@ def preview_social_unlink_operations(
 
 def _display_social_preview_results(results: dict[str, Any]) -> None:
     """Display detailed preview results for social unlink operations."""
+    _display_social_header(results)
+    _display_social_operations(results)
+    _display_social_categories(results)
+
+
+def _display_social_header(results: dict[str, Any]) -> None:
+    """Display social unlink preview header with summary statistics."""
     print(f"\n{GREEN}📊 DRY RUN PREVIEW RESULTS - SOCIAL UNLINK{RESET}")
     print(f"Total social IDs analyzed: {results['total_social_ids']}")
     print(f"Users found: {results['found_users']}")
     print(f"Social IDs not found: {results['not_found_ids']}")
 
+
+def _display_social_operations(results: dict[str, Any]) -> None:
+    """Display the operations that would be performed."""
     print(f"\n{GREEN}Operations that would be performed:{RESET}")
     print(f"  Users to delete: {CYAN}{results['users_to_delete']}{RESET}")
     print(f"  Identities to unlink: {CYAN}{results['identities_to_unlink']}{RESET}")
     print(f"  Protected users: {YELLOW}{results['auth0_main_protected']}{RESET}")
 
-    # Show details for each category
-    if results["users_to_delete_list"]:
-        print(f"\n{GREEN}Users that would be deleted:{RESET}")
-        for user in results["users_to_delete_list"][:10]:
-            print(f"  - {user['user_id']} ({user['email']}) - {user['reason']}")
-        if len(results["users_to_delete_list"]) > 10:
-            print(f"  ... and {len(results['users_to_delete_list']) - 10} more")
 
-    if results["identities_to_unlink_list"]:
-        print(f"\n{YELLOW}Identities that would be unlinked:{RESET}")
-        for user in results["identities_to_unlink_list"][:10]:
-            print(f"  - {user['user_id']} ({user['email']}) - {user['reason']}")
-        if len(results["identities_to_unlink_list"]) > 10:
-            print(f"  ... and {len(results['identities_to_unlink_list']) - 10} more")
+def _display_social_categories(results: dict[str, Any]) -> None:
+    """Display detailed information for each category of social unlink operations."""
+    _display_social_user_list(
+        results["users_to_delete_list"],
+        f"{GREEN}Users that would be deleted:",
+        limit=10
+    )
 
-    if results["auth0_main_protected_list"]:
-        print(f"\n{CYAN}Protected users (would be skipped):{RESET}")
-        for user in results["auth0_main_protected_list"][:10]:
-            print(f"  - {user['user_id']} ({user['email']}) - {user['reason']}")
-        if len(results["auth0_main_protected_list"]) > 10:
-            print(f"  ... and {len(results['auth0_main_protected_list']) - 10} more")
+    _display_social_user_list(
+        results["identities_to_unlink_list"],
+        f"{YELLOW}Identities that would be unlinked:",
+        limit=10
+    )
+
+    _display_social_user_list(
+        results["auth0_main_protected_list"],
+        f"{CYAN}Protected users (would be skipped):",
+        limit=10
+    )
+
+
+def _display_social_user_list(
+    user_list: list[dict[str, str]],
+    header: str,
+    limit: int = 10
+) -> None:
+    """Display a list of social users with their details."""
+    if not user_list:
+        return
+
+    print(f"\n{header}{RESET}")
+    for user in user_list[:limit]:
+        print(f"  - {user['user_id']} ({user['email']}) - {user['reason']}")
+
+    if len(user_list) > limit:
+        print(f"  ... and {len(user_list) - limit} more")
