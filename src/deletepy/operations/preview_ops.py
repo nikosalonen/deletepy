@@ -2,6 +2,7 @@
 
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from ..core.config import API_RATE_LIMIT
@@ -29,7 +30,7 @@ class PreviewResult:
     not_found_users: list[str] = field(default_factory=list)
     multiple_users: dict[str, list[str]] = field(default_factory=dict)
     blocked_users: list[str] = field(default_factory=list)
-    errors: list[dict[str, str]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def success_count(self) -> int:
@@ -115,11 +116,23 @@ def preview_user_operations(
                         )
                 else:
                     result.errors.append(
-                        {"identifier": user_id, "error": "Could not fetch user details"}
+                        {
+                            "identifier": user_id,
+                            "error": "Could not fetch user details",
+                            "timestamp": datetime.utcnow().isoformat(),
+                            "operation": operation,
+                            "error_type": "user_details_fetch_failed"
+                        }
                     )
             except Exception as e:
                 result.errors.append(
-                    {"identifier": user_id, "error": f"API error: {str(e)}"}
+                    {
+                        "identifier": user_id,
+                        "error": f"API error: {str(e)}",
+                        "timestamp": datetime.utcnow().isoformat(),
+                        "operation": operation,
+                        "error_type": "api_exception"
+                    }
                 )
 
     print("\n")  # Clear progress line
@@ -159,7 +172,13 @@ def _resolve_user_identifier(
             return resolved_ids[0]
         except Exception as e:
             result.errors.append(
-                {"identifier": user_id, "error": f"Error resolving email: {str(e)}"}
+                {
+                    "identifier": user_id,
+                    "error": f"Error resolving email: {str(e)}",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "operation": result.operation,
+                    "error_type": "email_resolution_failed"
+                }
             )
             return None
 
@@ -289,14 +308,17 @@ def _display_multiple_users(multiple_users: dict[str, list[str]]) -> None:
         print(f"  ... and {len(multiple_users) - 3} more")
 
 
-def _display_error_list(errors: list[dict[str, str]]) -> None:
-    """Display error list with identifier and error message."""
+def _display_error_list(errors: list[dict[str, Any]]) -> None:
+    """Display error list with identifier, error message, timestamp, and error type."""
     if not errors:
         return
 
     print(f"\n{RED}❌ Errors ({len(errors)}):{RESET}")
     for error in errors[:5]:  # Show first 5
+        timestamp = error.get('timestamp', 'N/A')
+        error_type = error.get('error_type', 'unknown')
         print(f"  - {error['identifier']}: {error['error']}")
+        print(f"    ↳ Time: {timestamp[:19]} | Type: {error_type}")
 
     if len(errors) > 5:
         print(f"  ... and {len(errors) - 5} more")
