@@ -94,6 +94,9 @@ def preview_user_operations(
         if resolved_user_id:
             # Get user details to check current state
             user_details = get_user_details(resolved_user_id, token, base_url)
+            # Rate limiting after API call
+            time.sleep(API_RATE_LIMIT)
+
             if user_details:
                 # Check if user is already in target state
                 if _should_skip_user(user_details, operation):
@@ -113,9 +116,6 @@ def preview_user_operations(
                 result.errors.append(
                     {"identifier": user_id, "error": "Could not fetch user details"}
                 )
-
-        # Rate limiting
-        time.sleep(API_RATE_LIMIT)
 
     print("\n")  # Clear progress line
 
@@ -140,6 +140,9 @@ def _resolve_user_identifier(
     ):
         try:
             resolved_ids = get_user_id_from_email(user_id, token, base_url)
+            # Rate limiting after API call
+            time.sleep(API_RATE_LIMIT)
+
             if not resolved_ids:
                 result.not_found_users.append(user_id)
                 return None
