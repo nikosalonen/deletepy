@@ -19,8 +19,17 @@ from ..operations.user_ops import (
     get_user_email,
     get_user_id_from_email,
 )
+from ..operations.validation_ops import SmartValidator, display_validation_results
 from ..utils.auth_utils import validate_auth0_user_id
-from ..utils.display_utils import CYAN, GREEN, RED, RESET, YELLOW, show_progress
+from ..utils.display_utils import (
+    CYAN,
+    GREEN,
+    RED,
+    RESET,
+    YELLOW,
+    confirm_action,
+    show_progress,
+)
 from ..utils.file_utils import read_user_ids_generator
 
 
@@ -28,7 +37,8 @@ class OperationHandler:
     """Handles CLI operations for Auth0 user management.
 
     This class provides a centralized way to handle all Auth0 user management
-    operations with proper error handling, progress tracking, and user feedback.
+    operations with proper error handling, progress tracking, user feedback,
+    and smart validation with warnings.
     """
 
     def __init__(self):
@@ -444,7 +454,8 @@ class OperationHandler:
             self._handle_operation_error(e, "Find social IDs")
 
     def handle_user_operations(
-        self, input_file: Path, env: str, operation: str
+        self, input_file: Path, env: str, operation: str,
+        validation_level: str = "standard", skip_validation: bool = False
     ) -> None:
         """Handle user operations (block, delete, revoke-grants-only)."""
         try:
@@ -453,6 +464,41 @@ class OperationHandler:
 
             # Get operation display name
             operation_display = self._get_operation_display_name(operation)
+
+            # Run smart validation unless skipped
+            if not skip_validation:
+                click.echo(f"\n{CYAN}🔍 Running smart validation...{RESET}")
+                validator = SmartValidator(token, base_url)
+                validation_result = validator.validate_operation(
+                    operation, user_ids, env, validation_level
+                )
+
+                # Display validation results
+                display_validation_results(validation_result, operation)
+
+                # Handle validation results
+                if validation_result.should_block_operation:
+                    click.echo(f"\n{RED}❌ Operation blocked due to critical validation issues.{RESET}")
+                    click.echo("Please resolve the issues above before proceeding.")
+                    return
+
+                if validation_result.has_high_warnings:
+                    if not confirm_action(
+                        "High severity warnings detected. Do you want to continue?",
+                        default=False
+                    ):
+                        click.echo("Operation cancelled by user.")
+                        return
+
+                # Show validation summary
+                if validation_result.warnings:
+                    click.echo(f"\n{YELLOW}📋 Validation Summary:{RESET}")
+                    click.echo(f"  Total warnings: {len(validation_result.warnings)}")
+                    warning_counts = validation_result.warning_count_by_severity
+                    for severity, count in warning_counts.items():
+                        if count > 0:
+                            color = RED if severity == "critical" else YELLOW if severity == "high" else CYAN
+                            click.echo(f"  {color}{severity.upper()}: {count}{RESET}")
 
             # Request confirmation for production environment
             if env == "prod" and not self._confirm_production_operation(
@@ -481,6 +527,131 @@ class OperationHandler:
 
         except Exception as e:
             self._handle_operation_error(e, f"User {operation}")
+
+    def handle_validation_only(
+        self, input_file: Path, env: str, operation: str, validation_level: str = "standard"
+    ) -> None:
+        """Handle validation-only operations without execution."""
+        try:
+            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+
+            click.echo(f"\n{CYAN}🔍 Running validation analysis...{RESET}")
+            validator = SmartValidator(token, base_url)
+            validation_result = validator.validate_operation(
+                operation, user_ids, env, validation_level
+            )
+
+            # Display detailed validation results
+            display_validation_results(validation_result, operation)
+
+            # Show recommendations summary
+            if validation_result.warnings:
+                auto_fixable = [w for w in validation_result.warnings if w.auto_fixable]
+                if auto_fixable:
+                    click.echo(f"\n{GREEN}🔧 Auto-fixable Issues:{RESET}")
+                    for warning in auto_fixable:
+                        click.echo(f"  • {warning.title}")
+                        click.echo(f"    {warning.message}")
+
+                # Show next steps
+                click.echo(f"\n{CYAN}📋 Next Steps:{RESET}")
+                if validation_result.should_block_operation:
+                    click.echo(f"  1. {RED}Resolve critical issues listed above{RESET}")
+                    click.echo("  2. Re-run validation to confirm fixes")
+                    click.echo("  3. Proceed with operation once validation passes")
+                elif validation_result.has_high_warnings:
+                    click.echo(f"  1. {YELLOW}Review high severity warnings carefully{RESET}")
+                    click.echo("  2. Consider if operation should proceed")
+                    click.echo("  3. Use --skip-validation flag to bypass if needed")
+                else:
+                    click.echo(f"  1. {GREEN}Validation passed - operation appears safe{RESET}")
+                    click.echo("  2. Proceed with operation using normal caution")
+
+            # Show validation level info
+            from ..operations.validation_ops import get_validation_level_description
+            level_desc = get_validation_level_description(validation_level)
+            click.echo(f"\n{CYAN}ℹ️  Validation Level: {validation_level}{RESET}")
+            click.echo(f"   {level_desc}")
+
+        except Exception as e:
+            self._handle_operation_error(e, f"Validation for {operation}")
+
+    def handle_auto_fix_validation(
+        self, input_file: Path, env: str, operation: str, validation_level: str = "standard"
+    ) -> None:
+        """Handle auto-fixing validation issues where possible."""
+        try:
+            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+
+            click.echo(f"\n{CYAN}🔍 Running validation analysis...{RESET}")
+            validator = SmartValidator(token, base_url)
+            validation_result = validator.validate_operation(
+                operation, user_ids, env, validation_level
+            )
+
+            # Find auto-fixable issues
+            auto_fixable = [w for w in validation_result.warnings if w.auto_fixable]
+
+            if not auto_fixable:
+                click.echo(f"\n{YELLOW}No auto-fixable issues found.{RESET}")
+                display_validation_results(validation_result, operation)
+                return
+
+            click.echo(f"\n{GREEN}🔧 Found {len(auto_fixable)} auto-fixable issues:{RESET}")
+            for warning in auto_fixable:
+                click.echo(f"  • {warning.title}")
+
+            if not confirm_action("Apply automatic fixes?", default=True):
+                click.echo("Auto-fix cancelled.")
+                return
+
+            # Apply fixes
+            fixed_user_ids = self._apply_automatic_fixes(user_ids, auto_fixable)
+
+            # Save fixed file
+            fixed_file = input_file.parent / f"{input_file.stem}_fixed{input_file.suffix}"
+            with open(fixed_file, 'w', encoding='utf-8') as f:
+                for user_id in fixed_user_ids:
+                    f.write(f"{user_id}\n")
+
+            click.echo(f"\n{GREEN}✅ Auto-fixes applied successfully!{RESET}")
+            click.echo(f"Fixed file saved as: {fixed_file}")
+            click.echo(f"Original file: {input_file}")
+
+            # Re-run validation on fixed data
+            click.echo(f"\n{CYAN}🔍 Re-running validation on fixed data...{RESET}")
+            new_validation_result = validator.validate_operation(
+                operation, fixed_user_ids, env, validation_level
+            )
+            display_validation_results(new_validation_result, operation)
+
+        except Exception as e:
+            self._handle_operation_error(e, f"Auto-fix validation for {operation}")
+
+    def _apply_automatic_fixes(self, user_ids: list[str], fixable_warnings: list) -> list[str]:
+        """Apply automatic fixes to user IDs.
+
+        Args:
+            user_ids: Original user IDs
+            fixable_warnings: List of auto-fixable warnings
+
+        Returns:
+            Fixed user IDs
+        """
+        fixed_ids = user_ids.copy()
+
+        for warning in fixable_warnings:
+            if warning.title == "Duplicate User Identifiers":
+                # Remove duplicates while preserving order
+                seen = set()
+                fixed_ids = []
+                for user_id in user_ids:
+                    if user_id not in seen:
+                        fixed_ids.append(user_id)
+                        seen.add(user_id)
+                click.echo(f"  ✓ Removed {len(user_ids) - len(fixed_ids)} duplicate identifiers")
+
+        return fixed_ids
 
     def _print_domain_results(self, results: dict, emails: list) -> None:
         """Print domain check results summary."""

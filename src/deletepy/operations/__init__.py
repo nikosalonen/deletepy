@@ -31,6 +31,15 @@ from .user_ops import (
     unlink_user_identity,
 )
 
+# Validation operations
+from .validation_ops import (
+    SmartValidator,
+    ValidationResult,
+    ValidationWarning,
+    display_validation_results,
+    get_validation_level_description,
+)
+
 __all__ = [
     # Core user operations
     "delete_user",
@@ -52,4 +61,10 @@ __all__ = [
     "extract_domains_from_emails",
     "get_domain_statistics",
     "filter_emails_by_domain",
+    # Validation operations
+    "SmartValidator",
+    "ValidationResult",
+    "ValidationWarning",
+    "display_validation_results",
+    "get_validation_level_description",
 ]

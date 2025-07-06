@@ -99,28 +99,56 @@ def users() -> None:
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def block(input_file: Path, env: str) -> None:
+@click.option("--validation-level", type=click.Choice(["strict", "standard", "lenient"]), default="standard", help="Validation strictness level")
+@click.option("--skip-validation", is_flag=True, help="Skip smart validation checks")
+def block(input_file: Path, env: str, validation_level: str, skip_validation: bool) -> None:
     """Block the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "block")
+    handler.handle_user_operations(input_file, env, "block", validation_level, skip_validation)
 
 
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def delete(input_file: Path, env: str) -> None:
+@click.option("--validation-level", type=click.Choice(["strict", "standard", "lenient"]), default="standard", help="Validation strictness level")
+@click.option("--skip-validation", is_flag=True, help="Skip smart validation checks")
+def delete(input_file: Path, env: str, validation_level: str, skip_validation: bool) -> None:
     """Delete the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "delete")
+    handler.handle_user_operations(input_file, env, "delete", validation_level, skip_validation)
 
 
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def revoke_grants_only(input_file: Path, env: str) -> None:
+@click.option("--validation-level", type=click.Choice(["strict", "standard", "lenient"]), default="standard", help="Validation strictness level")
+@click.option("--skip-validation", is_flag=True, help="Skip smart validation checks")
+def revoke_grants_only(input_file: Path, env: str, validation_level: str, skip_validation: bool) -> None:
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "revoke-grants-only")
+    handler.handle_user_operations(input_file, env, "revoke-grants-only", validation_level, skip_validation)
+
+
+@cli.command()
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
+@click.argument("operation", type=click.Choice(["block", "delete", "revoke-grants-only"]))
+@click.option("--validation-level", type=click.Choice(["strict", "standard", "lenient"]), default="standard", help="Validation strictness level")
+def validate(input_file: Path, env: str, operation: str, validation_level: str) -> None:
+    """Run validation analysis on user data without executing operations."""
+    handler = OperationHandler()
+    handler.handle_validation_only(input_file, env, operation, validation_level)
+
+
+@cli.command(name="auto-fix")
+@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
+@click.argument("operation", type=click.Choice(["block", "delete", "revoke-grants-only"]))
+@click.option("--validation-level", type=click.Choice(["strict", "standard", "lenient"]), default="standard", help="Validation strictness level")
+def auto_fix(input_file: Path, env: str, operation: str, validation_level: str) -> None:
+    """Automatically fix validation issues where possible."""
+    handler = OperationHandler()
+    handler.handle_auto_fix_validation(input_file, env, operation, validation_level)
 
 
 def main() -> None:
