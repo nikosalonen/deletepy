@@ -121,7 +121,7 @@ def preview_user_operations(
                             "error": "Could not fetch user details",
                             "timestamp": datetime.utcnow().isoformat(),
                             "operation": operation,
-                            "error_type": "user_details_fetch_failed"
+                            "error_type": "user_details_fetch_failed",
                         }
                     )
             except Exception as e:
@@ -131,7 +131,7 @@ def preview_user_operations(
                         "error": f"API error: {str(e)}",
                         "timestamp": datetime.utcnow().isoformat(),
                         "operation": operation,
-                        "error_type": "api_exception"
+                        "error_type": "api_exception",
                     }
                 )
 
@@ -151,11 +151,7 @@ def _resolve_user_identifier(
 ) -> str | None:
     """Resolve user identifier (email or user ID) to a valid user ID."""
     # If input is an email, resolve to user_id
-    if (
-        "@" in user_id
-        and user_id.count("@") == 1
-        and len(user_id.split("@")[1]) > 0
-    ):
+    if "@" in user_id and user_id.count("@") == 1 and len(user_id.split("@")[1]) > 0:
         try:
             resolved_ids = get_user_id_from_email(user_id, token, base_url)
             # Rate limiting after API call
@@ -177,7 +173,7 @@ def _resolve_user_identifier(
                     "error": f"Error resolving email: {str(e)}",
                     "timestamp": datetime.utcnow().isoformat(),
                     "operation": result.operation,
-                    "error_type": "email_resolution_failed"
+                    "error_type": "email_resolution_failed",
                 }
             )
             return None
@@ -249,25 +245,15 @@ def _display_valid_users(result: PreviewResult) -> None:
 def _display_skipped_users(result: PreviewResult) -> None:
     """Display users that would be skipped."""
     _display_simple_list(
-        result.blocked_users,
-        f"{YELLOW}⚠️  Users already in target state",
-        limit=5
+        result.blocked_users, f"{YELLOW}⚠️  Users already in target state", limit=5
     )
 
 
 def _display_error_categories(result: PreviewResult) -> None:
     """Display all error categories (not found, invalid, multiple users, errors)."""
-    _display_simple_list(
-        result.not_found_users,
-        f"{RED}❌ Users not found",
-        limit=5
-    )
+    _display_simple_list(result.not_found_users, f"{RED}❌ Users not found", limit=5)
 
-    _display_simple_list(
-        result.invalid_user_ids,
-        f"{RED}❌ Invalid user IDs",
-        limit=5
-    )
+    _display_simple_list(result.invalid_user_ids, f"{RED}❌ Invalid user IDs", limit=5)
 
     _display_multiple_users(result.multiple_users)
 
@@ -275,9 +261,7 @@ def _display_error_categories(result: PreviewResult) -> None:
 
 
 def _display_simple_list(
-    items: list[str],
-    header_template: str,
-    limit: int = 5
+    items: list[str], header_template: str, limit: int = 5
 ) -> None:
     """Display a simple list of items with header and limit."""
     if not items:
@@ -296,9 +280,7 @@ def _display_multiple_users(multiple_users: dict[str, list[str]]) -> None:
     if not multiple_users:
         return
 
-    print(
-        f"\n{YELLOW}⚠️  Emails with multiple users ({len(multiple_users)}):{RESET}"
-    )
+    print(f"\n{YELLOW}⚠️  Emails with multiple users ({len(multiple_users)}):{RESET}")
     for email, user_ids in list(multiple_users.items())[:3]:  # Show first 3
         print(f"  - {email}:")
         for uid in user_ids:
@@ -315,8 +297,8 @@ def _display_error_list(errors: list[dict[str, Any]]) -> None:
 
     print(f"\n{RED}❌ Errors ({len(errors)}):{RESET}")
     for error in errors[:5]:  # Show first 5
-        timestamp = error.get('timestamp', 'N/A')
-        error_type = error.get('error_type', 'unknown')
+        timestamp = error.get("timestamp", "N/A")
+        error_type = error.get("error_type", "unknown")
         print(f"  - {error['identifier']}: {error['error']}")
         print(f"    ↳ Time: {timestamp[:19]} | Type: {error_type}")
 
@@ -401,26 +383,24 @@ def _display_social_categories(results: dict[str, Any]) -> None:
     _display_social_user_list(
         results["users_to_delete_list"],
         f"{GREEN}Users that would be deleted:",
-        limit=10
+        limit=10,
     )
 
     _display_social_user_list(
         results["identities_to_unlink_list"],
         f"{YELLOW}Identities that would be unlinked:",
-        limit=10
+        limit=10,
     )
 
     _display_social_user_list(
         results["auth0_main_protected_list"],
         f"{CYAN}Protected users (would be skipped):",
-        limit=10
+        limit=10,
     )
 
 
 def _display_social_user_list(
-    user_list: list[dict[str, str]],
-    header: str,
-    limit: int = 10
+    user_list: list[dict[str, str]], header: str, limit: int = 10
 ) -> None:
     """Display a list of social users with their details."""
     if not user_list:

@@ -367,7 +367,7 @@ def _load_or_create_checkpoint(
     operation: str,
     operation_type: OperationType,
     env: str,
-    user_ids: list[str]
+    user_ids: list[str],
 ) -> Checkpoint:
     """Load existing checkpoint or create a new one.
 
@@ -387,9 +387,13 @@ def _load_or_create_checkpoint(
     if resume_checkpoint_id:
         checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
         if not checkpoint:
-            print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
+            print_warning(
+                f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
+            )
         elif checkpoint.status != CheckpointStatus.ACTIVE:
-            print_warning(f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})")
+            print_warning(
+                f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
+            )
             checkpoint = None
         elif not checkpoint.is_resumable():
             print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
@@ -399,16 +403,12 @@ def _load_or_create_checkpoint(
     if checkpoint is None:
         # Create operation config
         config = OperationConfig(
-            environment=env,
-            additional_params={"operation": operation}
+            environment=env, additional_params={"operation": operation}
         )
 
         # Create new checkpoint
         checkpoint = checkpoint_manager.create_checkpoint(
-            operation_type=operation_type,
-            config=config,
-            items=user_ids,
-            batch_size=50
+            operation_type=operation_type, config=config, items=user_ids, batch_size=50
         )
 
         print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
@@ -422,7 +422,7 @@ def _handle_checkpoint_error(
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
     operation: str,
-    error: Exception | None = None
+    error: Exception | None = None,
 ) -> str:
     """Handle checkpoint error by marking status and saving.
 
@@ -491,7 +491,12 @@ def batch_user_operations_with_checkpoints(
 
     # Load or create checkpoint
     checkpoint = _load_or_create_checkpoint(
-        resume_checkpoint_id, checkpoint_manager, operation, operation_type, env, user_ids
+        resume_checkpoint_id,
+        checkpoint_manager,
+        operation,
+        operation_type,
+        env,
+        user_ids,
     )
 
     # Use configuration from checkpoint if resuming
@@ -508,7 +513,7 @@ def batch_user_operations_with_checkpoints(
             token=token,
             base_url=base_url,
             operation=operation,
-            checkpoint_manager=checkpoint_manager
+            checkpoint_manager=checkpoint_manager,
         )
     except (KeyboardInterrupt, Exception) as e:
         return _handle_checkpoint_error(checkpoint, checkpoint_manager, operation, e)
@@ -519,7 +524,7 @@ def _process_batch_user_operations_with_checkpoints(
     token: str,
     base_url: str,
     operation: str,
-    checkpoint_manager: CheckpointManager
+    checkpoint_manager: CheckpointManager,
 ) -> str | None:
     """Process batch user operations with checkpointing support.
 
@@ -539,7 +544,7 @@ def _process_batch_user_operations_with_checkpoints(
     operation_display = {
         "delete": "Deleting users",
         "block": "Blocking users",
-        "revoke-grants-only": "Revoking grants and sessions"
+        "revoke-grants-only": "Revoking grants and sessions",
     }.get(operation, "Processing users")
 
     print_info(f"{operation_display} - {len(remaining_user_ids)} remaining users...")
@@ -562,12 +567,12 @@ def _process_batch_user_operations_with_checkpoints(
         current_batch = checkpoint.progress.current_batch + 1
         total_batches = checkpoint.progress.total_batches
 
-        print_info(f"\nProcessing batch {current_batch}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)")
+        print_info(
+            f"\nProcessing batch {current_batch}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)"
+        )
 
         # Process users in this batch
-        batch_results = _process_user_batch(
-            batch_user_ids, token, base_url, operation
-        )
+        batch_results = _process_user_batch(batch_user_ids, token, base_url, operation)
 
         # Update tracking lists
         multiple_users.update(batch_results.get("multiple_users", {}))
@@ -586,7 +591,7 @@ def _process_batch_user_operations_with_checkpoints(
         checkpoint_manager.update_checkpoint_progress(
             checkpoint=checkpoint,
             processed_items=batch_user_ids,
-            results_update=results_update
+            results_update=results_update,
         )
 
         # Save checkpoint after each batch
@@ -607,16 +612,14 @@ def _process_batch_user_operations_with_checkpoints(
     checkpoint.status = CheckpointStatus.COMPLETED
     checkpoint_manager.save_checkpoint(checkpoint)
 
-    print_success(f"{operation.title()} operation completed! Checkpoint: {checkpoint.checkpoint_id}")
+    print_success(
+        f"{operation.title()} operation completed! Checkpoint: {checkpoint.checkpoint_id}"
+    )
     return None  # Operation completed successfully
 
 
 def _process_users_in_batch(
-    user_ids: list[str],
-    token: str,
-    base_url: str,
-    operation: str,
-    results: dict
+    user_ids: list[str], token: str, base_url: str, operation: str, results: dict
 ) -> dict:
     """Process users in a batch, handling user resolution and operation execution.
 
@@ -662,10 +665,7 @@ def _process_users_in_batch(
 
 
 def _process_user_batch(
-    user_ids: list[str],
-    token: str,
-    base_url: str,
-    operation: str
+    user_ids: list[str], token: str, base_url: str, operation: str
 ) -> dict:
     """Process a batch of users for a specific operation.
 
@@ -694,10 +694,7 @@ def _process_user_batch(
 
 
 def _resolve_user_identifier_for_batch(
-    user_id: str,
-    token: str,
-    base_url: str,
-    results: dict
+    user_id: str, token: str, base_url: str, results: dict
 ) -> str | None:
     """Resolve user identifier (email or user ID) to a valid user ID for batch processing.
 
@@ -713,11 +710,7 @@ def _resolve_user_identifier_for_batch(
     from ..utils.auth_utils import validate_auth0_user_id
 
     # If input is an email, resolve to user_id
-    if (
-        "@" in user_id
-        and user_id.count("@") == 1
-        and len(user_id.split("@")[1]) > 0
-    ):
+    if "@" in user_id and user_id.count("@") == 1 and len(user_id.split("@")[1]) > 0:
         resolved_ids = get_user_id_from_email(user_id, token, base_url)
         if not resolved_ids:
             results["not_found_users"].append(user_id)
@@ -737,7 +730,9 @@ def _resolve_user_identifier_for_batch(
     return user_id
 
 
-def _execute_user_operation(operation: str, user_id: str, token: str, base_url: str) -> None:
+def _execute_user_operation(
+    operation: str, user_id: str, token: str, base_url: str
+) -> None:
     """Execute the specified operation on a user.
 
     Args:
@@ -756,10 +751,7 @@ def _execute_user_operation(operation: str, user_id: str, token: str, base_url: 
 
 
 def _display_multiple_users_details(
-    multiple_users: dict,
-    token: str,
-    base_url: str,
-    fetch_details: bool = True
+    multiple_users: dict, token: str, base_url: str, fetch_details: bool = True
 ) -> None:
     """Display details for multiple users found for each email.
 
