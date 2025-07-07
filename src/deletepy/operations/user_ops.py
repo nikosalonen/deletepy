@@ -184,7 +184,7 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
     try:
         response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
-        user_data = response.json()
+        user_data: dict[str, Any] = response.json()
         time.sleep(API_RATE_LIMIT)
         return user_data.get("email")
     except requests.exceptions.RequestException as e:
@@ -225,7 +225,7 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] 
         return None
 
     try:
-        user_data = response.json()
+        user_data: dict[str, Any] = response.json()
         return user_data
     except ValueError as e:
         print_error(
@@ -422,7 +422,7 @@ def _handle_checkpoint_error(
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
     operation: str,
-    error: Exception | None = None,
+    error: KeyboardInterrupt | Exception | None = None,
 ) -> str:
     """Handle checkpoint error by marking status and saving.
 
@@ -442,7 +442,7 @@ def _handle_checkpoint_error(
         print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
         print_info("You can resume this operation later using:")
         print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
-    else:
+    elif error is not None:
         print_warning(f"\n{operation.title()} operation failed: {error}")
         checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
         checkpoint_manager.save_checkpoint(checkpoint)
@@ -550,9 +550,9 @@ def _process_batch_user_operations_with_checkpoints(
     print_info(f"{operation_display} - {len(remaining_user_ids)} remaining users...")
 
     # Initialize processing state
-    multiple_users = {}
-    not_found_users = []
-    invalid_user_ids = []
+    multiple_users: dict[str, list[str]] = {}
+    not_found_users: list[str] = []
+    invalid_user_ids: list[str] = []
 
     # Process remaining user IDs in batches
     for batch_start in range(0, len(remaining_user_ids), batch_size):
@@ -619,8 +619,8 @@ def _process_batch_user_operations_with_checkpoints(
 
 
 def _process_users_in_batch(
-    user_ids: list[str], token: str, base_url: str, operation: str, results: dict
-) -> dict:
+    user_ids: list[str], token: str, base_url: str, operation: str, results: dict[str, Any]
+) -> dict[str, Any]:
     """Process users in a batch, handling user resolution and operation execution.
 
     Args:
@@ -666,7 +666,7 @@ def _process_users_in_batch(
 
 def _process_user_batch(
     user_ids: list[str], token: str, base_url: str, operation: str
-) -> dict:
+) -> dict[str, Any]:
     """Process a batch of users for a specific operation.
 
     Args:
@@ -678,7 +678,7 @@ def _process_user_batch(
     Returns:
         dict: Processing results for this batch
     """
-    results = {
+    results: dict[str, Any] = {
         "processed_count": 0,
         "skipped_count": 0,
         "multiple_users": {},
@@ -694,7 +694,7 @@ def _process_user_batch(
 
 
 def _resolve_user_identifier_for_batch(
-    user_id: str, token: str, base_url: str, results: dict
+    user_id: str, token: str, base_url: str, results: dict[str, Any]
 ) -> str | None:
     """Resolve user identifier (email or user ID) to a valid user ID for batch processing.
 
@@ -751,7 +751,7 @@ def _execute_user_operation(
 
 
 def _display_multiple_users_details(
-    multiple_users: dict, token: str, base_url: str, fetch_details: bool = True
+    multiple_users: dict[str, list[str]], token: str, base_url: str, fetch_details: bool = True
 ) -> None:
     """Display details for multiple users found for each email.
 
@@ -792,7 +792,7 @@ def _print_user_operation_summary(
     skipped_count: int,
     not_found_users: list[str],
     invalid_user_ids: list[str],
-    multiple_users: dict,
+    multiple_users: dict[str, list[str]],
     token: str,
     base_url: str,
 ) -> None:
