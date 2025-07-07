@@ -619,7 +619,11 @@ def _process_batch_user_operations_with_checkpoints(
 
 
 def _process_users_in_batch(
-    user_ids: list[str], token: str, base_url: str, operation: str, results: dict[str, Any]
+    user_ids: list[str],
+    token: str,
+    base_url: str,
+    operation: str,
+    results: dict[str, Any],
 ) -> dict[str, Any]:
     """Process users in a batch, handling user resolution and operation execution.
 
@@ -751,7 +755,10 @@ def _execute_user_operation(
 
 
 def _display_multiple_users_details(
-    multiple_users: dict[str, list[str]], token: str, base_url: str, fetch_details: bool = True
+    multiple_users: dict[str, list[str]],
+    token: str,
+    base_url: str,
+    fetch_details: bool = True,
 ) -> None:
     """Display details for multiple users found for each email.
 

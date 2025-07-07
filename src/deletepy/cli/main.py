@@ -99,7 +99,9 @@ def cleanup_csv(input_file: Path, env: str | None, output_type: str) -> None:
             output_file = f"cleaned_{input_file.name}"
             success = write_identifiers_to_file(identifiers, output_file)
             if success:
-                click.echo(f"Successfully processed {len(identifiers)} identifiers to {output_file}")
+                click.echo(
+                    f"Successfully processed {len(identifiers)} identifiers to {output_file}"
+                )
             else:
                 click.echo(f"Error writing output file: {output_file}")
                 sys.exit(1)
