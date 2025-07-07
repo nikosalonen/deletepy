@@ -58,10 +58,11 @@ def handle_csv_command(args: argparse.Namespace) -> None:
             filename=filename, env=env, output_type=output_type
         )
         print(f"Extracted {len(identifiers)} identifiers")
-        for identifier in identifiers[:5]:  # Show first 5
+        sanitized_identifiers = sanitize_identifiers(identifiers)
+        for identifier in sanitized_identifiers[:5]:  # Show first 5
             print(f"  {identifier}")
-        if len(identifiers) > 5:
-            print(f"  ... and {len(identifiers) - 5} more")
+        if len(sanitized_identifiers) > 5:
+            print(f"  ... and {len(sanitized_identifiers) - 5} more")
     except Exception as e:
         print(f"Error processing CSV: {e}")
 

@@ -17,6 +17,20 @@ from ..utils.request_utils import make_rate_limited_request
 from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
 from .file_utils import safe_file_read, safe_file_write
 
+def sanitize_identifiers(identifiers: list[str]) -> list[str]:
+    """Sanitize identifiers by redacting sensitive data.
+
+    Args:
+        identifiers: List of identifiers to sanitize.
+
+    Returns:
+        List of sanitized identifiers.
+    """
+    redacted_keywords = ["client_secret", "auth0"]
+    return [
+        identifier if not any(keyword in identifier.lower() for keyword in redacted_keywords) else "[REDACTED]"
+        for identifier in identifiers
+    ]
 
 class CsvRowData(NamedTuple):
     """Data structure to hold CSV row information for enhanced processing."""
