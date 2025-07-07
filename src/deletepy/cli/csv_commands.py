@@ -5,6 +5,7 @@ from typing import Any
 
 from ..utils.csv_utils import (
     extract_identifiers_from_csv,
+    sanitize_identifiers,
 )
 
 
