@@ -7,6 +7,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
+# Current software version for checkpoint compatibility
+CURRENT_VERSION = "1.0.0"
+
 
 class OperationType(Enum):
     """Types of operations that can be checkpointed."""
@@ -269,9 +272,6 @@ class Checkpoint:
 
     def _is_version_compatible(self) -> bool:
         """Check if checkpoint version is compatible with current software version."""
-        # Define the current software version
-        CURRENT_VERSION = "1.0.0"
-
         # For now, we only support exact version match
         # In the future, this could be extended to support version ranges
         return self.version == CURRENT_VERSION
