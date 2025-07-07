@@ -15,12 +15,14 @@ from ..models.checkpoint import (
 )
 from ..utils.checkpoint_manager import CheckpointManager
 from ..utils.display_utils import (
+    show_progress,
+    shutdown_requested,
+)
+from ..utils.legacy_print import (
     print_error,
     print_info,
     print_success,
     print_warning,
-    show_progress,
-    shutdown_requested,
 )
 from ..utils.request_utils import make_rate_limited_request
 

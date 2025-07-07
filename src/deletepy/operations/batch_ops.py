@@ -16,14 +16,14 @@ from ..models.checkpoint import (
 )
 from ..utils.checkpoint_manager import CheckpointManager
 from ..utils.display_utils import (
-    print_info,
-    print_success,
-    print_warning,
     show_progress,
     shutdown_requested,
 )
 from ..utils.legacy_print import (
     print_error,
+    print_info,
+    print_success,
+    print_warning,
 )
 from .user_ops import delete_user, unlink_user_identity
 
