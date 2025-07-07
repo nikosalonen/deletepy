@@ -113,7 +113,9 @@ def get_optimal_batch_size(total_emails: int) -> int:
         return 100
 
 
-def get_estimated_processing_time(total_emails: int, batch_size: int | None = None) -> float:
+def get_estimated_processing_time(
+    total_emails: int, batch_size: int | None = None
+) -> float:
     """Estimate processing time based on email count and batch size.
 
     Args:

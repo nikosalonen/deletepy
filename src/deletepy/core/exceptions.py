@@ -1,7 +1,6 @@
 """Custom exception hierarchy for DeletePy Auth0 User Management Tool."""
 
 
-
 class Auth0ManagerError(Exception):
     """Base exception for Auth0 Manager.
 
@@ -171,7 +170,11 @@ class ValidationError(Auth0ManagerError):
     """
 
     def __init__(
-        self, message: str, field: str | None = None, value: str | None = None, details: str | None = None
+        self,
+        message: str,
+        field: str | None = None,
+        value: str | None = None,
+        details: str | None = None,
     ):
         """Initialize the validation error.
 

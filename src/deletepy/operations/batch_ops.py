@@ -1468,7 +1468,10 @@ def find_users_by_social_media_ids_with_checkpoints(
 
 
 def _process_social_search_batch(
-    batch_social_ids: list[str], token: str, base_url: str, accumulator: dict[str, list[Any]]
+    batch_social_ids: list[str],
+    token: str,
+    base_url: str,
+    accumulator: dict[str, list[Any]],
 ) -> dict[str, int]:
     """Process a batch of social IDs and update accumulator.
 
@@ -1652,7 +1655,10 @@ def check_unblocked_users_with_checkpoints(
 
 
 def _process_check_unblocked_batch(
-    batch_user_ids: list[str], token: str, base_url: str, accumulator: dict[str, list[str]]
+    batch_user_ids: list[str],
+    token: str,
+    base_url: str,
+    accumulator: dict[str, list[str]],
 ) -> dict[str, int]:
     """Process a batch of user IDs to check for unblocked status.
 

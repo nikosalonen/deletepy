@@ -119,7 +119,9 @@ def _restore_backup(backup_path: Path | None, original_path: Path) -> None:
 
 
 @contextmanager
-def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w") -> Generator[TextIO]:
+def safe_file_write(
+    file_path: str, encoding: str = "utf-8", mode: str = "w"
+) -> Generator[TextIO]:
     """Context manager for safe file writing with comprehensive error handling.
 
     Args:

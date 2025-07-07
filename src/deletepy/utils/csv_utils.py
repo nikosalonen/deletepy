@@ -337,7 +337,9 @@ def _process_csv_file(
     return identifiers, skip_resolution
 
 
-def _setup_csv_reader(infile: TextIO) -> tuple[csv.DictReader[str] | None, list[str] | None]:
+def _setup_csv_reader(
+    infile: TextIO,
+) -> tuple[csv.DictReader[str] | None, list[str] | None]:
     """Setup CSV reader and validate headers.
 
     Args:
@@ -817,7 +819,9 @@ def _extract_output_value(
     if output_type == "email":
         return cast(str, user_details.get("email", fallback))
     elif output_type == "username":
-        return cast(str, user_details.get("username", user_details.get("email", fallback)))
+        return cast(
+            str, user_details.get("username", user_details.get("email", fallback))
+        )
     elif output_type == "user_id":
         return cast(str, user_details.get("user_id", fallback))
     else:
