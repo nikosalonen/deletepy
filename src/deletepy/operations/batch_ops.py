@@ -1283,6 +1283,59 @@ def _finalize_checkpoint_completion(
     print_success(f"{operation_name} completed! Checkpoint: {checkpoint.checkpoint_id}")
 
 
+def _execute_with_checkpoints(
+    operation_type: OperationType,
+    items: list[str],
+    config: CheckpointOperationConfig,
+    process_func: callable,
+    operation_name: str,
+    auto_delete: bool = True,
+    **process_kwargs
+) -> str | None:
+    """Execute operation with checkpoint lifecycle management.
+
+    Args:
+        operation_type: Type of operation to checkpoint
+        items: List of items to process
+        config: Configuration for checkpoint operations
+        process_func: Function to process the operation
+        operation_name: Name of the operation for logging
+        auto_delete: Whether auto-delete is enabled
+        **process_kwargs: Additional keyword arguments for process_func
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
+    """
+    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation(
+        operation_type=operation_type,
+        items=items,
+        env=config.env,
+        auto_delete=auto_delete,
+        resume_checkpoint_id=config.resume_checkpoint_id,
+        checkpoint_manager=config.checkpoint_manager,
+        operation_name=operation_name
+    )
+
+    try:
+        return process_func(
+            checkpoint=checkpoint,
+            token=config.token,
+            base_url=config.base_url,
+            env=env,
+            auto_delete=auto_delete,
+            checkpoint_manager=checkpoint_manager,
+            **process_kwargs
+        )
+    except KeyboardInterrupt:
+        return _handle_checkpoint_interruption(
+            checkpoint, checkpoint_manager, f"{operation_name.replace('_', ' ').title()} operation"
+        )
+    except Exception as e:
+        return _handle_checkpoint_error(
+            checkpoint, checkpoint_manager, f"{operation_name.replace('_', ' ').title()} operation", e
+        )
+
+
 def find_users_by_social_media_ids_with_checkpoints(
     social_ids: list[str],
     config: CheckpointOperationConfig,
@@ -1298,33 +1351,14 @@ def find_users_by_social_media_ids_with_checkpoints(
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
     """
-    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation(
+    return _execute_with_checkpoints(
         operation_type=OperationType.SOCIAL_UNLINK,
         items=social_ids,
-        env=config.env,
-        auto_delete=auto_delete,
-        resume_checkpoint_id=config.resume_checkpoint_id,
-        checkpoint_manager=config.checkpoint_manager,
-        operation_name="social_unlink"
+        config=config,
+        process_func=_process_social_search_with_checkpoints,
+        operation_name="social_unlink",
+        auto_delete=auto_delete
     )
-
-    try:
-        return _process_social_search_with_checkpoints(
-            checkpoint=checkpoint,
-            token=config.token,
-            base_url=config.base_url,
-            env=env,
-            auto_delete=auto_delete,
-            checkpoint_manager=checkpoint_manager
-        )
-    except KeyboardInterrupt:
-        return _handle_checkpoint_interruption(
-            checkpoint, checkpoint_manager, "Social search operation"
-        )
-    except Exception as e:
-        return _handle_checkpoint_error(
-            checkpoint, checkpoint_manager, "Social search operation", e
-        )
 
 
 def _process_social_search_batch(
@@ -1496,31 +1530,14 @@ def check_unblocked_users_with_checkpoints(
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
     """
-    checkpoint, checkpoint_manager, env, _ = _setup_checkpoint_operation(
+    return _execute_with_checkpoints(
         operation_type=OperationType.CHECK_UNBLOCKED,
         items=user_ids,
-        env=config.env,
-        auto_delete=False,  # Not relevant for check operations
-        resume_checkpoint_id=config.resume_checkpoint_id,
-        checkpoint_manager=config.checkpoint_manager,
-        operation_name="check_unblocked"
+        config=config,
+        process_func=_process_check_unblocked_with_checkpoints,
+        operation_name="check_unblocked",
+        auto_delete=False  # Not relevant for check operations
     )
-
-    try:
-        return _process_check_unblocked_with_checkpoints(
-            checkpoint=checkpoint,
-            token=config.token,
-            base_url=config.base_url,
-            checkpoint_manager=checkpoint_manager
-        )
-    except KeyboardInterrupt:
-        return _handle_checkpoint_interruption(
-            checkpoint, checkpoint_manager, "Check unblocked operation"
-        )
-    except Exception as e:
-        return _handle_checkpoint_error(
-            checkpoint, checkpoint_manager, "Check unblocked operation", e
-        )
 
 
 def _process_check_unblocked_batch(
@@ -1553,7 +1570,10 @@ def _process_check_unblocked_with_checkpoints(
     checkpoint: Checkpoint,
     token: str,
     base_url: str,
-    checkpoint_manager: CheckpointManager
+    checkpoint_manager: CheckpointManager,
+    env: str = None,  # Ignored for check operations
+    auto_delete: bool = None,  # Ignored for check operations
+    **kwargs  # Accept any additional parameters
 ) -> str | None:
     """Process check unblocked operation with checkpointing support.
 
