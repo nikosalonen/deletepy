@@ -1013,6 +1013,87 @@ def _find_users_with_primary_social_id(
     return found_users
 
 
+def _initialize_checkpoint_manager(
+    checkpoint_manager: CheckpointManager | None = None
+) -> CheckpointManager:
+    """Initialize checkpoint manager if not provided.
+
+    Args:
+        checkpoint_manager: Optional checkpoint manager instance
+
+    Returns:
+        CheckpointManager: Initialized checkpoint manager
+    """
+    return checkpoint_manager if checkpoint_manager is not None else CheckpointManager()
+
+
+def _load_existing_checkpoint(
+    checkpoint_manager: CheckpointManager, checkpoint_id: str
+) -> Checkpoint | None:
+    """Load and validate existing checkpoint for resumption.
+
+    Args:
+        checkpoint_manager: Checkpoint manager instance
+        checkpoint_id: Checkpoint ID to load
+
+    Returns:
+        Checkpoint | None: Valid checkpoint or None if invalid
+    """
+    checkpoint = checkpoint_manager.load_checkpoint(checkpoint_id)
+
+    if not checkpoint:
+        print_warning(f"Could not load checkpoint {checkpoint_id}, starting fresh")
+        return None
+
+    if checkpoint.status != CheckpointStatus.ACTIVE:
+        print_warning(f"Checkpoint {checkpoint_id} is not active (status: {checkpoint.status.value})")
+        return None
+
+    if not checkpoint.is_resumable():
+        print_warning(f"Checkpoint {checkpoint_id} is not resumable")
+        return None
+
+    return checkpoint
+
+
+def _create_new_checkpoint(
+    checkpoint_manager: CheckpointManager,
+    operation_type: OperationType,
+    items: list[str],
+    env: str,
+    auto_delete: bool,
+    operation_name: str
+) -> Checkpoint:
+    """Create a new checkpoint for the operation.
+
+    Args:
+        checkpoint_manager: Checkpoint manager instance
+        operation_type: Type of operation to checkpoint
+        items: List of items to process
+        env: Environment (dev/prod)
+        auto_delete: Whether auto-delete is enabled
+        operation_name: Name of the operation for logging
+
+    Returns:
+        Checkpoint: Newly created checkpoint
+    """
+    config = OperationConfig(
+        environment=env,
+        auto_delete=auto_delete,
+        additional_params={"operation": operation_name}
+    )
+
+    checkpoint = checkpoint_manager.create_checkpoint(
+        operation_type=operation_type,
+        config=config,
+        items=items,
+        batch_size=50
+    )
+
+    print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+    return checkpoint
+
+
 def _setup_checkpoint_operation(
     operation_type: OperationType,
     items: list[str],
@@ -1036,48 +1117,25 @@ def _setup_checkpoint_operation(
     Returns:
         Tuple of (checkpoint, checkpoint_manager, env, auto_delete)
     """
-    # Initialize checkpoint manager if not provided
-    if checkpoint_manager is None:
-        checkpoint_manager = CheckpointManager()
+    checkpoint_manager = _initialize_checkpoint_manager(checkpoint_manager)
 
-    # Check if we're resuming from a checkpoint
+    # Try to load existing checkpoint if resuming
     checkpoint = None
     if resume_checkpoint_id:
-        checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
-        if not checkpoint:
-            print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
-        elif checkpoint.status != CheckpointStatus.ACTIVE:
-            print_warning(f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})")
-            checkpoint = None
-        elif not checkpoint.is_resumable():
-            print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
-            checkpoint = None
+        checkpoint = _load_existing_checkpoint(checkpoint_manager, resume_checkpoint_id)
 
-    # If not resuming, create a new checkpoint
+    # Create new checkpoint if not resuming or loading failed
     if checkpoint is None:
-        # Create operation config
-        config = OperationConfig(
-            environment=env,
-            auto_delete=auto_delete,
-            additional_params={"operation": operation_name}
+        checkpoint = _create_new_checkpoint(
+            checkpoint_manager, operation_type, items, env, auto_delete, operation_name
         )
-
-        # Create new checkpoint
-        checkpoint = checkpoint_manager.create_checkpoint(
-            operation_type=operation_type,
-            config=config,
-            items=items,
-            batch_size=50
-        )
-
-        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
     else:
         print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
         # Use configuration from checkpoint
         env = checkpoint.config.environment
         auto_delete = checkpoint.config.auto_delete
 
-    # Save initial checkpoint
+    # Save initial checkpoint state
     checkpoint_manager.save_checkpoint(checkpoint)
 
     return checkpoint, checkpoint_manager, env, auto_delete
@@ -1128,6 +1186,91 @@ def _handle_checkpoint_error(
     checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
     checkpoint_manager.save_checkpoint(checkpoint)
     return checkpoint.checkpoint_id
+
+
+def _process_batch_items_with_checkpoints(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    batch_processor_func: callable,
+    operation_name: str,
+    *processor_args
+) -> str | None:
+    """Process items in batches with checkpoint support.
+
+    Args:
+        checkpoint: Checkpoint to process
+        checkpoint_manager: Checkpoint manager instance
+        batch_processor_func: Function to process each batch
+        operation_name: Name of the operation for logging
+        *processor_args: Additional arguments for the batch processor
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was interrupted, None if completed
+    """
+    remaining_items = checkpoint.remaining_items.copy()
+    batch_size = checkpoint.progress.batch_size
+
+    if not remaining_items:
+        print_info(f"No remaining items to process for {operation_name}")
+        _finalize_checkpoint_completion(checkpoint, checkpoint_manager, operation_name)
+        return None
+
+    print_info(f"Processing {len(remaining_items)} remaining items for {operation_name}...")
+
+    # Process items in batches
+    for batch_start in range(0, len(remaining_items), batch_size):
+        if shutdown_requested():
+            print_warning(f"\n{operation_name} interrupted")
+            checkpoint_manager.save_checkpoint(checkpoint)
+            return checkpoint.checkpoint_id
+
+        batch_end = min(batch_start + batch_size, len(remaining_items))
+        batch_items = remaining_items[batch_start:batch_end]
+
+        current_batch = checkpoint.progress.current_batch + 1
+        total_batches = checkpoint.progress.total_batches
+
+        print_info(f"\nProcessing batch {current_batch}/{total_batches} "
+                  f"({batch_start + 1}-{batch_end} of {len(remaining_items)} remaining)")
+
+        # Process batch using the provided function
+        batch_results = batch_processor_func(batch_items, *processor_args)
+
+        # Update checkpoint progress
+        results_update = {
+            "processed_count": len(batch_items),
+            **batch_results
+        }
+
+        checkpoint_manager.update_checkpoint_progress(
+            checkpoint=checkpoint,
+            processed_items=batch_items,
+            results_update=results_update
+        )
+
+        # Save checkpoint after each batch
+        checkpoint_manager.save_checkpoint(checkpoint)
+
+    # Mark checkpoint as completed
+    _finalize_checkpoint_completion(checkpoint, checkpoint_manager, operation_name)
+    return None
+
+
+def _finalize_checkpoint_completion(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    operation_name: str
+) -> None:
+    """Finalize checkpoint completion.
+
+    Args:
+        checkpoint: Checkpoint to finalize
+        checkpoint_manager: Checkpoint manager instance
+        operation_name: Name of the operation for logging
+    """
+    checkpoint.status = CheckpointStatus.COMPLETED
+    checkpoint_manager.save_checkpoint(checkpoint)
+    print_success(f"{operation_name} completed! Checkpoint: {checkpoint.checkpoint_id}")
 
 
 def find_users_by_social_media_ids_with_checkpoints(
@@ -1182,6 +1325,36 @@ def find_users_by_social_media_ids_with_checkpoints(
         )
 
 
+def _process_social_search_batch(
+    batch_social_ids: list[str],
+    token: str,
+    base_url: str,
+    accumulator: dict[str, list]
+) -> dict[str, int]:
+    """Process a batch of social IDs and accumulate results.
+
+    Args:
+        batch_social_ids: List of social media IDs to search
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        accumulator: Dictionary to accumulate found users and not found IDs
+
+    Returns:
+        dict: Batch processing results for checkpoint update
+    """
+    batch_found_users, batch_not_found = _search_batch_social_ids(
+        batch_social_ids, token, base_url
+    )
+
+    # Add batch results to overall results
+    accumulator["found_users"].extend(batch_found_users)
+    accumulator["not_found_ids"].extend(batch_not_found)
+
+    return {
+        "not_found_count": len(batch_not_found),
+    }
+
+
 def _process_social_search_with_checkpoints(
     checkpoint: Checkpoint,
     token: str,
@@ -1203,54 +1376,63 @@ def _process_social_search_with_checkpoints(
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
-    remaining_social_ids = checkpoint.remaining_items.copy()
-    batch_size = checkpoint.progress.batch_size
+    # Initialize accumulator for results
+    results_accumulator = {
+        "found_users": [],
+        "not_found_ids": []
+    }
 
-    print_info(f"Searching for users with {len(remaining_social_ids)} remaining social media IDs...")
+    # Process batches using common batch processing logic
+    result = _process_batch_items_with_checkpoints(
+        checkpoint,
+        checkpoint_manager,
+        _process_social_search_batch,
+        "Social search",
+        token,
+        base_url,
+        results_accumulator
+    )
 
-    # Process remaining social IDs in batches
-    found_users = []
-    not_found_ids = []
+    # If operation was interrupted, return checkpoint ID
+    if result is not None:
+        return result
 
-    for batch_start in range(0, len(remaining_social_ids), batch_size):
-        if shutdown_requested():
-            print_warning("\nOperation interrupted")
-            checkpoint_manager.save_checkpoint(checkpoint)
-            return checkpoint.checkpoint_id
+    # Process final search results
+    _process_final_social_search_results(
+        results_accumulator["found_users"],
+        results_accumulator["not_found_ids"],
+        checkpoint,
+        token,
+        base_url,
+        env,
+        auto_delete
+    )
 
-        batch_end = min(batch_start + batch_size, len(remaining_social_ids))
-        batch_social_ids = remaining_social_ids[batch_start:batch_end]
+    return None  # Operation completed successfully
 
-        current_batch = checkpoint.progress.current_batch + 1
-        total_batches = checkpoint.progress.total_batches
 
-        print_info(f"\nProcessing batch {current_batch}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_social_ids)} remaining)")
+def _process_final_social_search_results(
+    found_users: list[dict[str, Any]],
+    not_found_ids: list[str],
+    checkpoint: Checkpoint,
+    token: str,
+    base_url: str,
+    env: str,
+    auto_delete: bool
+) -> None:
+    """Process final social search results and perform operations.
 
-        # Search for users in this batch
-        batch_found_users, batch_not_found = _search_batch_social_ids(
-            batch_social_ids, token, base_url
-        )
+    Args:
+        found_users: All users found during search
+        not_found_ids: Social IDs that were not found
+        checkpoint: Current checkpoint
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        env: Environment
+        auto_delete: Whether to auto-delete users
+    """
+    total_processed = len(checkpoint.processed_items) + len(checkpoint.remaining_items)
 
-        # Add batch results to overall results
-        found_users.extend(batch_found_users)
-        not_found_ids.extend(batch_not_found)
-
-        # Update checkpoint progress
-        results_update = {
-            "processed_count": len(batch_social_ids),
-            "not_found_count": len(batch_not_found),
-        }
-
-        checkpoint_manager.update_checkpoint_progress(
-            checkpoint=checkpoint,
-            processed_items=batch_social_ids,
-            results_update=results_update
-        )
-
-        # Save checkpoint after each batch
-        checkpoint_manager.save_checkpoint(checkpoint)
-
-    # Process search results
     config = SearchProcessingConfig(
         token=token,
         base_url=base_url,
@@ -1259,15 +1441,8 @@ def _process_social_search_with_checkpoints(
     )
 
     _process_search_results(
-        found_users, not_found_ids, len(checkpoint.processed_items) + len(remaining_social_ids), config
+        found_users, not_found_ids, total_processed, config
     )
-
-    # Mark checkpoint as completed
-    checkpoint.status = CheckpointStatus.COMPLETED
-    checkpoint_manager.save_checkpoint(checkpoint)
-
-    print_success(f"Social search completed! Checkpoint: {checkpoint.checkpoint_id}")
-    return None  # Operation completed successfully
 
 
 def _search_batch_social_ids(
@@ -1354,6 +1529,32 @@ def check_unblocked_users_with_checkpoints(
         )
 
 
+def _process_check_unblocked_batch(
+    batch_user_ids: list[str],
+    token: str,
+    base_url: str,
+    accumulator: dict[str, list]
+) -> dict[str, int]:
+    """Process a batch of user IDs to check for unblocked status.
+
+    Args:
+        batch_user_ids: List of user IDs to check
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        accumulator: Dictionary to accumulate unblocked users
+
+    Returns:
+        dict: Batch processing results for checkpoint update
+    """
+    batch_unblocked = _check_batch_unblocked_users(
+        batch_user_ids, token, base_url
+    )
+
+    accumulator["unblocked_users"].extend(batch_unblocked)
+
+    return {}  # No specific results to track for checkpoint
+
+
 def _process_check_unblocked_with_checkpoints(
     checkpoint: Checkpoint,
     token: str,
@@ -1371,68 +1572,50 @@ def _process_check_unblocked_with_checkpoints(
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
-    remaining_user_ids = checkpoint.remaining_items.copy()
-    batch_size = checkpoint.progress.batch_size
+    # Initialize accumulator for results
+    results_accumulator = {
+        "unblocked_users": []
+    }
 
-    print_info(f"Checking {len(remaining_user_ids)} remaining users for blocked status...")
+    # Process batches using common batch processing logic
+    result = _process_batch_items_with_checkpoints(
+        checkpoint,
+        checkpoint_manager,
+        _process_check_unblocked_batch,
+        "Check unblocked",
+        token,
+        base_url,
+        results_accumulator
+    )
 
-    unblocked = []
+    # If operation was interrupted, return checkpoint ID
+    if result is not None:
+        return result
 
-    # Process remaining user IDs in batches
-    for batch_start in range(0, len(remaining_user_ids), batch_size):
-        if shutdown_requested():
-            print_warning("\nOperation interrupted")
-            checkpoint_manager.save_checkpoint(checkpoint)
-            return checkpoint.checkpoint_id
+    # Display final results
+    _display_check_unblocked_results(results_accumulator["unblocked_users"])
 
-        batch_end = min(batch_start + batch_size, len(remaining_user_ids))
-        batch_user_ids = remaining_user_ids[batch_start:batch_end]
+    return None  # Operation completed successfully
 
-        current_batch = checkpoint.progress.current_batch + 1
-        total_batches = checkpoint.progress.total_batches
 
-        print_info(f"\nProcessing batch {current_batch}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)")
+def _display_check_unblocked_results(unblocked_users: list[str]) -> None:
+    """Display results of check unblocked operation.
 
-        # Check users in this batch
-        batch_unblocked = _check_batch_unblocked_users(
-            batch_user_ids, token, base_url
-        )
-
-        unblocked.extend(batch_unblocked)
-
-        # Update checkpoint progress
-        results_update = {
-            "processed_count": len(batch_user_ids),
-        }
-
-        checkpoint_manager.update_checkpoint_progress(
-            checkpoint=checkpoint,
-            processed_items=batch_user_ids,
-            results_update=results_update
-        )
-
-        # Save checkpoint after each batch
-        checkpoint_manager.save_checkpoint(checkpoint)
-
-    # Display results
+    Args:
+        unblocked_users: List of unblocked user IDs
+    """
     print("\n")  # Clear progress line
-    if unblocked:
+
+    if unblocked_users:
         print_warning(
-            f"Found {len(unblocked)} unblocked users:",
-            count=len(unblocked),
+            f"Found {len(unblocked_users)} unblocked users:",
+            count=len(unblocked_users),
             operation="check_unblocked",
         )
-        for user_id in unblocked:
+        for user_id in unblocked_users:
             print_info(f"  {user_id}", user_id=user_id, status="unblocked")
     else:
         print_info("All users are blocked.", operation="check_unblocked")
-
-    # Mark checkpoint as completed
-    checkpoint.status = CheckpointStatus.COMPLETED
-    checkpoint_manager.save_checkpoint(checkpoint)
-
-    print_success(f"Check unblocked completed! Checkpoint: {checkpoint.checkpoint_id}")
-    return None  # Operation completed successfully
 
 
 def _check_batch_unblocked_users(
