@@ -127,6 +127,93 @@ def revoke_grants_only(input_file: Path, env: str, dry_run: bool) -> None:
     handler.handle_user_operations(input_file, env, "revoke-grants-only", dry_run)
 
 
+@cli.group()
+def checkpoint() -> None:
+    """Checkpoint management operations."""
+    pass
+
+
+@checkpoint.command()
+@click.option(
+    "--operation-type",
+    type=click.Choice([
+        "export-last-login",
+        "batch-delete",
+        "batch-block",
+        "batch-revoke-grants",
+        "social-unlink",
+        "check-unblocked",
+        "check-domains"
+    ]),
+    help="Filter by operation type"
+)
+@click.option(
+    "--status",
+    type=click.Choice(["active", "completed", "failed", "cancelled"]),
+    help="Filter by checkpoint status"
+)
+@click.option(
+    "--env",
+    type=click.Choice(["dev", "prod"]),
+    help="Filter by environment"
+)
+@click.option("--details", is_flag=True, help="Show detailed checkpoint information")
+def list(operation_type: str | None, status: str | None, env: str | None, details: bool) -> None:
+    """List all checkpoints with optional filters."""
+    handler = OperationHandler()
+    handler.handle_list_checkpoints(operation_type, status, env, details)
+
+
+@checkpoint.command()
+@click.argument("checkpoint_id", type=str)
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, path_type=Path),
+    help="Override input file from checkpoint (optional)"
+)
+def resume(checkpoint_id: str, input_file: Path | None) -> None:
+    """Resume an operation from a checkpoint."""
+    handler = OperationHandler()
+    handler.handle_resume_checkpoint(checkpoint_id, input_file)
+
+
+@checkpoint.command()
+@click.option(
+    "--all", "clean_all", is_flag=True, help="Clean all checkpoints (use with caution)"
+)
+@click.option(
+    "--failed", is_flag=True, help="Clean only failed checkpoints"
+)
+@click.option(
+    "--days-old", type=int, default=30,
+    help="Clean checkpoints older than specified days (default: 30)"
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Preview what would be cleaned without actually deleting"
+)
+def clean(clean_all: bool, failed: bool, days_old: int, dry_run: bool) -> None:
+    """Clean up old or failed checkpoints."""
+    handler = OperationHandler()
+    handler.handle_clean_checkpoints(clean_all, failed, days_old, dry_run)
+
+
+@checkpoint.command()
+@click.argument("checkpoint_id", type=str)
+@click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
+def delete(checkpoint_id: str, confirm: bool) -> None:
+    """Delete a specific checkpoint."""
+    handler = OperationHandler()
+    handler.handle_delete_checkpoint(checkpoint_id, confirm)
+
+
+@checkpoint.command()
+@click.argument("checkpoint_id", type=str)
+def details(checkpoint_id: str) -> None:
+    """Show detailed information about a specific checkpoint."""
+    handler = OperationHandler()
+    handler.handle_checkpoint_details(checkpoint_id)
+
+
 def main() -> None:
     """Main entry point for the CLI application."""
     try:

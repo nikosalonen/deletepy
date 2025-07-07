@@ -8,15 +8,22 @@ from urllib.parse import quote
 import requests
 
 from ..core.config import API_RATE_LIMIT, API_TIMEOUT
+from ..models.checkpoint import (
+    Checkpoint,
+    CheckpointStatus,
+    OperationConfig,
+    OperationType,
+)
+from ..utils.checkpoint_manager import CheckpointManager
 from ..utils.display_utils import (
+    print_info,
+    print_success,
+    print_warning,
     show_progress,
     shutdown_requested,
 )
 from ..utils.legacy_print import (
     print_error,
-    print_info,
-    print_success,
-    print_warning,
 )
 from .user_ops import delete_user, unlink_user_identity
 
@@ -1004,3 +1011,427 @@ def _find_users_with_primary_social_id(
         )
 
     return found_users
+
+
+def find_users_by_social_media_ids_with_checkpoints(
+    social_ids: list[str],
+    token: str,
+    base_url: str,
+    env: str = "dev",
+    auto_delete: bool = True,
+    resume_checkpoint_id: str | None = None,
+    checkpoint_manager: CheckpointManager | None = None,
+) -> str | None:
+    """Find Auth0 users with social media IDs and optionally delete them with checkpointing.
+
+    Args:
+        social_ids: List of social media IDs to search for
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        env: Environment (dev/prod) for confirmation prompts
+        auto_delete: Whether to automatically delete users with main identity matches
+        resume_checkpoint_id: Optional checkpoint ID to resume from
+        checkpoint_manager: Optional checkpoint manager instance
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
+    """
+    # Initialize checkpoint manager if not provided
+    if checkpoint_manager is None:
+        checkpoint_manager = CheckpointManager()
+
+    # Check if we're resuming from a checkpoint
+    checkpoint = None
+    if resume_checkpoint_id:
+        checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
+        if not checkpoint:
+            print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
+        elif checkpoint.status != CheckpointStatus.ACTIVE:
+            print_warning(f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})")
+            checkpoint = None
+        elif not checkpoint.is_resumable():
+            print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
+            checkpoint = None
+
+    # If not resuming, create a new checkpoint
+    if checkpoint is None:
+        # Create operation config
+        config = OperationConfig(
+            environment=env,
+            auto_delete=auto_delete,
+            additional_params={"operation": "social_unlink"}
+        )
+
+        # Create new checkpoint
+        checkpoint = checkpoint_manager.create_checkpoint(
+            operation_type=OperationType.SOCIAL_UNLINK,
+            config=config,
+            items=social_ids,
+            batch_size=50  # Process social IDs in batches of 50
+        )
+
+        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+    else:
+        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
+        # Use configuration from checkpoint
+        env = checkpoint.config.environment
+        auto_delete = checkpoint.config.auto_delete
+
+    # Save initial checkpoint
+    checkpoint_manager.save_checkpoint(checkpoint)
+
+    try:
+        return _process_social_search_with_checkpoints(
+            checkpoint=checkpoint,
+            token=token,
+            base_url=base_url,
+            env=env,
+            auto_delete=auto_delete,
+            checkpoint_manager=checkpoint_manager
+        )
+    except KeyboardInterrupt:
+        print_warning("\nSocial search operation interrupted by user")
+        checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
+        checkpoint_manager.save_checkpoint(checkpoint)
+        print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
+        print_info("You can resume this operation later using:")
+        print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
+        return checkpoint.checkpoint_id
+    except Exception as e:
+        print_warning(f"\nSocial search operation failed: {e}")
+        checkpoint_manager.mark_checkpoint_failed(checkpoint, str(e))
+        checkpoint_manager.save_checkpoint(checkpoint)
+        return checkpoint.checkpoint_id
+
+
+def _process_social_search_with_checkpoints(
+    checkpoint: Checkpoint,
+    token: str,
+    base_url: str,
+    env: str,
+    auto_delete: bool,
+    checkpoint_manager: CheckpointManager
+) -> str | None:
+    """Process social search operation with checkpointing support.
+
+    Args:
+        checkpoint: Checkpoint to process
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        env: Environment
+        auto_delete: Whether to auto-delete users
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was interrupted, None if completed
+    """
+    remaining_social_ids = checkpoint.remaining_items.copy()
+    batch_size = checkpoint.progress.batch_size
+
+    print_info(f"Searching for users with {len(remaining_social_ids)} remaining social media IDs...")
+
+    # Process remaining social IDs in batches
+    found_users = []
+    not_found_ids = []
+
+    for batch_start in range(0, len(remaining_social_ids), batch_size):
+        if shutdown_requested():
+            print_warning("\nOperation interrupted")
+            checkpoint_manager.save_checkpoint(checkpoint)
+            return checkpoint.checkpoint_id
+
+        batch_end = min(batch_start + batch_size, len(remaining_social_ids))
+        batch_social_ids = remaining_social_ids[batch_start:batch_end]
+
+        current_batch = checkpoint.progress.current_batch + 1
+        total_batches = checkpoint.progress.total_batches
+
+        print_info(f"\nProcessing batch {current_batch}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_social_ids)} remaining)")
+
+        # Search for users in this batch
+        batch_found_users, batch_not_found = _search_batch_social_ids(
+            batch_social_ids, token, base_url
+        )
+
+        # Add batch results to overall results
+        found_users.extend(batch_found_users)
+        not_found_ids.extend(batch_not_found)
+
+        # Update checkpoint progress
+        results_update = {
+            "processed_count": len(batch_social_ids),
+            "not_found_count": len(batch_not_found),
+        }
+
+        checkpoint_manager.update_checkpoint_progress(
+            checkpoint=checkpoint,
+            processed_items=batch_social_ids,
+            results_update=results_update
+        )
+
+        # Save checkpoint after each batch
+        checkpoint_manager.save_checkpoint(checkpoint)
+
+    # Process search results
+    config = SearchProcessingConfig(
+        token=token,
+        base_url=base_url,
+        env=env,
+        auto_delete=auto_delete
+    )
+
+    _process_search_results(
+        found_users, not_found_ids, len(checkpoint.processed_items) + len(remaining_social_ids), config
+    )
+
+    # Mark checkpoint as completed
+    checkpoint.status = CheckpointStatus.COMPLETED
+    checkpoint_manager.save_checkpoint(checkpoint)
+
+    print_success(f"Social search completed! Checkpoint: {checkpoint.checkpoint_id}")
+    return None  # Operation completed successfully
+
+
+def _search_batch_social_ids(
+    social_ids: list[str], token: str, base_url: str
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Search for users with a batch of social media IDs.
+
+    Args:
+        social_ids: List of social media IDs to search for
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        Tuple of (found_users, not_found_ids)
+    """
+    found_users = []
+    not_found_ids = []
+
+    for idx, social_id in enumerate(social_ids, 1):
+        if shutdown_requested():
+            break
+
+        show_progress(idx, len(social_ids), "Searching social IDs")
+
+        # Search for users with this social ID
+        users_found = _search_users_by_social_id(social_id, token, base_url)
+        if users_found:
+            # Add social_id to each user for later processing
+            for user in users_found:
+                user["social_id"] = social_id
+            found_users.extend(users_found)
+        else:
+            not_found_ids.append(social_id.strip())
+
+    print("\n")  # Clear progress line
+    return found_users, not_found_ids
+
+
+def check_unblocked_users_with_checkpoints(
+    user_ids: list[str],
+    token: str,
+    base_url: str,
+    env: str = "dev",
+    resume_checkpoint_id: str | None = None,
+    checkpoint_manager: CheckpointManager | None = None,
+) -> str | None:
+    """Check unblocked users with checkpointing support.
+
+    Args:
+        user_ids: List of Auth0 user IDs to check
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        env: Environment
+        resume_checkpoint_id: Optional checkpoint ID to resume from
+        checkpoint_manager: Optional checkpoint manager instance
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
+    """
+    # Initialize checkpoint manager if not provided
+    if checkpoint_manager is None:
+        checkpoint_manager = CheckpointManager()
+
+    # Check if we're resuming from a checkpoint
+    checkpoint = None
+    if resume_checkpoint_id:
+        checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
+        if not checkpoint:
+            print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
+        elif checkpoint.status != CheckpointStatus.ACTIVE:
+            print_warning(f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})")
+            checkpoint = None
+        elif not checkpoint.is_resumable():
+            print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
+            checkpoint = None
+
+    # If not resuming, create a new checkpoint
+    if checkpoint is None:
+        # Create operation config
+        config = OperationConfig(
+            environment=env,
+            additional_params={"operation": "check_unblocked"}
+        )
+
+        # Create new checkpoint
+        checkpoint = checkpoint_manager.create_checkpoint(
+            operation_type=OperationType.CHECK_UNBLOCKED,
+            config=config,
+            items=user_ids,
+            batch_size=50
+        )
+
+        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+    else:
+        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
+
+    # Save initial checkpoint
+    checkpoint_manager.save_checkpoint(checkpoint)
+
+    try:
+        return _process_check_unblocked_with_checkpoints(
+            checkpoint=checkpoint,
+            token=token,
+            base_url=base_url,
+            checkpoint_manager=checkpoint_manager
+        )
+    except KeyboardInterrupt:
+        print_warning("\nCheck unblocked operation interrupted by user")
+        checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
+        checkpoint_manager.save_checkpoint(checkpoint)
+        print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
+        print_info("You can resume this operation later using:")
+        print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
+        return checkpoint.checkpoint_id
+    except Exception as e:
+        print_warning(f"\nCheck unblocked operation failed: {e}")
+        checkpoint_manager.mark_checkpoint_failed(checkpoint, str(e))
+        checkpoint_manager.save_checkpoint(checkpoint)
+        return checkpoint.checkpoint_id
+
+
+def _process_check_unblocked_with_checkpoints(
+    checkpoint: Checkpoint,
+    token: str,
+    base_url: str,
+    checkpoint_manager: CheckpointManager
+) -> str | None:
+    """Process check unblocked operation with checkpointing support.
+
+    Args:
+        checkpoint: Checkpoint to process
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was interrupted, None if completed
+    """
+    remaining_user_ids = checkpoint.remaining_items.copy()
+    batch_size = checkpoint.progress.batch_size
+
+    print_info(f"Checking {len(remaining_user_ids)} remaining users for blocked status...")
+
+    unblocked = []
+
+    # Process remaining user IDs in batches
+    for batch_start in range(0, len(remaining_user_ids), batch_size):
+        if shutdown_requested():
+            print_warning("\nOperation interrupted")
+            checkpoint_manager.save_checkpoint(checkpoint)
+            return checkpoint.checkpoint_id
+
+        batch_end = min(batch_start + batch_size, len(remaining_user_ids))
+        batch_user_ids = remaining_user_ids[batch_start:batch_end]
+
+        current_batch = checkpoint.progress.current_batch + 1
+        total_batches = checkpoint.progress.total_batches
+
+        print_info(f"\nProcessing batch {current_batch}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)")
+
+        # Check users in this batch
+        batch_unblocked = _check_batch_unblocked_users(
+            batch_user_ids, token, base_url
+        )
+
+        unblocked.extend(batch_unblocked)
+
+        # Update checkpoint progress
+        results_update = {
+            "processed_count": len(batch_user_ids),
+        }
+
+        checkpoint_manager.update_checkpoint_progress(
+            checkpoint=checkpoint,
+            processed_items=batch_user_ids,
+            results_update=results_update
+        )
+
+        # Save checkpoint after each batch
+        checkpoint_manager.save_checkpoint(checkpoint)
+
+    # Display results
+    print("\n")  # Clear progress line
+    if unblocked:
+        print_warning(
+            f"Found {len(unblocked)} unblocked users:",
+            count=len(unblocked),
+            operation="check_unblocked",
+        )
+        for user_id in unblocked:
+            print_info(f"  {user_id}", user_id=user_id, status="unblocked")
+    else:
+        print_info("All users are blocked.", operation="check_unblocked")
+
+    # Mark checkpoint as completed
+    checkpoint.status = CheckpointStatus.COMPLETED
+    checkpoint_manager.save_checkpoint(checkpoint)
+
+    print_success(f"Check unblocked completed! Checkpoint: {checkpoint.checkpoint_id}")
+    return None  # Operation completed successfully
+
+
+def _check_batch_unblocked_users(
+    user_ids: list[str], token: str, base_url: str
+) -> list[str]:
+    """Check a batch of users for unblocked status.
+
+    Args:
+        user_ids: List of Auth0 user IDs to check
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        List[str]: List of unblocked user IDs
+    """
+    unblocked = []
+
+    for idx, user_id in enumerate(user_ids, 1):
+        if shutdown_requested():
+            break
+
+        url = f"{base_url}/api/v2/users/{quote(user_id)}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+        }
+
+        try:
+            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
+            response.raise_for_status()
+            user_data = response.json()
+            if not user_data.get("blocked", False):
+                unblocked.append(user_id)
+            show_progress(idx, len(user_ids), "Checking users")
+            time.sleep(API_RATE_LIMIT)
+        except requests.exceptions.RequestException as e:
+            print_error(
+                f"Error checking user {user_id}: {e}",
+                user_id=user_id,
+                operation="check_blocked",
+            )
+            continue
+
+    return unblocked

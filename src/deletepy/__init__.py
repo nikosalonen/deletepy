@@ -36,6 +36,16 @@ from .core.exceptions import (
     ValidationError,
 )
 
+# Models
+from .models.checkpoint import (
+    BatchProgress,
+    Checkpoint,
+    CheckpointStatus,
+    OperationConfig,
+    OperationType,
+    ProcessingResults,
+)
+
 # Operations
 from .operations.batch_ops import (
     _categorize_users,
@@ -43,7 +53,9 @@ from .operations.batch_ops import (
     _handle_auto_delete_operations,
     _search_users_by_social_id,
     check_unblocked_users,
+    check_unblocked_users_with_checkpoints,
     find_users_by_social_media_ids,
+    find_users_by_social_media_ids_with_checkpoints,
 )
 from .operations.domain_ops import (
     _display_domain_check_results,
@@ -61,6 +73,7 @@ from .operations.export_ops import (
     _validate_and_setup_export,
     _write_csv_batch,
     export_users_last_login_to_csv,
+    export_users_last_login_to_csv_with_checkpoints,
 )
 from .operations.preview_ops import (
     PreviewResult,
@@ -68,6 +81,7 @@ from .operations.preview_ops import (
     preview_user_operations,
 )
 from .operations.user_ops import (
+    batch_user_operations_with_checkpoints,
     block_user,
     delete_user,
     get_user_details,
@@ -112,6 +126,7 @@ from .utils import (
     validate_file_path,
     write_identifiers_to_file,
 )
+from .utils.checkpoint_manager import CheckpointManager
 
 __version__ = "1.0.0"
 
@@ -136,6 +151,13 @@ __all__ = [
     "FileOperationError",
     "APIError",
     "ValidationError",
+    # Models
+    "Checkpoint",
+    "CheckpointStatus",
+    "OperationType",
+    "OperationConfig",
+    "BatchProgress",
+    "ProcessingResults",
     # Operations
     "block_user",
     "delete_user",
@@ -153,6 +175,11 @@ __all__ = [
     "extract_domains_from_emails",
     "get_domain_statistics",
     "filter_emails_by_domain",
+    # Checkpoint-enabled operations
+    "export_users_last_login_to_csv_with_checkpoints",
+    "check_unblocked_users_with_checkpoints",
+    "find_users_by_social_media_ids_with_checkpoints",
+    "batch_user_operations_with_checkpoints",
     # Preview operations
     "PreviewResult",
     "preview_user_operations",
@@ -189,6 +216,8 @@ __all__ = [
     "print_success",
     "print_info",
     "print_section_header",
+    # Checkpoint manager
+    "CheckpointManager",
     # CLI
     "validate_args",
     "validate_environment",
