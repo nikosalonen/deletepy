@@ -334,9 +334,9 @@ class CheckpointManager:
 
         # Update processed and remaining items
         checkpoint.processed_items.extend(processed_items)
-        for item in processed_items:
-            if item in checkpoint.remaining_items:
-                checkpoint.remaining_items.remove(item)
+        # Optimize removal by using set operation instead of loop (O(n) vs O(n²))
+        processed_set = set(processed_items)
+        checkpoint.remaining_items = [item for item in checkpoint.remaining_items if item not in processed_set]
 
         # Check if operation is complete
         if len(checkpoint.remaining_items) == 0:
