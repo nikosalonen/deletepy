@@ -837,6 +837,89 @@ class OperationHandler:
             click.echo(f"{RED}Resume not supported for operation type: {operation_type.value}{RESET}")
             return
 
+    def _clean_all_checkpoints(
+        self,
+        manager: CheckpointManager,
+        dry_run: bool
+    ) -> None:
+        """Clean all checkpoints.
+
+        Args:
+            manager: Checkpoint manager instance
+            dry_run: Whether to perform a dry run
+        """
+        # Get all checkpoints
+        checkpoints = manager.list_checkpoints()
+
+        if not checkpoints:
+            click.echo(f"{YELLOW}No checkpoints found to clean.{RESET}")
+            return
+
+        if dry_run:
+            click.echo(f"{CYAN}Would delete {len(checkpoints)} checkpoints:{RESET}")
+            manager.display_checkpoints(checkpoints)
+            return
+
+        if not confirm_action(f"delete ALL {len(checkpoints)} checkpoints"):
+            click.echo(f"{YELLOW}Cleanup cancelled.{RESET}")
+            return
+
+        # Delete all checkpoints
+        deleted_count = 0
+        for checkpoint in checkpoints:
+            if manager.delete_checkpoint(checkpoint.checkpoint_id):
+                deleted_count += 1
+
+        click.echo(f"{GREEN}Deleted {deleted_count} checkpoints.{RESET}")
+
+    def _clean_failed_checkpoints(
+        self,
+        manager: CheckpointManager
+    ) -> None:
+        """Clean failed checkpoints.
+
+        Args:
+            manager: Checkpoint manager instance
+        """
+        # Clean only failed checkpoints
+        deleted_count = manager.clean_failed_checkpoints()
+        if deleted_count > 0:
+            click.echo(f"{GREEN}Cleaned {deleted_count} failed checkpoints.{RESET}")
+        else:
+            click.echo(f"{YELLOW}No failed checkpoints found to clean.{RESET}")
+
+    def _clean_old_checkpoints(
+        self,
+        manager: CheckpointManager,
+        days_old: int,
+        dry_run: bool
+    ) -> None:
+        """Clean old checkpoints.
+
+        Args:
+            manager: Checkpoint manager instance
+            days_old: Number of days old to consider checkpoints for deletion
+            dry_run: Whether to perform a dry run
+        """
+        # Clean old checkpoints
+        if dry_run:
+            checkpoints = manager.list_checkpoints()
+            cutoff_date = datetime.now() - timedelta(days=days_old)
+            old_checkpoints = [cp for cp in checkpoints if cp.created_at < cutoff_date]
+
+            if old_checkpoints:
+                click.echo(f"{CYAN}Would delete {len(old_checkpoints)} checkpoints older than {days_old} days:{RESET}")
+                manager.display_checkpoints(old_checkpoints)
+            else:
+                click.echo(f"{YELLOW}No checkpoints older than {days_old} days found.{RESET}")
+            return
+
+        deleted_count = manager.clean_old_checkpoints(days_old)
+        if deleted_count > 0:
+            click.echo(f"{GREEN}Cleaned {deleted_count} old checkpoints.{RESET}")
+        else:
+            click.echo(f"{YELLOW}No old checkpoints found to clean.{RESET}")
+
     def handle_clean_checkpoints(
         self,
         clean_all: bool,
@@ -849,57 +932,11 @@ class OperationHandler:
             manager = CheckpointManager()
 
             if clean_all:
-                # Get all checkpoints
-                checkpoints = manager.list_checkpoints()
-
-                if not checkpoints:
-                    click.echo(f"{YELLOW}No checkpoints found to clean.{RESET}")
-                    return
-
-                if dry_run:
-                    click.echo(f"{CYAN}Would delete {len(checkpoints)} checkpoints:{RESET}")
-                    manager.display_checkpoints(checkpoints)
-                    return
-
-                if not confirm_action(f"delete ALL {len(checkpoints)} checkpoints"):
-                    click.echo(f"{YELLOW}Cleanup cancelled.{RESET}")
-                    return
-
-                # Delete all checkpoints
-                deleted_count = 0
-                for checkpoint in checkpoints:
-                    if manager.delete_checkpoint(checkpoint.checkpoint_id):
-                        deleted_count += 1
-
-                click.echo(f"{GREEN}Deleted {deleted_count} checkpoints.{RESET}")
-
+                self._clean_all_checkpoints(manager, dry_run)
             elif failed:
-                # Clean only failed checkpoints
-                deleted_count = manager.clean_failed_checkpoints()
-                if deleted_count > 0:
-                    click.echo(f"{GREEN}Cleaned {deleted_count} failed checkpoints.{RESET}")
-                else:
-                    click.echo(f"{YELLOW}No failed checkpoints found to clean.{RESET}")
-
+                self._clean_failed_checkpoints(manager)
             else:
-                # Clean old checkpoints
-                if dry_run:
-                    checkpoints = manager.list_checkpoints()
-                    cutoff_date = datetime.now() - timedelta(days=days_old)
-                    old_checkpoints = [cp for cp in checkpoints if cp.created_at < cutoff_date]
-
-                    if old_checkpoints:
-                        click.echo(f"{CYAN}Would delete {len(old_checkpoints)} checkpoints older than {days_old} days:{RESET}")
-                        manager.display_checkpoints(old_checkpoints)
-                    else:
-                        click.echo(f"{YELLOW}No checkpoints older than {days_old} days found.{RESET}")
-                    return
-
-                deleted_count = manager.clean_old_checkpoints(days_old)
-                if deleted_count > 0:
-                    click.echo(f"{GREEN}Cleaned {deleted_count} old checkpoints.{RESET}")
-                else:
-                    click.echo(f"{YELLOW}No old checkpoints found to clean.{RESET}")
+                self._clean_old_checkpoints(manager, days_old, dry_run)
 
         except Exception as e:
             self._handle_operation_error(e, "Clean checkpoints")
