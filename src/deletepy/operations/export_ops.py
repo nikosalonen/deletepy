@@ -2,6 +2,7 @@
 
 import csv
 import os
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,25 @@ from ..utils.display_utils import (
     shutdown_requested,
 )
 from .user_ops import get_user_details, get_user_id_from_email
+
+
+@dataclass
+class ExportWithCheckpointsConfig:
+    """Configuration for export operations with checkpoint support."""
+
+    # Auth0/API configuration
+    token: str
+    base_url: str
+    env: str = "dev"
+    connection: str | None = None
+
+    # Export configuration
+    output_file: str = "users_last_login.csv"
+    batch_size: int | None = None
+
+    # Checkpoint configuration
+    resume_checkpoint_id: str | None = None
+    checkpoint_manager: CheckpointManager | None = None
 
 
 def _validate_and_setup_export(
@@ -198,7 +218,11 @@ def _process_email_batch(
 
 
 def _write_csv_batch(
-    csv_data: list[dict[str, Any]], output_file: str, batch_number: int
+    csv_data: list[dict[str, Any]],
+    output_file: str,
+    batch_number: int,
+    mode: str | None = None,
+    write_headers: bool | None = None,
 ) -> bool:
     """Write CSV data to file.
 
@@ -206,6 +230,8 @@ def _write_csv_batch(
         csv_data: List of dictionaries containing CSV data
         output_file: Output CSV file path
         batch_number: Batch number for backup naming
+        mode: Write mode ('w' for write, 'a' for append). If None, auto-determined.
+        write_headers: Whether to write headers. If None, auto-determined.
 
     Returns:
         bool: True if successful, False otherwise
@@ -214,10 +240,13 @@ def _write_csv_batch(
         return True
 
     try:
-        # Determine if this is the first batch (write headers)
-        write_headers = batch_number == 1 or not os.path.exists(output_file)
+        # Auto-determine mode and write_headers if not provided (backward compatibility)
+        if write_headers is None:
+            write_headers = batch_number == 1 or not os.path.exists(output_file)
 
-        mode = "w" if write_headers else "a"
+        if mode is None:
+            mode = "w" if write_headers else "a"
+
         with open(output_file, mode, newline="", encoding="utf-8") as csvfile:
             fieldnames = [
                 "email",
@@ -243,7 +272,7 @@ def _write_csv_batch(
         return True
 
     except Exception as e:
-        print(f"{RED}Error writing CSV batch {batch_number}: {e}{RESET}")
+        print_warning(f"Error writing CSV batch {batch_number}: {e}")
         return False
 
 
@@ -430,27 +459,13 @@ def export_users_last_login_to_csv(
 
 def export_users_last_login_to_csv_with_checkpoints(
     emails: list[str],
-    token: str,
-    base_url: str,
-    output_file: str = "users_last_login.csv",
-    batch_size: int | None = None,
-    connection: str | None = None,
-    env: str = "dev",
-    resume_checkpoint_id: str | None = None,
-    checkpoint_manager: CheckpointManager | None = None,
+    config: ExportWithCheckpointsConfig,
 ) -> str | None:
     """Fetch user data for given emails and export last_login values to CSV with checkpointing.
 
     Args:
         emails: List of email addresses to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-        output_file: Output CSV file path (default: users_last_login.csv)
-        batch_size: Number of emails to process before writing to CSV (auto-calculated if None)
-        connection: Optional connection filter (e.g., "google-oauth2", "auth0", "facebook")
-        env: Environment (dev/prod)
-        resume_checkpoint_id: Optional checkpoint ID to resume from
-        checkpoint_manager: Optional checkpoint manager instance
+        config: Configuration for the export operation
 
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
@@ -460,39 +475,40 @@ def export_users_last_login_to_csv_with_checkpoints(
         FileNotFoundError: If the output directory does not exist
     """
     # Initialize checkpoint manager if not provided
+    checkpoint_manager = config.checkpoint_manager
     if checkpoint_manager is None:
         checkpoint_manager = CheckpointManager()
 
     # Check if we're resuming from a checkpoint
     checkpoint = None
-    if resume_checkpoint_id:
-        checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
+    if config.resume_checkpoint_id:
+        checkpoint = checkpoint_manager.load_checkpoint(config.resume_checkpoint_id)
         if not checkpoint:
             print_warning(
-                f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
+                f"Could not load checkpoint {config.resume_checkpoint_id}, starting fresh"
             )
         elif checkpoint.status != CheckpointStatus.ACTIVE:
             print_warning(
-                f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
+                f"Checkpoint {config.resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
             )
             checkpoint = None
         elif not checkpoint.is_resumable():
-            print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
+            print_warning(f"Checkpoint {config.resume_checkpoint_id} is not resumable")
             checkpoint = None
 
     # If not resuming, create a new checkpoint
     if checkpoint is None:
         # Validate and setup export parameters
         batch_size, estimated_time = _validate_and_setup_export(
-            emails, output_file, batch_size, connection
+            emails, config.output_file, config.batch_size, config.connection
         )
 
         # Create operation config
-        config = OperationConfig(
-            environment=env,
+        operation_config = OperationConfig(
+            environment=config.env,
             input_file=None,  # emails are passed directly
-            output_file=output_file,
-            connection_filter=connection,
+            output_file=config.output_file,
+            connection_filter=config.connection,
             batch_size=batch_size,
             additional_params={"estimated_time": estimated_time},
         )
@@ -500,7 +516,7 @@ def export_users_last_login_to_csv_with_checkpoints(
         # Create new checkpoint
         checkpoint = checkpoint_manager.create_checkpoint(
             operation_type=OperationType.EXPORT_LAST_LOGIN,
-            config=config,
+            config=operation_config,
             items=emails,
             batch_size=batch_size,
         )
@@ -510,8 +526,8 @@ def export_users_last_login_to_csv_with_checkpoints(
         print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
         # Use configuration from checkpoint
         batch_size = checkpoint.config.batch_size or checkpoint.progress.batch_size
-        connection = checkpoint.config.connection_filter
-        output_file = checkpoint.config.output_file or output_file
+        config.connection = checkpoint.config.connection_filter
+        config.output_file = checkpoint.config.output_file or config.output_file
 
     # Save initial checkpoint
     checkpoint_manager.save_checkpoint(checkpoint)
@@ -519,8 +535,8 @@ def export_users_last_login_to_csv_with_checkpoints(
     try:
         return _process_export_with_checkpoints(
             checkpoint=checkpoint,
-            token=token,
-            base_url=base_url,
+            token=config.token,
+            base_url=config.base_url,
             checkpoint_manager=checkpoint_manager,
         )
     except KeyboardInterrupt:
@@ -596,7 +612,7 @@ def _process_export_with_checkpoints(
 
         # Write batch to CSV
         mode = "w" if write_headers else "a"
-        success = _write_csv_batch_with_mode(
+        success = _write_csv_batch(
             batch_csv_data, output_file, current_batch_num, mode, write_headers
         )
 
@@ -636,57 +652,6 @@ def _process_export_with_checkpoints(
     print_success(f"Export completed! Checkpoint: {checkpoint.checkpoint_id}")
     return None  # Operation completed successfully
 
-
-def _write_csv_batch_with_mode(
-    csv_data: list[dict[str, Any]],
-    output_file: str,
-    batch_number: int,
-    mode: str = "a",
-    write_headers: bool = False,
-) -> bool:
-    """Write CSV data to file with specified mode.
-
-    Args:
-        csv_data: List of dictionaries containing CSV data
-        output_file: Output CSV file path
-        batch_number: Batch number for error reporting
-        mode: Write mode ('w' for write, 'a' for append)
-        write_headers: Whether to write headers
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    if not csv_data:
-        return True
-
-    try:
-        with open(output_file, mode, newline="", encoding="utf-8") as csvfile:
-            fieldnames = [
-                "email",
-                "user_id",
-                "connection",
-                "last_login",
-                "created_at",
-                "updated_at",
-                "status",
-                "blocked",
-                "email_verified",
-                "identities_count",
-            ]
-
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-            if write_headers:
-                writer.writeheader()
-
-            for row in csv_data:
-                writer.writerow(row)
-
-        return True
-
-    except Exception as e:
-        print_warning(f"Error writing CSV batch {batch_number}: {e}")
-        return False
 
 
 def _generate_export_summary_from_checkpoint(

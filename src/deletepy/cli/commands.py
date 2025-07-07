@@ -835,14 +835,14 @@ class OperationHandler:
             checkpoint_manager: Checkpoint manager instance
         """
         from ..operations.export_ops import (
+            ExportWithCheckpointsConfig,
             export_users_last_login_to_csv_with_checkpoints,
         )
 
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
 
-        export_users_last_login_to_csv_with_checkpoints(
-            emails=checkpoint.remaining_items,
+        config = ExportWithCheckpointsConfig(
             token=get_access_token(env),
             base_url=get_base_url(env),
             output_file=checkpoint.config.output_file or "users_last_login.csv",
@@ -850,6 +850,11 @@ class OperationHandler:
             env=env,
             resume_checkpoint_id=checkpoint_id,
             checkpoint_manager=checkpoint_manager,
+        )
+
+        export_users_last_login_to_csv_with_checkpoints(
+            emails=checkpoint.remaining_items,
+            config=config,
         )
 
     def _resume_check_unblocked(

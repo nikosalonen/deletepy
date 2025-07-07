@@ -49,6 +49,7 @@ from .models.checkpoint import (
 # Operations
 from .operations.batch_ops import (
     CheckpointOperationConfig,
+    ExecuteCheckpointConfig,
     _categorize_users,
     _display_search_results,
     _handle_auto_delete_operations,
@@ -67,6 +68,7 @@ from .operations.domain_ops import (
     validate_domain_format,
 )
 from .operations.export_ops import (
+    ExportWithCheckpointsConfig,
     _build_csv_data_dict,
     _fetch_user_data,
     _generate_export_summary,
@@ -161,6 +163,8 @@ __all__ = [
     "ProcessingResults",
     # Operations
     "CheckpointOperationConfig",
+    "ExecuteCheckpointConfig",
+    "ExportWithCheckpointsConfig",
     "block_user",
     "delete_user",
     "get_user_details",
