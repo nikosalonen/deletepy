@@ -602,7 +602,7 @@ class OperationHandler:
             base_url,
         )
 
-    def _print_domain_results(self, results: dict, emails: list) -> None:
+    def _print_domain_results(self, results: dict[str, Any], emails: list[str]) -> None:
         """Print domain check results summary."""
         # Print summary
         blocked = [email for email, status in results.items() if "BLOCKED" in status]

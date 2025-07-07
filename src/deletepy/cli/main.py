@@ -86,10 +86,28 @@ def unlink_social_ids(input_file: Path, env: str, dry_run: bool) -> None:
 )
 def cleanup_csv(input_file: Path, env: str | None, output_type: str) -> None:
     """Process CSV file and extract/convert user identifiers."""
-    from .csv_commands import process_csv_file
+    from ..utils.csv_utils import (
+        extract_identifiers_from_csv,
+        write_identifiers_to_file,
+    )
 
-    success = process_csv_file(str(input_file), env, output_type, interactive=True)
-    if not success:
+    try:
+        identifiers = extract_identifiers_from_csv(
+            filename=str(input_file), env=env, output_type=output_type
+        )
+        if identifiers:
+            output_file = f"cleaned_{input_file.name}"
+            success = write_identifiers_to_file(identifiers, output_file)
+            if success:
+                click.echo(f"Successfully processed {len(identifiers)} identifiers to {output_file}")
+            else:
+                click.echo(f"Error writing output file: {output_file}")
+                sys.exit(1)
+        else:
+            click.echo("No identifiers found in input file")
+            sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error processing CSV file: {e}")
         sys.exit(1)
 
 

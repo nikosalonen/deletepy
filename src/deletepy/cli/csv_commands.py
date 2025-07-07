@@ -80,7 +80,7 @@ def print_csv_usage() -> None:
     print("  deletepy csv ids.csv --env prod --output-type user_id")
 
 
-def create_csv_parser(subparsers: argparse._SubParsersAction) -> None:
+def create_csv_parser(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
     """Create CSV subparser for the main argument parser.
 
     Args:
