@@ -31,6 +31,7 @@ from .user_ops import delete_user, unlink_user_identity
 @dataclass
 class CheckpointSetupConfig:
     """Configuration for checkpoint setup operations."""
+
     operation_type: OperationType
     items: list[str]
     env: str
@@ -43,6 +44,7 @@ class CheckpointSetupConfig:
 @dataclass
 class SearchProcessingConfig:
     """Configuration for search result processing operations."""
+
     token: str
     base_url: str
     env: str
@@ -52,6 +54,7 @@ class SearchProcessingConfig:
 @dataclass
 class CheckpointOperationConfig:
     """Configuration for checkpoint-enabled operations."""
+
     token: str
     base_url: str
     env: str = "dev"
@@ -216,7 +219,12 @@ def _process_search_results(
 
     # Handle auto-delete operations
     _handle_auto_delete_operations(
-        users_to_delete, identities_to_unlink, config.token, config.base_url, config.env, config.auto_delete
+        users_to_delete,
+        identities_to_unlink,
+        config.token,
+        config.base_url,
+        config.env,
+        config.auto_delete,
     )
 
 
@@ -249,14 +257,9 @@ def find_users_by_social_media_ids(
 
     # Process the search results
     config = SearchProcessingConfig(
-        token=token,
-        base_url=base_url,
-        env=env,
-        auto_delete=auto_delete
+        token=token, base_url=base_url, env=env, auto_delete=auto_delete
     )
-    _process_search_results(
-        found_users, not_found_ids, len(social_ids), config
-    )
+    _process_search_results(found_users, not_found_ids, len(social_ids), config)
 
 
 def _search_users_by_social_id(
@@ -344,7 +347,11 @@ def _categorize_users(
         elif category == "unlink":
             identities_to_unlink.append(_create_user_record(user, "Secondary identity"))
         elif category == "protected":
-            reason = "Main identity (protected)" if not auto_delete else "Auth0 main identity"
+            reason = (
+                "Main identity (protected)"
+                if not auto_delete
+                else "Auth0 main identity"
+            )
             auth0_main_protected.append(_create_user_record(user, reason))
 
     return users_to_delete, identities_to_unlink, auth0_main_protected
@@ -380,7 +387,9 @@ def _determine_user_category(user: dict[str, Any], auto_delete: bool) -> str:
     return "unlink"
 
 
-def _find_matching_identity(identities: list[dict[str, Any]], social_id: str) -> dict[str, Any] | None:
+def _find_matching_identity(
+    identities: list[dict[str, Any]], social_id: str
+) -> dict[str, Any] | None:
     """Find the identity matching the given social ID.
 
     Args:
@@ -418,8 +427,10 @@ def _has_auth0_main_identity(identities: list[dict[str, Any]]) -> bool:
         bool: True if Auth0 is the main identity (non-social)
     """
     for identity in identities:
-        if (identity.get("connection") == "auth0" and
-                identity.get("isSocial", False) is False):
+        if (
+            identity.get("connection") == "auth0"
+            and identity.get("isSocial", False) is False
+        ):
             return True
     return False
 
@@ -437,7 +448,9 @@ def _create_user_record(user: dict[str, Any], reason: str) -> dict[str, str]:
     identities = user.get("identities", [])
     social_id = user.get("social_id", "")
     matching_identity = _find_matching_identity(identities, social_id)
-    matching_connection = matching_identity.get("connection", "") if matching_identity else ""
+    matching_connection = (
+        matching_identity.get("connection", "") if matching_identity else ""
+    )
 
     return {
         "user_id": user.get("user_id", ""),
@@ -508,7 +521,7 @@ def _print_not_found_ids(not_found_ids: list[str]) -> None:
 def _print_category_counts(
     users_to_delete: list[dict[str, Any]],
     identities_to_unlink: list[dict[str, Any]],
-    auth0_main_protected: list[dict[str, Any]]
+    auth0_main_protected: list[dict[str, Any]],
 ) -> None:
     """Print user category counts.
 
@@ -534,7 +547,7 @@ def _print_category_counts(
 def _print_category_details(
     users_to_delete: list[dict[str, Any]],
     identities_to_unlink: list[dict[str, Any]],
-    auth0_main_protected: list[dict[str, Any]]
+    auth0_main_protected: list[dict[str, Any]],
 ) -> None:
     """Print detailed user lists for each category.
 
@@ -544,30 +557,22 @@ def _print_category_details(
         auth0_main_protected: Users that are protected from deletion
     """
     if users_to_delete:
-        _print_user_list(
-            "\nUsers that will be deleted:",
-            users_to_delete,
-            "delete"
-        )
+        _print_user_list("\nUsers that will be deleted:", users_to_delete, "delete")
 
     if identities_to_unlink:
         _print_user_list(
-            "\nUsers where identities will be unlinked:",
-            identities_to_unlink,
-            "unlink"
+            "\nUsers where identities will be unlinked:", identities_to_unlink, "unlink"
         )
 
     if auth0_main_protected:
         _print_user_list(
             "\nProtected users (Auth0 main identity):",
             auth0_main_protected,
-            "protected"
+            "protected",
         )
 
 
-def _print_user_list(
-    header: str, user_list: list[dict[str, Any]], action: str
-) -> None:
+def _print_user_list(header: str, user_list: list[dict[str, Any]], action: str) -> None:
     """Print a formatted list of users.
 
     Args:
@@ -1002,8 +1007,8 @@ def _has_social_id_as_primary_identity(
     # Check if this is the primary identity (usually the first one)
     primary_identity = identities[0]
     return (
-        primary_identity.get("user_id") == social_id and
-        primary_identity.get("connection") == connection
+        primary_identity.get("user_id") == social_id
+        and primary_identity.get("connection") == connection
     )
 
 
@@ -1075,7 +1080,7 @@ def _find_users_with_primary_social_id(
 
 
 def _initialize_checkpoint_manager(
-    checkpoint_manager: CheckpointManager | None = None
+    checkpoint_manager: CheckpointManager | None = None,
 ) -> CheckpointManager:
     """Initialize checkpoint manager if not provided.
 
@@ -1107,7 +1112,9 @@ def _load_existing_checkpoint(
         return None
 
     if checkpoint.status != CheckpointStatus.ACTIVE:
-        print_warning(f"Checkpoint {checkpoint_id} is not active (status: {checkpoint.status.value})")
+        print_warning(
+            f"Checkpoint {checkpoint_id} is not active (status: {checkpoint.status.value})"
+        )
         return None
 
     if not checkpoint.is_resumable():
@@ -1123,7 +1130,7 @@ def _create_new_checkpoint(
     items: list[str],
     env: str,
     auto_delete: bool,
-    operation_name: str
+    operation_name: str,
 ) -> Checkpoint:
     """Create a new checkpoint for the operation.
 
@@ -1141,14 +1148,11 @@ def _create_new_checkpoint(
     config = OperationConfig(
         environment=env,
         auto_delete=auto_delete,
-        additional_params={"operation": operation_name}
+        additional_params={"operation": operation_name},
     )
 
     checkpoint = checkpoint_manager.create_checkpoint(
-        operation_type=operation_type,
-        config=config,
-        items=items,
-        batch_size=50
+        operation_type=operation_type, config=config, items=items, batch_size=50
     )
 
     print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
@@ -1156,7 +1160,7 @@ def _create_new_checkpoint(
 
 
 def _setup_checkpoint_operation(
-    setup_config: CheckpointSetupConfig
+    setup_config: CheckpointSetupConfig,
 ) -> tuple[Checkpoint, CheckpointManager, str, bool]:
     """Set up checkpoint operation by creating or resuming checkpoints.
 
@@ -1171,7 +1175,9 @@ def _setup_checkpoint_operation(
     # Try to load existing checkpoint if resuming
     checkpoint = None
     if setup_config.resume_checkpoint_id:
-        checkpoint = _load_existing_checkpoint(checkpoint_manager, setup_config.resume_checkpoint_id)
+        checkpoint = _load_existing_checkpoint(
+            checkpoint_manager, setup_config.resume_checkpoint_id
+        )
 
     # Create new checkpoint if not resuming or loading failed
     if checkpoint is None:
@@ -1181,7 +1187,7 @@ def _setup_checkpoint_operation(
             setup_config.items,
             setup_config.env,
             setup_config.auto_delete,
-            setup_config.operation_name
+            setup_config.operation_name,
         )
     else:
         print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
@@ -1196,9 +1202,7 @@ def _setup_checkpoint_operation(
 
 
 def _handle_checkpoint_interruption(
-    checkpoint: Checkpoint,
-    checkpoint_manager: CheckpointManager,
-    operation_name: str
+    checkpoint: Checkpoint, checkpoint_manager: CheckpointManager, operation_name: str
 ) -> str:
     """Handle checkpoint interruption (KeyboardInterrupt).
 
@@ -1223,7 +1227,7 @@ def _handle_checkpoint_error(
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
     operation_name: str,
-    error: Exception
+    error: Exception,
 ) -> str:
     """Handle checkpoint error.
 
@@ -1249,7 +1253,7 @@ def _execute_batch_processing_loop(
     checkpoint_manager: CheckpointManager,
     batch_processor_func: callable,
     operation_name: str,
-    *processor_args
+    *processor_args,
 ) -> str | None:
     """Execute batch processing loop with checkpoint support.
 
@@ -1278,22 +1282,21 @@ def _execute_batch_processing_loop(
         current_batch = checkpoint.progress.current_batch + 1
         total_batches = checkpoint.progress.total_batches
 
-        print_info(f"\nProcessing batch {current_batch}/{total_batches} "
-                  f"({batch_start + 1}-{batch_end} of {len(remaining_items)} remaining)")
+        print_info(
+            f"\nProcessing batch {current_batch}/{total_batches} "
+            f"({batch_start + 1}-{batch_end} of {len(remaining_items)} remaining)"
+        )
 
         # Process batch using the provided function
         batch_results = batch_processor_func(batch_items, *processor_args)
 
         # Update checkpoint progress
-        results_update = {
-            "processed_count": len(batch_items),
-            **batch_results
-        }
+        results_update = {"processed_count": len(batch_items), **batch_results}
 
         checkpoint_manager.update_checkpoint_progress(
             checkpoint=checkpoint,
             processed_items=batch_items,
-            results_update=results_update
+            results_update=results_update,
         )
 
         # Save checkpoint after each batch
@@ -1307,7 +1310,7 @@ def _process_batch_items_with_checkpoints(
     checkpoint_manager: CheckpointManager,
     batch_processor_func: callable,
     operation_name: str,
-    *processor_args
+    *processor_args,
 ) -> str | None:
     """Process items in batches with checkpoint support.
 
@@ -1329,7 +1332,9 @@ def _process_batch_items_with_checkpoints(
         _finalize_checkpoint_completion(checkpoint, checkpoint_manager, operation_name)
         return None
 
-    print_info(f"Processing {len(remaining_items)} remaining items for {operation_name}...")
+    print_info(
+        f"Processing {len(remaining_items)} remaining items for {operation_name}..."
+    )
 
     # Execute the batch processing loop
     result = _execute_batch_processing_loop(
@@ -1339,7 +1344,7 @@ def _process_batch_items_with_checkpoints(
         checkpoint_manager,
         batch_processor_func,
         operation_name,
-        *processor_args
+        *processor_args,
     )
 
     # If operation was interrupted, return checkpoint ID
@@ -1352,9 +1357,7 @@ def _process_batch_items_with_checkpoints(
 
 
 def _finalize_checkpoint_completion(
-    checkpoint: Checkpoint,
-    checkpoint_manager: CheckpointManager,
-    operation_name: str
+    checkpoint: Checkpoint, checkpoint_manager: CheckpointManager, operation_name: str
 ) -> None:
     """Finalize checkpoint completion.
 
@@ -1375,7 +1378,7 @@ def _execute_with_checkpoints(
     process_func: callable,
     operation_name: str,
     auto_delete: bool = True,
-    processing_config: ProcessingConfig | None = None
+    processing_config: ProcessingConfig | None = None,
 ) -> str | None:
     """Execute operation with checkpoint lifecycle management.
 
@@ -1401,9 +1404,11 @@ def _execute_with_checkpoints(
         auto_delete=auto_delete,
         resume_checkpoint_id=config.resume_checkpoint_id,
         checkpoint_manager=config.checkpoint_manager,
-        operation_name=operation_name
+        operation_name=operation_name,
     )
-    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation(setup_config)
+    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation(
+        setup_config
+    )
 
     # Prepare process function parameters
     process_params = {
@@ -1422,11 +1427,16 @@ def _execute_with_checkpoints(
         return process_func(**process_params)
     except KeyboardInterrupt:
         return _handle_checkpoint_interruption(
-            checkpoint, checkpoint_manager, f"{operation_name.replace('_', ' ').title()} operation"
+            checkpoint,
+            checkpoint_manager,
+            f"{operation_name.replace('_', ' ').title()} operation",
         )
     except Exception as e:
         return _handle_checkpoint_error(
-            checkpoint, checkpoint_manager, f"{operation_name.replace('_', ' ').title()} operation", e
+            checkpoint,
+            checkpoint_manager,
+            f"{operation_name.replace('_', ' ').title()} operation",
+            e,
         )
 
 
@@ -1452,15 +1462,12 @@ def find_users_by_social_media_ids_with_checkpoints(
         process_func=_process_social_search_with_checkpoints,
         operation_name="social_unlink",
         auto_delete=auto_delete,
-        processing_config=ProcessingConfig()
+        processing_config=ProcessingConfig(),
     )
 
 
 def _process_social_search_batch(
-    batch_social_ids: list[str],
-    token: str,
-    base_url: str,
-    accumulator: dict[str, list]
+    batch_social_ids: list[str], token: str, base_url: str, accumulator: dict[str, list]
 ) -> dict[str, int]:
     """Process a batch of social IDs and accumulate results.
 
@@ -1492,7 +1499,7 @@ def _handle_social_search_completion(
     token: str,
     base_url: str,
     env: str,
-    auto_delete: bool
+    auto_delete: bool,
 ) -> None:
     """Handle the completion of social search operation by processing final results.
 
@@ -1512,7 +1519,7 @@ def _handle_social_search_completion(
         token,
         base_url,
         env,
-        auto_delete
+        auto_delete,
     )
 
 
@@ -1522,7 +1529,7 @@ def _process_social_search_with_checkpoints(
     base_url: str,
     env: str,
     auto_delete: bool,
-    checkpoint_manager: CheckpointManager
+    checkpoint_manager: CheckpointManager,
 ) -> str | None:
     """Process social search operation with checkpointing support.
 
@@ -1538,10 +1545,7 @@ def _process_social_search_with_checkpoints(
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
     # Initialize accumulator for results
-    results_accumulator = {
-        "found_users": [],
-        "not_found_ids": []
-    }
+    results_accumulator = {"found_users": [], "not_found_ids": []}
 
     # Process batches using common batch processing logic
     result = _process_batch_items_with_checkpoints(
@@ -1551,7 +1555,7 @@ def _process_social_search_with_checkpoints(
         "Social search",
         token,
         base_url,
-        results_accumulator
+        results_accumulator,
     )
 
     # If operation was interrupted, return checkpoint ID
@@ -1573,7 +1577,7 @@ def _process_final_social_search_results(
     token: str,
     base_url: str,
     env: str,
-    auto_delete: bool
+    auto_delete: bool,
 ) -> None:
     """Process final social search results and perform operations.
 
@@ -1589,15 +1593,10 @@ def _process_final_social_search_results(
     total_processed = len(checkpoint.processed_items) + len(checkpoint.remaining_items)
 
     config = SearchProcessingConfig(
-        token=token,
-        base_url=base_url,
-        env=env,
-        auto_delete=auto_delete
+        token=token, base_url=base_url, env=env, auto_delete=auto_delete
     )
 
-    _process_search_results(
-        found_users, not_found_ids, total_processed, config
-    )
+    _process_search_results(found_users, not_found_ids, total_processed, config)
 
 
 def _search_batch_social_ids(
@@ -1656,15 +1655,12 @@ def check_unblocked_users_with_checkpoints(
         process_func=_process_check_unblocked_with_checkpoints,
         operation_name="check_unblocked",
         auto_delete=False,  # Not relevant for check operations
-        processing_config=ProcessingConfig()
+        processing_config=ProcessingConfig(),
     )
 
 
 def _process_check_unblocked_batch(
-    batch_user_ids: list[str],
-    token: str,
-    base_url: str,
-    accumulator: dict[str, list]
+    batch_user_ids: list[str], token: str, base_url: str, accumulator: dict[str, list]
 ) -> dict[str, int]:
     """Process a batch of user IDs to check for unblocked status.
 
@@ -1677,9 +1673,7 @@ def _process_check_unblocked_batch(
     Returns:
         dict: Batch processing results for checkpoint update
     """
-    batch_unblocked = _check_batch_unblocked_users(
-        batch_user_ids, token, base_url
-    )
+    batch_unblocked = _check_batch_unblocked_users(batch_user_ids, token, base_url)
 
     accumulator["unblocked_users"].extend(batch_unblocked)
 
@@ -1699,7 +1693,7 @@ def _process_check_unblocked_with_checkpoints(
     connection_filter: str | None = None,  # Processing config parameter
     include_inactive: bool = False,  # Processing config parameter
     verify_results: bool = True,  # Processing config parameter
-    **custom_params  # Custom parameters from ProcessingConfig
+    **custom_params,  # Custom parameters from ProcessingConfig
 ) -> str | None:
     """Process check unblocked operation with checkpointing support.
 
@@ -1713,9 +1707,7 @@ def _process_check_unblocked_with_checkpoints(
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
     # Initialize accumulator for results
-    results_accumulator = {
-        "unblocked_users": []
-    }
+    results_accumulator = {"unblocked_users": []}
 
     # Process batches using common batch processing logic
     result = _process_batch_items_with_checkpoints(
@@ -1725,7 +1717,7 @@ def _process_check_unblocked_with_checkpoints(
         "Check unblocked",
         token,
         base_url,
-        results_accumulator
+        results_accumulator,
     )
 
     # If operation was interrupted, return checkpoint ID

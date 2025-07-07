@@ -468,9 +468,13 @@ def export_users_last_login_to_csv_with_checkpoints(
     if resume_checkpoint_id:
         checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
         if not checkpoint:
-            print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
+            print_warning(
+                f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
+            )
         elif checkpoint.status != CheckpointStatus.ACTIVE:
-            print_warning(f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})")
+            print_warning(
+                f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
+            )
             checkpoint = None
         elif not checkpoint.is_resumable():
             print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
@@ -490,7 +494,7 @@ def export_users_last_login_to_csv_with_checkpoints(
             output_file=output_file,
             connection_filter=connection,
             batch_size=batch_size,
-            additional_params={"estimated_time": estimated_time}
+            additional_params={"estimated_time": estimated_time},
         )
 
         # Create new checkpoint
@@ -498,7 +502,7 @@ def export_users_last_login_to_csv_with_checkpoints(
             operation_type=OperationType.EXPORT_LAST_LOGIN,
             config=config,
             items=emails,
-            batch_size=batch_size
+            batch_size=batch_size,
         )
 
         print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
@@ -517,7 +521,7 @@ def export_users_last_login_to_csv_with_checkpoints(
             checkpoint=checkpoint,
             token=token,
             base_url=base_url,
-            checkpoint_manager=checkpoint_manager
+            checkpoint_manager=checkpoint_manager,
         )
     except KeyboardInterrupt:
         print_warning("\nExport operation interrupted by user")
@@ -538,7 +542,7 @@ def _process_export_with_checkpoints(
     checkpoint: Checkpoint,
     token: str,
     base_url: str,
-    checkpoint_manager: CheckpointManager
+    checkpoint_manager: CheckpointManager,
 ) -> str | None:
     """Process export operation with checkpointing support.
 
@@ -575,7 +579,9 @@ def _process_export_with_checkpoints(
 
         total_batches = checkpoint.progress.total_batches
 
-        print_info(f"\nProcessing batch {current_batch_num}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_emails)} remaining)")
+        print_info(
+            f"\nProcessing batch {current_batch_num}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_emails)} remaining)"
+        )
 
         # Process this batch
         batch_csv_data, batch_counters = _process_email_batch(
@@ -586,7 +592,9 @@ def _process_export_with_checkpoints(
 
         # Write batch to CSV
         mode = "w" if write_headers else "a"
-        success = _write_csv_batch_with_mode(batch_csv_data, output_file, current_batch_num, mode, write_headers)
+        success = _write_csv_batch_with_mode(
+            batch_csv_data, output_file, current_batch_num, mode, write_headers
+        )
 
         if not success:
             error_msg = f"Failed to write CSV batch {current_batch_num}"
@@ -605,7 +613,7 @@ def _process_export_with_checkpoints(
         checkpoint_manager.update_checkpoint_progress(
             checkpoint=checkpoint,
             processed_items=batch_emails,
-            results_update=results_update
+            results_update=results_update,
         )
 
         # Save checkpoint after each batch
@@ -630,7 +638,7 @@ def _write_csv_batch_with_mode(
     output_file: str,
     batch_number: int,
     mode: str = "a",
-    write_headers: bool = False
+    write_headers: bool = False,
 ) -> bool:
     """Write CSV data to file with specified mode.
 
@@ -678,8 +686,7 @@ def _write_csv_batch_with_mode(
 
 
 def _generate_export_summary_from_checkpoint(
-    checkpoint: Checkpoint,
-    output_file: str
+    checkpoint: Checkpoint, output_file: str
 ) -> None:
     """Generate and display export summary from checkpoint data.
 
@@ -712,7 +719,7 @@ def _generate_export_summary_from_checkpoint(
 
 
 def find_resumable_export_checkpoint(
-    checkpoint_manager: CheckpointManager | None = None
+    checkpoint_manager: CheckpointManager | None = None,
 ) -> Checkpoint | None:
     """Find the most recent resumable export checkpoint.
 
@@ -726,8 +733,7 @@ def find_resumable_export_checkpoint(
         checkpoint_manager = CheckpointManager()
 
     checkpoints = checkpoint_manager.list_checkpoints(
-        operation_type=OperationType.EXPORT_LAST_LOGIN,
-        status=CheckpointStatus.ACTIVE
+        operation_type=OperationType.EXPORT_LAST_LOGIN, status=CheckpointStatus.ACTIVE
     )
 
     # Return the most recent resumable checkpoint

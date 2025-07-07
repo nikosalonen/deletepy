@@ -235,7 +235,7 @@ class Checkpoint:
         file_path = Path(file_path)
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(file_path, 'w', encoding='utf-8') as f:
+        with open(file_path, "w", encoding="utf-8") as f:
             f.write(self.to_json())
 
     @classmethod
@@ -246,7 +246,7 @@ class Checkpoint:
         if not file_path.exists():
             raise FileNotFoundError(f"Checkpoint file not found: {file_path}")
 
-        with open(file_path, encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             return cls.from_json(f.read())
 
     def get_completion_percentage(self) -> float:
@@ -257,18 +257,22 @@ class Checkpoint:
 
     def get_success_rate(self) -> float:
         """Get success rate of processed items."""
-        total_processed = (self.results.processed_count +
-                         self.results.skipped_count +
-                         self.results.error_count)
+        total_processed = (
+            self.results.processed_count
+            + self.results.skipped_count
+            + self.results.error_count
+        )
         if total_processed == 0:
             return 0.0
         return (self.results.processed_count / total_processed) * 100.0
 
     def is_resumable(self) -> bool:
         """Check if checkpoint can be resumed."""
-        return (self.status == CheckpointStatus.ACTIVE and
-                len(self.remaining_items) > 0 and
-                self._is_version_compatible())
+        return (
+            self.status == CheckpointStatus.ACTIVE
+            and len(self.remaining_items) > 0
+            and self._is_version_compatible()
+        )
 
     def _is_version_compatible(self) -> bool:
         """Check if checkpoint version is compatible with current software version."""

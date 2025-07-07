@@ -115,10 +115,12 @@ class CheckpointManager:
             print_error(f"Failed to load checkpoint {checkpoint_id}: {e}")
             return None
 
-    def list_checkpoints(self,
-                        operation_type: OperationType | None = None,
-                        status: CheckpointStatus | None = None,
-                        environment: str | None = None) -> list[Checkpoint]:
+    def list_checkpoints(
+        self,
+        operation_type: OperationType | None = None,
+        status: CheckpointStatus | None = None,
+        environment: str | None = None,
+    ) -> list[Checkpoint]:
         """List all checkpoints with optional filters.
 
         Args:
@@ -150,7 +152,9 @@ class CheckpointManager:
                     checkpoints.append(checkpoint)
 
                 except Exception as e:
-                    print_warning(f"Failed to load checkpoint file {checkpoint_file}: {e}")
+                    print_warning(
+                        f"Failed to load checkpoint file {checkpoint_file}: {e}"
+                    )
                     continue
 
             # Sort by created_at (newest first)
@@ -212,16 +216,22 @@ class CheckpointManager:
                     checkpoint = Checkpoint.load_from_file(checkpoint_file)
 
                     # Only delete completed, failed, or cancelled checkpoints
-                    if (checkpoint.status in [CheckpointStatus.COMPLETED,
-                                            CheckpointStatus.FAILED,
-                                            CheckpointStatus.CANCELLED] and
-                        checkpoint.created_at < cutoff_date):
-
+                    if (
+                        checkpoint.status
+                        in [
+                            CheckpointStatus.COMPLETED,
+                            CheckpointStatus.FAILED,
+                            CheckpointStatus.CANCELLED,
+                        ]
+                        and checkpoint.created_at < cutoff_date
+                    ):
                         if self.delete_checkpoint(checkpoint.checkpoint_id):
                             deleted_count += 1
 
                 except Exception as e:
-                    print_warning(f"Failed to process checkpoint file {checkpoint_file}: {e}")
+                    print_warning(
+                        f"Failed to process checkpoint file {checkpoint_file}: {e}"
+                    )
                     continue
 
             if deleted_count > 0:
@@ -259,11 +269,13 @@ class CheckpointManager:
 
         return deleted_count
 
-    def create_checkpoint(self,
-                         operation_type: OperationType,
-                         config: OperationConfig,
-                         items: list[str],
-                         batch_size: int = 50) -> Checkpoint:
+    def create_checkpoint(
+        self,
+        operation_type: OperationType,
+        config: OperationConfig,
+        items: list[str],
+        batch_size: int = 50,
+    ) -> Checkpoint:
         """Create a new checkpoint.
 
         Args:
@@ -286,7 +298,7 @@ class CheckpointManager:
             total_batches=total_batches,
             current_item=0,
             total_items=total_items,
-            batch_size=batch_size
+            batch_size=batch_size,
         )
 
         results = ProcessingResults()
@@ -301,15 +313,17 @@ class CheckpointManager:
             progress=progress,
             results=results,
             remaining_items=items.copy(),
-            processed_items=[]
+            processed_items=[],
         )
 
         return checkpoint
 
-    def update_checkpoint_progress(self,
-                                  checkpoint: Checkpoint,
-                                  processed_items: list[str],
-                                  results_update: dict[str, Any]) -> None:
+    def update_checkpoint_progress(
+        self,
+        checkpoint: Checkpoint,
+        processed_items: list[str],
+        results_update: dict[str, Any],
+    ) -> None:
         """Update checkpoint progress after processing a batch.
 
         Args:
@@ -325,8 +339,11 @@ class CheckpointManager:
         for key, value in results_update.items():
             if hasattr(checkpoint.results, key):
                 if isinstance(value, int):
-                    setattr(checkpoint.results, key,
-                           getattr(checkpoint.results, key) + value)
+                    setattr(
+                        checkpoint.results,
+                        key,
+                        getattr(checkpoint.results, key) + value,
+                    )
                 elif isinstance(value, list):
                     getattr(checkpoint.results, key).extend(value)
                 elif isinstance(value, dict):
@@ -336,7 +353,9 @@ class CheckpointManager:
         checkpoint.processed_items.extend(processed_items)
         # Optimize removal by using set operation instead of loop (O(n) vs O(n²))
         processed_set = set(processed_items)
-        checkpoint.remaining_items = [item for item in checkpoint.remaining_items if item not in processed_set]
+        checkpoint.remaining_items = [
+            item for item in checkpoint.remaining_items if item not in processed_set
+        ]
 
         # Check if operation is complete
         if len(checkpoint.remaining_items) == 0:
@@ -355,11 +374,13 @@ class CheckpointManager:
         checkpoint.updated_at = datetime.now()
 
         # Add error to results
-        checkpoint.results.errors.append({
-            "error": error,
-            "timestamp": datetime.now().isoformat(),
-            "operation": checkpoint.operation_type.value
-        })
+        checkpoint.results.errors.append(
+            {
+                "error": error,
+                "timestamp": datetime.now().isoformat(),
+                "operation": checkpoint.operation_type.value,
+            }
+        )
 
         checkpoint.results.error_count += 1
 
@@ -383,7 +404,9 @@ class CheckpointManager:
             return
 
         print(f"\n{GREEN}Available Checkpoints:{RESET}")
-        print(f"{'ID':<20} {'Type':<18} {'Status':<12} {'Progress':<10} {'Created':<20} {'Environment':<6}")
+        print(
+            f"{'ID':<20} {'Type':<18} {'Status':<12} {'Progress':<10} {'Created':<20} {'Environment':<6}"
+        )
         print("-" * 95)
 
         for checkpoint in checkpoints:
@@ -391,17 +414,19 @@ class CheckpointManager:
                 CheckpointStatus.ACTIVE: YELLOW,
                 CheckpointStatus.COMPLETED: GREEN,
                 CheckpointStatus.FAILED: RED,
-                CheckpointStatus.CANCELLED: CYAN
+                CheckpointStatus.CANCELLED: CYAN,
             }.get(checkpoint.status, RESET)
 
             progress_pct = checkpoint.get_completion_percentage()
 
-            print(f"{checkpoint.checkpoint_id:<20} "
-                  f"{checkpoint.operation_type.value:<18} "
-                  f"{status_color}{checkpoint.status.value:<12}{RESET} "
-                  f"{progress_pct:>6.1f}%   "
-                  f"{checkpoint.created_at.strftime('%Y-%m-%d %H:%M'):<20} "
-                  f"{checkpoint.config.environment:<6}")
+            print(
+                f"{checkpoint.checkpoint_id:<20} "
+                f"{checkpoint.operation_type.value:<18} "
+                f"{status_color}{checkpoint.status.value:<12}{RESET} "
+                f"{progress_pct:>6.1f}%   "
+                f"{checkpoint.created_at.strftime('%Y-%m-%d %H:%M'):<20} "
+                f"{checkpoint.config.environment:<6}"
+            )
 
         print("")
 
@@ -420,14 +445,16 @@ class CheckpointManager:
         print(f"Environment: {summary['environment']}")
         print(f"Created: {summary['created_at']}")
         print(f"Updated: {summary['updated_at']}")
-        print(f"Progress: {summary['completion_percentage']:.1f}% ({summary['processed_items']}/{summary['total_items']})")
+        print(
+            f"Progress: {summary['completion_percentage']:.1f}% ({summary['processed_items']}/{summary['total_items']})"
+        )
         print(f"Success Rate: {summary['success_rate']:.1f}%")
         print(f"Remaining Items: {summary['remaining_items']}")
         print(f"Resumable: {'Yes' if summary['is_resumable'] else 'No'}")
 
-        if summary['input_file']:
+        if summary["input_file"]:
             print(f"Input File: {summary['input_file']}")
-        if summary['output_file']:
+        if summary["output_file"]:
             print(f"Output File: {summary['output_file']}")
 
         print("\nResults:")

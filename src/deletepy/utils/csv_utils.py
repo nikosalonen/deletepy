@@ -356,7 +356,9 @@ def _setup_csv_reader(infile) -> tuple[csv.DictReader | None, list[str] | None]:
     return reader, headers
 
 
-def _determine_csv_columns(headers: list[str], output_type: str) -> tuple[str, str | None]:
+def _determine_csv_columns(
+    headers: list[str], output_type: str
+) -> tuple[str, str | None]:
     """Determine the best column to use and find user_id column for fallback.
 
     Args:
@@ -416,7 +418,7 @@ def _process_csv_rows(
     user_id_column: str | None,
     output_type: str,
     env: str | None,
-    skip_resolution: bool
+    skip_resolution: bool,
 ) -> list[str | CsvRowData]:
     """Process CSV rows and extract identifiers.
 
@@ -450,7 +452,7 @@ def _create_identifier_record(
     user_id_column: str | None,
     output_type: str,
     env: str | None,
-    skip_resolution: bool
+    skip_resolution: bool,
 ) -> str | CsvRowData | None:
     """Create an identifier record from a CSV row.
 
@@ -476,9 +478,7 @@ def _create_identifier_record(
     # If we have Auth0 API env and user_id column, store row data for enhanced processing
     if env and user_id_column and user_id_column in row:
         user_id = row[user_id_column].strip() if row[user_id_column] else None
-        return CsvRowData(
-            identifier=cleaned, user_id=user_id, row_data=dict(row)
-        )
+        return CsvRowData(identifier=cleaned, user_id=user_id, row_data=dict(row))
     else:
         return cleaned
 
@@ -614,7 +614,10 @@ def _detect_and_process_file(
     if file_type == "plain_text":
         plain_identifiers = _process_plain_text(infile, env)
         # Plain text identifiers are already strings, not CsvRowData
-        return plain_identifiers, True  # Skip resolution since plain text is already processed
+        return (
+            plain_identifiers,
+            True,
+        )  # Skip resolution since plain text is already processed
     else:
         return _process_csv_file(infile, output_type, env)
 
@@ -624,7 +627,7 @@ def _handle_post_processing(
     skip_resolution: bool,
     output_type: str,
     env: str | None,
-    interactive: bool
+    interactive: bool,
 ) -> list[str]:
     """Handle post-processing of identifiers including conversion and extraction.
 
@@ -881,7 +884,7 @@ def _handle_conversion_result(
     user_details: dict[str, Any] | None,
     output_type: str,
     identifier: str,
-    item: str | CsvRowData
+    item: str | CsvRowData,
 ) -> str:
     """Handle conversion result extraction.
 

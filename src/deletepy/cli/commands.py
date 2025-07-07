@@ -484,7 +484,9 @@ class OperationHandler:
         except Exception as e:
             self._handle_operation_error(e, f"User {operation}")
 
-    def handle_unlink_social_ids(self, input_file: Path, env: str, dry_run: bool = False) -> None:
+    def handle_unlink_social_ids(
+        self, input_file: Path, env: str, dry_run: bool = False
+    ) -> None:
         """Handle unlink social IDs operation."""
         try:
             base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
@@ -525,15 +527,19 @@ class OperationHandler:
                 click.echo(f"\n{GREEN}Preview completed successfully!{RESET}")
                 if confirm_action(
                     f"Do you want to proceed with {operation} operation on {result.success_count} users?",
-                    default=False
+                    default=False,
                 ):
-                    click.echo(f"\n{CYAN}Proceeding with actual {operation} operation...{RESET}")
+                    click.echo(
+                        f"\n{CYAN}Proceeding with actual {operation} operation...{RESET}"
+                    )
                     # Remove dry_run flag and call the actual operation
                     self._execute_actual_operation(user_ids, token, base_url, operation)
                 else:
                     click.echo("Operation cancelled by user.")
             else:
-                click.echo(f"\n{YELLOW}No users would be processed. Operation cancelled.{RESET}")
+                click.echo(
+                    f"\n{YELLOW}No users would be processed. Operation cancelled.{RESET}"
+                )
 
         except Exception as e:
             click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
@@ -547,16 +553,20 @@ class OperationHandler:
                 social_ids, token, base_url, show_details=True
             )
 
-            total_operations = results['users_to_delete'] + results['identities_to_unlink']
+            total_operations = (
+                results["users_to_delete"] + results["identities_to_unlink"]
+            )
 
             # Ask for confirmation to proceed with actual operation
             if total_operations > 0:
                 click.echo(f"\n{GREEN}Preview completed successfully!{RESET}")
                 if confirm_action(
                     f"Do you want to proceed with the social unlink operation on {total_operations} items?",
-                    default=False
+                    default=False,
                 ):
-                    click.echo(f"\n{CYAN}Proceeding with actual social unlink operation...{RESET}")
+                    click.echo(
+                        f"\n{CYAN}Proceeding with actual social unlink operation...{RESET}"
+                    )
                     # Execute the actual operation
                     find_users_by_social_media_ids(
                         social_ids, token, base_url, env, auto_delete=True
@@ -564,7 +574,9 @@ class OperationHandler:
                 else:
                     click.echo("Operation cancelled by user.")
             else:
-                click.echo(f"\n{YELLOW}No operations would be performed. Operation cancelled.{RESET}")
+                click.echo(
+                    f"\n{YELLOW}No operations would be performed. Operation cancelled.{RESET}"
+                )
 
         except Exception as e:
             click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
@@ -721,7 +733,7 @@ class OperationHandler:
         operation_type: str | None,
         status: str | None,
         env: str | None,
-        details: bool
+        details: bool,
     ) -> None:
         """Handle listing checkpoints."""
         try:
@@ -733,13 +745,13 @@ class OperationHandler:
 
             # Get checkpoints
             checkpoints = manager.list_checkpoints(
-                operation_type=op_type,
-                status=status_enum,
-                environment=env
+                operation_type=op_type, status=status_enum, environment=env
             )
 
             if not checkpoints:
-                click.echo(f"{YELLOW}No checkpoints found matching the criteria.{RESET}")
+                click.echo(
+                    f"{YELLOW}No checkpoints found matching the criteria.{RESET}"
+                )
                 return
 
             if details:
@@ -752,7 +764,9 @@ class OperationHandler:
         except Exception as e:
             self._handle_operation_error(e, "List checkpoints")
 
-    def handle_resume_checkpoint(self, checkpoint_id: str, input_file: Path | None) -> None:
+    def handle_resume_checkpoint(
+        self, checkpoint_id: str, input_file: Path | None
+    ) -> None:
         """Handle resuming from a checkpoint."""
         try:
             manager = CheckpointManager()
@@ -765,7 +779,9 @@ class OperationHandler:
 
             # Check if checkpoint is resumable
             if not checkpoint.is_resumable():
-                click.echo(f"{RED}Cannot resume checkpoint {checkpoint_id}: {checkpoint.status.value}{RESET}")
+                click.echo(
+                    f"{RED}Cannot resume checkpoint {checkpoint_id}: {checkpoint.status.value}{RESET}"
+                )
                 return
 
             # Override input file if provided
@@ -778,18 +794,21 @@ class OperationHandler:
         except Exception as e:
             self._handle_operation_error(e, "Resume checkpoint")
 
-    def _dispatch_checkpoint_resume(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+    def _dispatch_checkpoint_resume(
+        self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager
+    ) -> None:
         """Dispatch checkpoint resume to the appropriate operation function.
 
         Args:
             checkpoint: The checkpoint to resume
             checkpoint_manager: Checkpoint manager instance
         """
-        env = checkpoint.config.environment
         operation_type = checkpoint.operation_type
         checkpoint_id = checkpoint.checkpoint_id
 
-        click.echo(f"{CYAN}Resuming {operation_type.value} operation from checkpoint {checkpoint_id}...{RESET}")
+        click.echo(
+            f"{CYAN}Resuming {operation_type.value} operation from checkpoint {checkpoint_id}...{RESET}"
+        )
 
         if operation_type == OperationType.EXPORT_LAST_LOGIN:
             self._resume_export_last_login(checkpoint, checkpoint_manager)
@@ -797,13 +816,21 @@ class OperationHandler:
             self._resume_check_unblocked(checkpoint, checkpoint_manager)
         elif operation_type == OperationType.SOCIAL_UNLINK:
             self._resume_social_unlink(checkpoint, checkpoint_manager)
-        elif operation_type in [OperationType.BATCH_DELETE, OperationType.BATCH_BLOCK, OperationType.BATCH_REVOKE_GRANTS]:
+        elif operation_type in [
+            OperationType.BATCH_DELETE,
+            OperationType.BATCH_BLOCK,
+            OperationType.BATCH_REVOKE_GRANTS,
+        ]:
             self._resume_batch_user_operations(checkpoint, checkpoint_manager)
         else:
-            click.echo(f"{RED}Resume not supported for operation type: {operation_type.value}{RESET}")
+            click.echo(
+                f"{RED}Resume not supported for operation type: {operation_type.value}{RESET}"
+            )
             return
 
-    def _resume_export_last_login(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+    def _resume_export_last_login(
+        self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager
+    ) -> None:
         """Resume export last login operation from checkpoint.
 
         Args:
@@ -825,10 +852,12 @@ class OperationHandler:
             connection=checkpoint.config.connection_filter,
             env=env,
             resume_checkpoint_id=checkpoint_id,
-            checkpoint_manager=checkpoint_manager
+            checkpoint_manager=checkpoint_manager,
         )
 
-    def _resume_check_unblocked(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+    def _resume_check_unblocked(
+        self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager
+    ) -> None:
         """Resume check unblocked users operation from checkpoint.
 
         Args:
@@ -848,14 +877,15 @@ class OperationHandler:
             base_url=get_base_url(env),
             env=env,
             resume_checkpoint_id=checkpoint_id,
-            checkpoint_manager=checkpoint_manager
+            checkpoint_manager=checkpoint_manager,
         )
         check_unblocked_users_with_checkpoints(
-            user_ids=checkpoint.remaining_items,
-            config=config
+            user_ids=checkpoint.remaining_items, config=config
         )
 
-    def _resume_social_unlink(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+    def _resume_social_unlink(
+        self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager
+    ) -> None:
         """Resume social unlink operation from checkpoint.
 
         Args:
@@ -875,15 +905,17 @@ class OperationHandler:
             base_url=get_base_url(env),
             env=env,
             resume_checkpoint_id=checkpoint_id,
-            checkpoint_manager=checkpoint_manager
+            checkpoint_manager=checkpoint_manager,
         )
         find_users_by_social_media_ids_with_checkpoints(
             social_ids=checkpoint.remaining_items,
             config=config,
-            auto_delete=checkpoint.config.auto_delete
+            auto_delete=checkpoint.config.auto_delete,
         )
 
-    def _resume_batch_user_operations(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+    def _resume_batch_user_operations(
+        self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager
+    ) -> None:
         """Resume batch user operations from checkpoint.
 
         Args:
@@ -908,14 +940,10 @@ class OperationHandler:
             operation=operation_map[operation_type],
             env=env,
             resume_checkpoint_id=checkpoint_id,
-            checkpoint_manager=checkpoint_manager
+            checkpoint_manager=checkpoint_manager,
         )
 
-    def _clean_all_checkpoints(
-        self,
-        manager: CheckpointManager,
-        dry_run: bool
-    ) -> None:
+    def _clean_all_checkpoints(self, manager: CheckpointManager, dry_run: bool) -> None:
         """Clean all checkpoints.
 
         Args:
@@ -946,10 +974,7 @@ class OperationHandler:
 
         click.echo(f"{GREEN}Deleted {deleted_count} checkpoints.{RESET}")
 
-    def _clean_failed_checkpoints(
-        self,
-        manager: CheckpointManager
-    ) -> None:
+    def _clean_failed_checkpoints(self, manager: CheckpointManager) -> None:
         """Clean failed checkpoints.
 
         Args:
@@ -963,10 +988,7 @@ class OperationHandler:
             click.echo(f"{YELLOW}No failed checkpoints found to clean.{RESET}")
 
     def _clean_old_checkpoints(
-        self,
-        manager: CheckpointManager,
-        days_old: int,
-        dry_run: bool
+        self, manager: CheckpointManager, days_old: int, dry_run: bool
     ) -> None:
         """Clean old checkpoints.
 
@@ -982,10 +1004,14 @@ class OperationHandler:
             old_checkpoints = [cp for cp in checkpoints if cp.created_at < cutoff_date]
 
             if old_checkpoints:
-                click.echo(f"{CYAN}Would delete {len(old_checkpoints)} checkpoints older than {days_old} days:{RESET}")
+                click.echo(
+                    f"{CYAN}Would delete {len(old_checkpoints)} checkpoints older than {days_old} days:{RESET}"
+                )
                 manager.display_checkpoints(old_checkpoints)
             else:
-                click.echo(f"{YELLOW}No checkpoints older than {days_old} days found.{RESET}")
+                click.echo(
+                    f"{YELLOW}No checkpoints older than {days_old} days found.{RESET}"
+                )
             return
 
         deleted_count = manager.clean_old_checkpoints(days_old)
@@ -995,11 +1021,7 @@ class OperationHandler:
             click.echo(f"{YELLOW}No old checkpoints found to clean.{RESET}")
 
     def handle_clean_checkpoints(
-        self,
-        clean_all: bool,
-        failed: bool,
-        days_old: int,
-        dry_run: bool
+        self, clean_all: bool, failed: bool, days_old: int, dry_run: bool
     ) -> None:
         """Handle cleaning checkpoints."""
         try:
@@ -1035,7 +1057,9 @@ class OperationHandler:
 
             # Delete the checkpoint
             if manager.delete_checkpoint(checkpoint_id):
-                click.echo(f"{GREEN}Checkpoint {checkpoint_id} deleted successfully.{RESET}")
+                click.echo(
+                    f"{GREEN}Checkpoint {checkpoint_id} deleted successfully.{RESET}"
+                )
             else:
                 click.echo(f"{RED}Failed to delete checkpoint {checkpoint_id}.{RESET}")
 
