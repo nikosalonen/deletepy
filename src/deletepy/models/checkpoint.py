@@ -181,12 +181,34 @@ class Checkpoint:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Checkpoint":
         """Create from dictionary."""
+        # Handle enum fields with proper enum defaults
+        operation_type = data.get("operation_type")
+        if operation_type is None:
+            operation_type = OperationType.EXPORT_LAST_LOGIN
+        else:
+            operation_type = OperationType(operation_type)
+
+        status = data.get("status")
+        if status is None:
+            status = CheckpointStatus.ACTIVE
+        else:
+            status = CheckpointStatus(status)
+
+        # Handle timestamp fields - require them to be present or raise error
+        created_at_str = data.get("created_at")
+        if created_at_str is None:
+            raise ValueError("Missing required field: created_at")
+
+        updated_at_str = data.get("updated_at")
+        if updated_at_str is None:
+            raise ValueError("Missing required field: updated_at")
+
         return cls(
             checkpoint_id=data.get("checkpoint_id", ""),
-            operation_type=OperationType(data.get("operation_type", "export_last_login")),
-            status=CheckpointStatus(data.get("status", "active")),
-            created_at=datetime.fromisoformat(data.get("created_at", datetime.now().isoformat())),
-            updated_at=datetime.fromisoformat(data.get("updated_at", datetime.now().isoformat())),
+            operation_type=operation_type,
+            status=status,
+            created_at=datetime.fromisoformat(created_at_str),
+            updated_at=datetime.fromisoformat(updated_at_str),
             config=OperationConfig.from_dict(data.get("config", {})),
             progress=BatchProgress.from_dict(data.get("progress", {})),
             results=ProcessingResults.from_dict(data.get("results", {})),
