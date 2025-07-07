@@ -11,12 +11,16 @@ authors = [
 ]
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
     "requests>=2.32.4",
     "python-dotenv>=1.1.1",
     "click>=8.2.1",
 ]
+
+[project.urls]
+  Repository = "https://github.com/nikotsalonen/deletepy"
+  Issues = "https://github.com/nikotsalonen/deletepy/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -52,6 +56,10 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
 
+  [tool.coverage.run]
+  source = ["src"]
+  omit = ["tests/*"]
+
 [tool.mypy]
 python_version = "3.13"
 warn_return_any = true
@@ -69,8 +77,6 @@ strict_equality = true
 show_error_codes = true
 show_column_numbers = true
 strict = true
-mypy_path = "src"
-packages = ["deletepy"]
 
 # Module-specific settings
 [[tool.mypy.overrides]]
