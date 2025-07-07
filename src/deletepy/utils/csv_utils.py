@@ -674,7 +674,7 @@ def _extract_final_identifiers(identifiers: list[str | CsvRowData]) -> list[str]
 
 
 def _needs_conversion(
-    skip_resolution: bool, identifiers: list[str], output_type: str
+    skip_resolution: bool, identifiers: list[str | CsvRowData], output_type: str
 ) -> bool:
     """Check if identifiers need conversion to the requested output type.
 

@@ -6,7 +6,7 @@ import signal
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, TextIO, cast
 
 from ..core.exceptions import FileOperationError
 from .display_utils import (
@@ -149,7 +149,7 @@ def safe_file_write(
 
     try:
         with open(path, mode, encoding=encoding) as file:
-            yield file
+            yield cast(TextIO, file)
 
         # Remove backup on successful write
         if backup_path and backup_path.exists():

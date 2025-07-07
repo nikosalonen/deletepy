@@ -559,6 +559,10 @@ def _process_export_with_checkpoints(
     connection = checkpoint.config.connection_filter
     output_file = checkpoint.config.output_file
 
+    # Ensure output_file is not None
+    if output_file is None:
+        output_file = "users_last_login.csv"
+
     print_info(f"Processing {len(checkpoint.remaining_items)} remaining emails...")
 
     # Determine starting batch number and write mode
