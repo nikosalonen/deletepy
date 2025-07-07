@@ -673,6 +673,49 @@ class OperationHandler:
                         else:
                             click.echo(f"      - {user_id}")
 
+    def _parse_operation_type(self, operation_type: str | None) -> OperationType | None:
+        """Parse operation type string to enum.
+
+        Args:
+            operation_type: Operation type string to parse
+
+        Returns:
+            OperationType: Corresponding enum value or None if not found
+        """
+        if not operation_type:
+            return None
+
+        op_type_map = {
+            "export-last-login": OperationType.EXPORT_LAST_LOGIN,
+            "batch-delete": OperationType.BATCH_DELETE,
+            "batch-block": OperationType.BATCH_BLOCK,
+            "batch-revoke-grants": OperationType.BATCH_REVOKE_GRANTS,
+            "social-unlink": OperationType.SOCIAL_UNLINK,
+            "check-unblocked": OperationType.CHECK_UNBLOCKED,
+            "check-domains": OperationType.CHECK_DOMAINS,
+        }
+        return op_type_map.get(operation_type)
+
+    def _parse_checkpoint_status(self, status: str | None) -> CheckpointStatus | None:
+        """Parse checkpoint status string to enum.
+
+        Args:
+            status: Status string to parse
+
+        Returns:
+            CheckpointStatus: Corresponding enum value or None if not found
+        """
+        if not status:
+            return None
+
+        status_map = {
+            "active": CheckpointStatus.ACTIVE,
+            "completed": CheckpointStatus.COMPLETED,
+            "failed": CheckpointStatus.FAILED,
+            "cancelled": CheckpointStatus.CANCELLED,
+        }
+        return status_map.get(status)
+
     def handle_list_checkpoints(
         self,
         operation_type: str | None,
@@ -685,28 +728,8 @@ class OperationHandler:
             manager = CheckpointManager()
 
             # Convert string parameters to enums
-            op_type = None
-            if operation_type:
-                op_type_map = {
-                    "export-last-login": OperationType.EXPORT_LAST_LOGIN,
-                    "batch-delete": OperationType.BATCH_DELETE,
-                    "batch-block": OperationType.BATCH_BLOCK,
-                    "batch-revoke-grants": OperationType.BATCH_REVOKE_GRANTS,
-                    "social-unlink": OperationType.SOCIAL_UNLINK,
-                    "check-unblocked": OperationType.CHECK_UNBLOCKED,
-                    "check-domains": OperationType.CHECK_DOMAINS,
-                }
-                op_type = op_type_map.get(operation_type)
-
-            status_enum = None
-            if status:
-                status_map = {
-                    "active": CheckpointStatus.ACTIVE,
-                    "completed": CheckpointStatus.COMPLETED,
-                    "failed": CheckpointStatus.FAILED,
-                    "cancelled": CheckpointStatus.CANCELLED,
-                }
-                status_enum = status_map.get(status)
+            op_type = self._parse_operation_type(operation_type)
+            status_enum = self._parse_checkpoint_status(status)
 
             # Get checkpoints
             checkpoints = manager.list_checkpoints(
