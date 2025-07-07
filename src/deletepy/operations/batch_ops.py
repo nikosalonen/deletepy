@@ -1007,10 +1007,9 @@ def _has_social_id_as_primary_identity(
 
     # Check if this is the primary identity (usually the first one)
     primary_identity = identities[0]
-    return (
-        primary_identity.get("user_id") == social_id
-        and primary_identity.get("connection") == connection
-    )
+    user_id = primary_identity.get("user_id")
+    connection_name = primary_identity.get("connection")
+    return bool(user_id == social_id and connection_name == connection)
 
 
 def _find_users_with_primary_social_id(
@@ -1254,7 +1253,7 @@ def _execute_batch_processing_loop(
     checkpoint_manager: CheckpointManager,
     batch_processor_func: Callable[..., dict[str, int]],
     operation_name: str,
-    *processor_args,
+    *processor_args: Any,
 ) -> str | None:
     """Execute batch processing loop with checkpoint support.
 
@@ -1311,7 +1310,7 @@ def _process_batch_items_with_checkpoints(
     checkpoint_manager: CheckpointManager,
     batch_processor_func: Callable[..., dict[str, int]],
     operation_name: str,
-    *processor_args,
+    *processor_args: Any,
 ) -> str | None:
     """Process items in batches with checkpoint support.
 
@@ -1691,7 +1690,7 @@ def _process_check_unblocked_with_checkpoints(
     connection_filter: str | None = None,  # Processing config parameter
     include_inactive: bool = False,  # Processing config parameter
     verify_results: bool = True,  # Processing config parameter
-    **custom_params,  # Custom parameters from ProcessingConfig
+    **custom_params: Any,  # Custom parameters from ProcessingConfig
 ) -> str | None:
     """Process check unblocked users with checkpoints.
 

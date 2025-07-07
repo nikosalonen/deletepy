@@ -190,7 +190,8 @@ def _should_skip_user(user_details: dict[str, Any], operation: str) -> bool:
     """Check if user should be skipped based on current state and operation."""
     if operation == "block":
         # Skip if user is already blocked
-        return user_details.get("blocked", False)
+        blocked_status = user_details.get("blocked", False)
+        return bool(blocked_status)
 
     # For delete and revoke-grants-only, we don't skip based on state
     return False
@@ -200,7 +201,8 @@ def _get_user_connection(user_details: dict[str, Any]) -> str:
     """Extract connection from user details."""
     identities = user_details.get("identities", [])
     if identities and isinstance(identities, list):
-        return identities[0].get("connection", "unknown")
+        connection = identities[0].get("connection", "unknown")
+        return str(connection)
     return "unknown"
 
 
