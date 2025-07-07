@@ -200,7 +200,7 @@ def clean(clean_all: bool, failed: bool, days_old: int, dry_run: bool) -> None:
 @checkpoint.command()
 @click.argument("checkpoint_id", type=str)
 @click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
-def delete(checkpoint_id: str, confirm: bool) -> None:
+def delete_checkpoint(checkpoint_id: str, confirm: bool) -> None:
     """Delete a specific checkpoint."""
     handler = OperationHandler()
     handler.handle_delete_checkpoint(checkpoint_id, confirm)
