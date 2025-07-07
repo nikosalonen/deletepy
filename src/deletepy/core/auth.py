@@ -95,8 +95,8 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
         config = get_env_config(env)
         logger.info(f"    ✅ Client ID: {config['client_id'][:8]}...")
         logger.info(f"    ✅ Client Secret: {'*' * 8}...")
-        logger.info(f"    ✅ Auth0 Domain: {config['auth0_domain']}")
-        logger.info(f"    ✅ API URL: {config['api_url']}")
+        logger.info(f"    ✅ Auth0 Domain: {config['domain']}")
+        logger.info(f"    ✅ API URL: {config['base_url']}")
 
         logger.info("  🔑 Getting access token...")
         token = get_access_token(env)
@@ -115,7 +115,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
 
         if test_api:
             logger.info("  🌐 Testing API access...")
-            base_url = f"https://{config['auth0_domain']}"
+            base_url = f"https://{config['domain']}"
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",

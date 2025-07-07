@@ -1468,7 +1468,7 @@ def find_users_by_social_media_ids_with_checkpoints(
 
 
 def _process_social_search_batch(
-    batch_social_ids: list[str], token: str, base_url: str, accumulator: dict[str, list]
+    batch_social_ids: list[str], token: str, base_url: str, accumulator: dict[str, list[Any]]
 ) -> dict[str, int]:
     """Process a batch of social IDs and update accumulator.
 
@@ -1490,7 +1490,7 @@ def _process_social_search_batch(
 
 
 def _handle_social_search_completion(
-    results_accumulator: dict[str, list],
+    results_accumulator: dict[str, list[Any]],
     checkpoint: Checkpoint,
     token: str,
     base_url: str,
@@ -1537,7 +1537,7 @@ def _process_social_search_with_checkpoints(
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
     # Initialize accumulator for results
-    results_accumulator: dict[str, list] = {"found_users": [], "not_found_ids": []}
+    results_accumulator: dict[str, list[Any]] = {"found_users": [], "not_found_ids": []}
 
     # Process batches using common batch processing logic
     result = _process_batch_items_with_checkpoints(
@@ -1652,7 +1652,7 @@ def check_unblocked_users_with_checkpoints(
 
 
 def _process_check_unblocked_batch(
-    batch_user_ids: list[str], token: str, base_url: str, accumulator: dict[str, list]
+    batch_user_ids: list[str], token: str, base_url: str, accumulator: dict[str, list[str]]
 ) -> dict[str, int]:
     """Process a batch of user IDs to check for unblocked status.
 
@@ -1708,7 +1708,7 @@ def _process_check_unblocked_with_checkpoints(
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
     # Initialize results accumulator
-    results_accumulator: dict[str, list] = {"unblocked_users": []}
+    results_accumulator: dict[str, list[str]] = {"unblocked_users": []}
 
     # Process with checkpoint support
     checkpoint_result = _process_batch_items_with_checkpoints(

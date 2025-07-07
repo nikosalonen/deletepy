@@ -4,9 +4,9 @@
 # CLI
 from .cli import (
     csv_main,
-    parse_csv_arguments,
+    handle_csv_command,
+    parse_csv_args,
     print_csv_usage,
-    process_csv_file,
     validate_args,
     validate_connection_type,
     validate_environment,
@@ -228,7 +228,7 @@ __all__ = [
     "validate_user_id_list",
     "validate_file_path_argument",
     "csv_main",
-    "parse_csv_arguments",
+    "parse_csv_args",
     "print_csv_usage",
-    "process_csv_file",
+    "handle_csv_command",
 ]
