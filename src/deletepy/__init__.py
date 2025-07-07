@@ -48,6 +48,7 @@ from .models.checkpoint import (
 
 # Operations
 from .operations.batch_ops import (
+    CheckpointOperationConfig,
     _categorize_users,
     _display_search_results,
     _handle_auto_delete_operations,
@@ -159,6 +160,7 @@ __all__ = [
     "BatchProgress",
     "ProcessingResults",
     # Operations
+    "CheckpointOperationConfig",
     "block_user",
     "delete_user",
     "get_user_details",
