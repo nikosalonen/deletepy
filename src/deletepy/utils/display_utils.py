@@ -14,10 +14,10 @@ RESET = "\033[0m"
 _shutdown_requested = False
 
 
-def setup_shutdown_handler():
+def setup_shutdown_handler() -> None:
     """Setup signal handlers for graceful shutdown."""
 
-    def signal_handler(signum, frame):
+    def signal_handler(signum, frame) -> None:
         global _shutdown_requested
         _shutdown_requested = True
         print(f"\n{YELLOW}Shutdown requested. Finishing current operation...{RESET}")

@@ -2,10 +2,11 @@
 
 import csv
 import re
-from typing import Any, NamedTuple
+from typing import Any, NamedTuple, TextIO
 
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
+from ..core.exceptions import FileOperationError
 from ..operations.user_ops import get_user_details, get_user_id_from_email
 from ..utils.display_utils import (
     print_error,
@@ -14,7 +15,7 @@ from ..utils.display_utils import (
 )
 from ..utils.request_utils import make_rate_limited_request
 from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
-from .file_utils import FileOperationError, safe_file_read, safe_file_write
+from .file_utils import safe_file_read, safe_file_write
 
 
 class CsvRowData(NamedTuple):
@@ -81,7 +82,7 @@ def find_best_column(headers: list[str], output_type: str = "user_id") -> str | 
     return None
 
 
-def resolve_encoded_username(username: str, env: str = None) -> str:
+def resolve_encoded_username(username: str, env: str | None = None) -> str:
     """Resolve encoded username to actual email using Auth0 API.
 
     Note: Auth0 usernames cannot contain '@' - if there's an '@' it's already an email.
@@ -205,7 +206,7 @@ def _apply_username_fallback(username: str, env: str | None) -> str:
 
 
 def clean_identifier(
-    value: str, env: str = None, preserve_encoded: bool = False
+    value: str, env: str | None = None, preserve_encoded: bool = False
 ) -> str:
     """Clean and normalize user identifiers.
 
@@ -288,7 +289,7 @@ def _detect_file_type(first_line: str) -> str:
     return "csv"
 
 
-def _process_plain_text(infile, env: str = None) -> list[str]:
+def _process_plain_text(infile: TextIO, env: str | None = None) -> list[str]:
     """Process plain text file with identifiers.
 
     Args:
@@ -310,7 +311,7 @@ def _process_plain_text(infile, env: str = None) -> list[str]:
 
 
 def _process_csv_file(
-    infile, output_type: str = "user_id", env: str = None
+    infile: TextIO, output_type: str = "user_id", env: str | None = None
 ) -> tuple[list[str | CsvRowData], bool]:
     """Process CSV file and extract identifiers with row context.
 
@@ -323,7 +324,7 @@ def _process_csv_file(
         Tuple of (identifiers/row_data list, skip_resolution flag)
     """
     reader, headers = _setup_csv_reader(infile)
-    if not headers:
+    if not headers or not reader:
         return [], False
 
     best_column, user_id_column = _determine_csv_columns(headers, output_type)
@@ -336,7 +337,7 @@ def _process_csv_file(
     return identifiers, skip_resolution
 
 
-def _setup_csv_reader(infile) -> tuple[csv.DictReader | None, list[str] | None]:
+def _setup_csv_reader(infile: TextIO) -> tuple[csv.DictReader[Any] | None, list[str] | None]:
     """Setup CSV reader and validate headers.
 
     Args:
@@ -413,7 +414,7 @@ def _setup_processing_config(best_column: str, output_type: str) -> bool:
 
 
 def _process_csv_rows(
-    reader: csv.DictReader,
+    reader: csv.DictReader[Any],
     best_column: str,
     user_id_column: str | None,
     output_type: str,
@@ -553,7 +554,7 @@ def _check_if_data_available(
 
 def extract_identifiers_from_csv(
     filename: str = "ids.csv",
-    env: str = None,
+    env: str | None = None,
     output_type: str = "user_id",
     interactive: bool = True,
 ) -> list[str]:
@@ -592,7 +593,7 @@ def extract_identifiers_from_csv(
 
 
 def _detect_and_process_file(
-    infile, output_type: str, env: str | None
+    infile: TextIO, output_type: str, env: str | None
 ) -> tuple[list[str | CsvRowData], bool]:
     """Detect file type and process file accordingly.
 
@@ -691,7 +692,7 @@ def _needs_conversion(
 def _handle_conversion(
     identifiers: list[str | CsvRowData],
     output_type: str,
-    env: str = None,
+    env: str | None = None,
     interactive: bool = True,
 ) -> list[str]:
     """Handle conversion of identifiers to requested output type.

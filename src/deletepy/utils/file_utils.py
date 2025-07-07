@@ -6,6 +6,7 @@ import signal
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any, TextIO
 
 from ..core.exceptions import FileOperationError
 from .display_utils import (
@@ -17,7 +18,7 @@ from .display_utils import (
 shutdown_requested = False
 
 
-def handle_shutdown(signum: int, frame: object) -> None:
+def handle_shutdown(signum: int, frame: Any) -> None:
     """Handle graceful shutdown on interrupt signals."""
     global shutdown_requested
     print_warning("\nShutdown requested. Finishing current operation...")
@@ -72,7 +73,7 @@ def validate_file_path(file_path: str, operation: str = "access") -> Path:
 
 
 @contextmanager
-def safe_file_read(file_path: str, encoding: str = "utf-8"):
+def safe_file_read(file_path: str, encoding: str = "utf-8") -> Generator[TextIO]:
     """Context manager for safe file reading with comprehensive error handling.
 
     Args:
@@ -102,11 +103,11 @@ def safe_file_read(file_path: str, encoding: str = "utf-8"):
         raise FileOperationError(f"Unexpected error reading file {path}: {e}") from e
 
 
-def _restore_backup(backup_path: Path, original_path: Path) -> None:
+def _restore_backup(backup_path: Path | None, original_path: Path) -> None:
     """Helper function to restore backup file to original path.
 
     Args:
-        backup_path: Path to the backup file
+        backup_path: Path to the backup file (may be None)
         original_path: Path to restore the backup to
     """
     if backup_path and backup_path.exists():
@@ -118,7 +119,7 @@ def _restore_backup(backup_path: Path, original_path: Path) -> None:
 
 
 @contextmanager
-def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
+def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w") -> Generator[TextIO]:
     """Context manager for safe file writing with comprehensive error handling.
 
     Args:
@@ -135,7 +136,7 @@ def safe_file_write(file_path: str, encoding: str = "utf-8", mode: str = "w"):
     path = validate_file_path(file_path, "write")
 
     # Create a backup if file exists and we're overwriting
-    backup_path = None
+    backup_path: Path | None = None
     if mode in ["w", "wt"] and path.exists():
         backup_path = path.with_suffix(path.suffix + ".backup")
         try:
@@ -272,7 +273,7 @@ def read_user_ids_generator(filepath: str) -> Generator[str]:
         return
 
 
-def setup_signal_handlers():
+def setup_signal_handlers() -> None:
     """Setup signal handlers for graceful shutdown."""
     signal.signal(signal.SIGINT, handle_shutdown)
     signal.signal(signal.SIGTERM, handle_shutdown)

@@ -1,6 +1,7 @@
 """Custom exception hierarchy for DeletePy Auth0 User Management Tool."""
 
 
+
 class Auth0ManagerError(Exception):
     """Base exception for Auth0 Manager.
 
@@ -8,7 +9,7 @@ class Auth0ManagerError(Exception):
     All other custom exceptions should inherit from this class.
     """
 
-    def __init__(self, message: str, details: str = None):
+    def __init__(self, message: str, details: str | None = None):
         """Initialize the exception.
 
         Args:
@@ -46,9 +47,9 @@ class UserOperationError(Auth0ManagerError):
     def __init__(
         self,
         message: str,
-        user_id: str = None,
-        operation: str = None,
-        details: str = None,
+        user_id: str | None = None,
+        operation: str | None = None,
+        details: str | None = None,
     ):
         """Initialize the user operation error.
 
@@ -88,9 +89,9 @@ class FileOperationError(Auth0ManagerError):
     def __init__(
         self,
         message: str,
-        file_path: str = None,
-        operation: str = None,
-        details: str = None,
+        file_path: str | None = None,
+        operation: str | None = None,
+        details: str | None = None,
     ):
         """Initialize the file operation error.
 
@@ -130,9 +131,9 @@ class APIError(Auth0ManagerError):
     def __init__(
         self,
         message: str,
-        status_code: int = None,
-        endpoint: str = None,
-        details: str = None,
+        status_code: int | None = None,
+        endpoint: str | None = None,
+        details: str | None = None,
     ):
         """Initialize the API error.
 
@@ -170,7 +171,7 @@ class ValidationError(Auth0ManagerError):
     """
 
     def __init__(
-        self, message: str, field: str = None, value: str = None, details: str = None
+        self, message: str, field: str | None = None, value: str | None = None, details: str | None = None
     ):
         """Initialize the validation error.
 

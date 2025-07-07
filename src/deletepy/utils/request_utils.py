@@ -49,7 +49,7 @@ def handle_rate_limit_response(response: requests.Response, attempt: int) -> boo
 
 
 def make_rate_limited_request(
-    method: str, url: str, headers: dict[str, str], **kwargs
+    method: str, url: str, headers: dict[str, str], **kwargs: Any
 ) -> requests.Response | None:
     """Make an HTTP request with rate limiting and retry logic.
 
@@ -96,7 +96,7 @@ def make_rate_limited_request(
 
 
 def make_simple_request(
-    method: str, url: str, headers: dict[str, str], **kwargs
+    method: str, url: str, headers: dict[str, str], **kwargs: Any
 ) -> requests.Response | None:
     """Make a simple HTTP request without rate limiting.
 
@@ -154,7 +154,8 @@ def get_json_response(response: requests.Response) -> dict[str, Any] | None:
         Optional[Dict[str, Any]]: JSON data or None if invalid
     """
     try:
-        return response.json()
+        json_data = response.json()
+        return json_data
     except ValueError as e:
         print(f"Error parsing JSON response: {e}")
         return None
@@ -186,7 +187,7 @@ def get_optimal_batch_size(total_emails: int) -> int:
     return 100
 
 
-def get_estimated_processing_time(total_emails: int, batch_size: int = None) -> float:
+def get_estimated_processing_time(total_emails: int, batch_size: int | None = None) -> float:
     """Calculate estimated processing time in minutes.
 
     Args:
