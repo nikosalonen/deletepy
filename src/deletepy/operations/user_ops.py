@@ -611,30 +611,27 @@ def _process_batch_user_operations_with_checkpoints(
     return None  # Operation completed successfully
 
 
-def _process_user_batch(
+def _process_users_in_batch(
     user_ids: list[str],
     token: str,
     base_url: str,
-    operation: str
+    operation: str,
+    results: dict
 ) -> dict:
-    """Process a batch of users for a specific operation.
+    """Process users in a batch, handling user resolution and operation execution.
 
     Args:
         user_ids: List of user IDs to process
         token: Auth0 access token
         base_url: Auth0 API base URL
         operation: Operation to perform
+        results: Results dictionary to update
 
     Returns:
-        dict: Processing results for this batch
+        dict: Updated results dictionary
     """
-    results = {
-        "processed_count": 0,
-        "skipped_count": 0,
-        "multiple_users": {},
-        "not_found_users": [],
-        "invalid_user_ids": [],
-    }
+    from ..utils.display_utils import shutdown_requested
+    from ..utils.legacy_print import print_error
 
     for idx, user_id in enumerate(user_ids, 1):
         if shutdown_requested():
@@ -660,6 +657,37 @@ def _process_user_batch(
         except Exception as e:
             print_error(f"\nFailed to {operation} user {resolved_user_id}: {e}")
             results["skipped_count"] += 1
+
+    return results
+
+
+def _process_user_batch(
+    user_ids: list[str],
+    token: str,
+    base_url: str,
+    operation: str
+) -> dict:
+    """Process a batch of users for a specific operation.
+
+    Args:
+        user_ids: List of user IDs to process
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        operation: Operation to perform
+
+    Returns:
+        dict: Processing results for this batch
+    """
+    results = {
+        "processed_count": 0,
+        "skipped_count": 0,
+        "multiple_users": {},
+        "not_found_users": [],
+        "invalid_user_ids": [],
+    }
+
+    # Process users using the extracted helper function
+    results = _process_users_in_batch(user_ids, token, base_url, operation, results)
 
     print("\n")  # Clear progress line
     return results

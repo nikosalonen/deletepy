@@ -1391,6 +1391,36 @@ def _process_social_search_batch(
     }
 
 
+def _handle_social_search_completion(
+    results_accumulator: dict,
+    checkpoint: Checkpoint,
+    token: str,
+    base_url: str,
+    env: str,
+    auto_delete: bool
+) -> None:
+    """Handle the completion of social search operation by processing final results.
+
+    Args:
+        results_accumulator: Dictionary containing found_users and not_found_ids
+        checkpoint: Current checkpoint
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        env: Environment
+        auto_delete: Whether to auto-delete users
+    """
+    # Process final search results
+    _process_final_social_search_results(
+        results_accumulator["found_users"],
+        results_accumulator["not_found_ids"],
+        checkpoint,
+        token,
+        base_url,
+        env,
+        auto_delete
+    )
+
+
 def _process_social_search_with_checkpoints(
     checkpoint: Checkpoint,
     token: str,
@@ -1433,15 +1463,9 @@ def _process_social_search_with_checkpoints(
     if result is not None:
         return result
 
-    # Process final search results
-    _process_final_social_search_results(
-        results_accumulator["found_users"],
-        results_accumulator["not_found_ids"],
-        checkpoint,
-        token,
-        base_url,
-        env,
-        auto_delete
+    # Handle completion by processing final results
+    _handle_social_search_completion(
+        results_accumulator, checkpoint, token, base_url, env, auto_delete
     )
 
     return None  # Operation completed successfully
