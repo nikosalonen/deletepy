@@ -1198,17 +1198,21 @@ def _handle_checkpoint_error(
     return checkpoint.checkpoint_id
 
 
-def _process_batch_items_with_checkpoints(
+def _execute_batch_processing_loop(
+    remaining_items: list[str],
+    batch_size: int,
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
     batch_processor_func: callable,
     operation_name: str,
     *processor_args
 ) -> str | None:
-    """Process items in batches with checkpoint support.
+    """Execute batch processing loop with checkpoint support.
 
     Args:
-        checkpoint: Checkpoint to process
+        remaining_items: Items to process in batches
+        batch_size: Size of each batch
+        checkpoint: Checkpoint to update
         checkpoint_manager: Checkpoint manager instance
         batch_processor_func: Function to process each batch
         operation_name: Name of the operation for logging
@@ -1217,16 +1221,6 @@ def _process_batch_items_with_checkpoints(
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
-    remaining_items = checkpoint.remaining_items.copy()
-    batch_size = checkpoint.progress.batch_size
-
-    if not remaining_items:
-        print_info(f"No remaining items to process for {operation_name}")
-        _finalize_checkpoint_completion(checkpoint, checkpoint_manager, operation_name)
-        return None
-
-    print_info(f"Processing {len(remaining_items)} remaining items for {operation_name}...")
-
     # Process items in batches
     for batch_start in range(0, len(remaining_items), batch_size):
         if shutdown_requested():
@@ -1260,6 +1254,53 @@ def _process_batch_items_with_checkpoints(
 
         # Save checkpoint after each batch
         checkpoint_manager.save_checkpoint(checkpoint)
+
+    return None  # Completed successfully
+
+
+def _process_batch_items_with_checkpoints(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    batch_processor_func: callable,
+    operation_name: str,
+    *processor_args
+) -> str | None:
+    """Process items in batches with checkpoint support.
+
+    Args:
+        checkpoint: Checkpoint to process
+        checkpoint_manager: Checkpoint manager instance
+        batch_processor_func: Function to process each batch
+        operation_name: Name of the operation for logging
+        *processor_args: Additional arguments for the batch processor
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was interrupted, None if completed
+    """
+    remaining_items = checkpoint.remaining_items.copy()
+    batch_size = checkpoint.progress.batch_size
+
+    if not remaining_items:
+        print_info(f"No remaining items to process for {operation_name}")
+        _finalize_checkpoint_completion(checkpoint, checkpoint_manager, operation_name)
+        return None
+
+    print_info(f"Processing {len(remaining_items)} remaining items for {operation_name}...")
+
+    # Execute the batch processing loop
+    result = _execute_batch_processing_loop(
+        remaining_items,
+        batch_size,
+        checkpoint,
+        checkpoint_manager,
+        batch_processor_func,
+        operation_name,
+        *processor_args
+    )
+
+    # If operation was interrupted, return checkpoint ID
+    if result is not None:
+        return result
 
     # Mark checkpoint as completed
     _finalize_checkpoint_completion(checkpoint, checkpoint_manager, operation_name)
