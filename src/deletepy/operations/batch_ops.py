@@ -102,6 +102,19 @@ class ProcessingConfig:
         return {k: v for k, v in params.items() if v is not None}
 
 
+@dataclass
+class ExecuteCheckpointConfig:
+    """Configuration for checkpoint execution operations."""
+
+    operation_type: OperationType
+    items: list[str]
+    config: CheckpointOperationConfig
+    process_func: Callable[..., str | None]
+    operation_name: str
+    auto_delete: bool = True
+    processing_config: ProcessingConfig | None = None
+
+
 def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
     """Print user IDs that are not blocked, with a progress indicator.
 
@@ -1371,6 +1384,101 @@ def _finalize_checkpoint_completion(
     print_success(f"{operation_name} completed! Checkpoint: {checkpoint.checkpoint_id}")
 
 
+def _setup_checkpoint_operation_from_config(
+    exec_config: ExecuteCheckpointConfig,
+) -> tuple[Checkpoint, CheckpointManager, str, bool]:
+    """Set up checkpoint operation from execution config.
+
+    Args:
+        exec_config: Configuration for checkpoint execution
+
+    Returns:
+        Tuple of (checkpoint, checkpoint_manager, env, auto_delete)
+    """
+    if exec_config.processing_config is None:
+        exec_config.processing_config = ProcessingConfig()
+
+    setup_config = CheckpointSetupConfig(
+        operation_type=exec_config.operation_type,
+        items=exec_config.items,
+        env=exec_config.config.env,
+        auto_delete=exec_config.auto_delete,
+        resume_checkpoint_id=exec_config.config.resume_checkpoint_id,
+        checkpoint_manager=exec_config.config.checkpoint_manager,
+        operation_name=exec_config.operation_name,
+    )
+    return _setup_checkpoint_operation(setup_config)
+
+
+def _prepare_process_parameters(
+    exec_config: ExecuteCheckpointConfig,
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    env: str,
+    auto_delete: bool,
+) -> dict[str, Any]:
+    """Prepare process function parameters dictionary.
+
+    Args:
+        exec_config: Configuration for checkpoint execution
+        checkpoint: Checkpoint instance
+        checkpoint_manager: Checkpoint manager instance
+        env: Environment name
+        auto_delete: Whether auto-delete is enabled
+
+    Returns:
+        Dictionary of process function parameters
+    """
+    process_params = {
+        "checkpoint": checkpoint,
+        "token": exec_config.config.token,
+        "base_url": exec_config.config.base_url,
+        "env": env,
+        "auto_delete": auto_delete,
+        "checkpoint_manager": checkpoint_manager,
+    }
+
+    # Add processing configuration parameters
+    if exec_config.processing_config is not None:
+        process_params.update(exec_config.processing_config.get_all_params())
+
+    return process_params
+
+
+def _execute_process_function_with_error_handling(
+    exec_config: ExecuteCheckpointConfig,
+    process_params: dict[str, Any],
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+) -> str | None:
+    """Execute process function with error handling.
+
+    Args:
+        exec_config: Configuration for checkpoint execution
+        process_params: Parameters for the process function
+        checkpoint: Checkpoint instance
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was interrupted, None if completed
+    """
+    try:
+        return exec_config.process_func(**process_params)
+    except KeyboardInterrupt:
+        return _handle_checkpoint_interruption(
+            checkpoint,
+            checkpoint_manager,
+            f"{exec_config.operation_name.replace('_', ' ').title()} operation",
+        )
+    except Exception as e:
+        return _handle_checkpoint_error(
+            checkpoint,
+            checkpoint_manager,
+            f"{exec_config.operation_name.replace('_', ' ').title()} operation",
+            e,
+        )
+
+
 def _execute_with_checkpoints(
     operation_type: OperationType,
     items: list[str],
@@ -1394,50 +1502,27 @@ def _execute_with_checkpoints(
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
     """
-    if processing_config is None:
-        processing_config = ProcessingConfig()
-
-    setup_config = CheckpointSetupConfig(
+    exec_config = ExecuteCheckpointConfig(
         operation_type=operation_type,
         items=items,
-        env=config.env,
-        auto_delete=auto_delete,
-        resume_checkpoint_id=config.resume_checkpoint_id,
-        checkpoint_manager=config.checkpoint_manager,
+        config=config,
+        process_func=process_func,
         operation_name=operation_name,
+        auto_delete=auto_delete,
+        processing_config=processing_config,
     )
-    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation(
-        setup_config
+
+    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation_from_config(
+        exec_config
     )
 
-    # Prepare process function parameters
-    process_params = {
-        "checkpoint": checkpoint,
-        "token": config.token,
-        "base_url": config.base_url,
-        "env": env,
-        "auto_delete": auto_delete,
-        "checkpoint_manager": checkpoint_manager,
-    }
+    process_params = _prepare_process_parameters(
+        exec_config, checkpoint, checkpoint_manager, env, auto_delete
+    )
 
-    # Add processing configuration parameters
-    process_params.update(processing_config.get_all_params())
-
-    try:
-        return process_func(**process_params)
-    except KeyboardInterrupt:
-        return _handle_checkpoint_interruption(
-            checkpoint,
-            checkpoint_manager,
-            f"{operation_name.replace('_', ' ').title()} operation",
-        )
-    except Exception as e:
-        return _handle_checkpoint_error(
-            checkpoint,
-            checkpoint_manager,
-            f"{operation_name.replace('_', ' ').title()} operation",
-            e,
-        )
+    return _execute_process_function_with_error_handling(
+        exec_config, process_params, checkpoint, checkpoint_manager
+    )
 
 
 def find_users_by_social_media_ids_with_checkpoints(

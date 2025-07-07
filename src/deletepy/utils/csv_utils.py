@@ -17,6 +17,7 @@ from ..utils.request_utils import make_rate_limited_request
 from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
 from .file_utils import safe_file_read, safe_file_write
 
+
 def sanitize_identifiers(identifiers: list[str]) -> list[str]:
     """Sanitize identifiers by redacting sensitive data.
 
@@ -181,8 +182,10 @@ def _try_auth0_username_resolution(username: str, env: str) -> str | None:
         if token:
             # Search for user by encoded username
             user_details = _search_user_by_field(username, token, base_url)
-            if user_details and user_details.get("email"):
-                return cast(str, user_details["email"])
+            if user_details:
+                email = user_details.get("email")
+                if email is not None and isinstance(email, str):
+                    return email
     except Exception:
         # If Auth0 API fails, fall back to string replacement
         pass
@@ -831,13 +834,18 @@ def _extract_output_value(
         Extracted value or fallback
     """
     if output_type == "email":
-        return cast(str, user_details.get("email", fallback))
+        email = user_details.get("email")
+        return email if email is not None and isinstance(email, str) else fallback
     elif output_type == "username":
-        return cast(
-            str, user_details.get("username", user_details.get("email", fallback))
-        )
+        username = user_details.get("username")
+        if username is not None and isinstance(username, str):
+            return username
+        # Fallback to email if username is not available or not a string
+        email = user_details.get("email")
+        return email if email is not None and isinstance(email, str) else fallback
     elif output_type == "user_id":
-        return cast(str, user_details.get("user_id", fallback))
+        user_id = user_details.get("user_id")
+        return user_id if user_id is not None and isinstance(user_id, str) else fallback
     else:
         return fallback
 

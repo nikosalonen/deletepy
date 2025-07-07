@@ -331,11 +331,33 @@ class CheckpointManager:
             processed_items: Items that were processed in this batch
             results_update: Results to add to the checkpoint
         """
-        # Update progress
+        self._update_progress_counters(checkpoint, processed_items)
+        self._update_results(checkpoint, results_update)
+        self._update_item_lists(checkpoint, processed_items)
+        self._check_and_update_completion_status(checkpoint)
+        self._update_timestamp(checkpoint)
+
+    def _update_progress_counters(
+        self, checkpoint: Checkpoint, processed_items: list[str]
+    ) -> None:
+        """Update progress counters for the checkpoint.
+
+        Args:
+            checkpoint: Checkpoint to update
+            processed_items: Items that were processed in this batch
+        """
         checkpoint.progress.current_batch += 1
         checkpoint.progress.current_item += len(processed_items)
 
-        # Update results
+    def _update_results(
+        self, checkpoint: Checkpoint, results_update: dict[str, Any]
+    ) -> None:
+        """Update results data in the checkpoint.
+
+        Args:
+            checkpoint: Checkpoint to update
+            results_update: Results to add to the checkpoint
+        """
         for key, value in results_update.items():
             if hasattr(checkpoint.results, key):
                 if isinstance(value, int):
@@ -349,7 +371,15 @@ class CheckpointManager:
                 elif isinstance(value, dict):
                     getattr(checkpoint.results, key).update(value)
 
-        # Update processed and remaining items
+    def _update_item_lists(
+        self, checkpoint: Checkpoint, processed_items: list[str]
+    ) -> None:
+        """Update processed and remaining item lists.
+
+        Args:
+            checkpoint: Checkpoint to update
+            processed_items: Items that were processed in this batch
+        """
         checkpoint.processed_items.extend(processed_items)
         # Optimize removal by using set operation instead of loop (O(n) vs O(n²))
         processed_set = set(processed_items)
@@ -357,10 +387,21 @@ class CheckpointManager:
             item for item in checkpoint.remaining_items if item not in processed_set
         ]
 
-        # Check if operation is complete
+    def _check_and_update_completion_status(self, checkpoint: Checkpoint) -> None:
+        """Check if operation is complete and update status accordingly.
+
+        Args:
+            checkpoint: Checkpoint to check and update
+        """
         if len(checkpoint.remaining_items) == 0:
             checkpoint.status = CheckpointStatus.COMPLETED
 
+    def _update_timestamp(self, checkpoint: Checkpoint) -> None:
+        """Update the checkpoint's last updated timestamp.
+
+        Args:
+            checkpoint: Checkpoint to update
+        """
         checkpoint.updated_at = datetime.now()
 
     def mark_checkpoint_failed(self, checkpoint: Checkpoint, error: str) -> None:
