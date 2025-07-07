@@ -29,9 +29,12 @@ def sanitize_identifiers(identifiers: list[str]) -> list[str]:
     """
     redacted_keywords = ["client_secret", "auth0"]
     return [
-        identifier if not any(keyword in identifier.lower() for keyword in redacted_keywords) else "[REDACTED]"
+        identifier
+        if not any(keyword in identifier.lower() for keyword in redacted_keywords)
+        else "[REDACTED]"
         for identifier in identifiers
     ]
+
 
 class CsvRowData(NamedTuple):
     """Data structure to hold CSV row information for enhanced processing."""
@@ -185,7 +188,7 @@ def _try_auth0_username_resolution(username: str, env: str) -> str | None:
             if user_details:
                 email = user_details.get("email")
                 if email is not None and isinstance(email, str):
-                    return email
+                    return cast(str, email)
     except Exception:
         # If Auth0 API fails, fall back to string replacement
         pass
@@ -835,17 +838,29 @@ def _extract_output_value(
     """
     if output_type == "email":
         email = user_details.get("email")
-        return email if email is not None and isinstance(email, str) else fallback
+        return (
+            cast(str, email)
+            if email is not None and isinstance(email, str)
+            else fallback
+        )
     elif output_type == "username":
         username = user_details.get("username")
         if username is not None and isinstance(username, str):
-            return username
+            return cast(str, username)
         # Fallback to email if username is not available or not a string
         email = user_details.get("email")
-        return email if email is not None and isinstance(email, str) else fallback
+        return (
+            cast(str, email)
+            if email is not None and isinstance(email, str)
+            else fallback
+        )
     elif output_type == "user_id":
         user_id = user_details.get("user_id")
-        return user_id if user_id is not None and isinstance(user_id, str) else fallback
+        return (
+            cast(str, user_id)
+            if user_id is not None and isinstance(user_id, str)
+            else fallback
+        )
     else:
         return fallback
 

@@ -1512,8 +1512,8 @@ def _execute_with_checkpoints(
         processing_config=processing_config,
     )
 
-    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation_from_config(
-        exec_config
+    checkpoint, checkpoint_manager, env, auto_delete = (
+        _setup_checkpoint_operation_from_config(exec_config)
     )
 
     process_params = _prepare_process_parameters(

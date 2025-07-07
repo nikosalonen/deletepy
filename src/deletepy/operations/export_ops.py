@@ -653,7 +653,6 @@ def _process_export_with_checkpoints(
     return None  # Operation completed successfully
 
 
-
 def _generate_export_summary_from_checkpoint(
     checkpoint: Checkpoint, output_file: str
 ) -> None:
