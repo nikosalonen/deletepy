@@ -242,7 +242,17 @@ class Checkpoint:
     def is_resumable(self) -> bool:
         """Check if checkpoint can be resumed."""
         return (self.status == CheckpointStatus.ACTIVE and
-                len(self.remaining_items) > 0)
+                len(self.remaining_items) > 0 and
+                self._is_version_compatible())
+
+    def _is_version_compatible(self) -> bool:
+        """Check if checkpoint version is compatible with current software version."""
+        # Define the current software version
+        CURRENT_VERSION = "1.0.0"
+
+        # For now, we only support exact version match
+        # In the future, this could be extended to support version ranges
+        return self.version == CURRENT_VERSION
 
     def get_summary(self) -> dict[str, Any]:
         """Get checkpoint summary."""
