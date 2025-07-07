@@ -727,6 +727,46 @@ def _execute_user_operation(operation: str, user_id: str, token: str, base_url: 
         revoke_user_grants(user_id, token, base_url)
 
 
+def _display_multiple_users_details(
+    multiple_users: dict,
+    token: str,
+    base_url: str,
+    fetch_details: bool = True
+) -> None:
+    """Display details for multiple users found for each email.
+
+    Args:
+        multiple_users: Dict of emails with multiple users
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        fetch_details: Whether to fetch user details via API calls
+    """
+    from ..utils.display_utils import CYAN, RESET
+
+    if not multiple_users:
+        return
+
+    print_info(f"\nFound {len(multiple_users)} emails with multiple users:")
+    for email, user_ids in multiple_users.items():
+        print_info(f"\n  {CYAN}{email}{RESET}:")
+        for uid in user_ids:
+            if fetch_details:
+                user_details = get_user_details(uid, token, base_url)
+                if (
+                    user_details
+                    and user_details.get("identities")
+                    and len(user_details["identities"]) > 0
+                ):
+                    connection = user_details["identities"][0].get(
+                        "connection", "unknown"
+                    )
+                    print_info(f"    - {uid} (Connection: {connection})")
+                else:
+                    print_info(f"    - {uid} (Connection: unknown)")
+            else:
+                print_info(f"    - {uid}")
+
+
 def _print_user_operation_summary(
     processed_count: int,
     skipped_count: int,
@@ -763,20 +803,5 @@ def _print_user_operation_summary(
         for user_id in invalid_user_ids:
             print_info(f"  {CYAN}{user_id}{RESET}")
 
-    if multiple_users:
-        print_info(f"\nFound {len(multiple_users)} emails with multiple users:")
-        for email, user_ids in multiple_users.items():
-            print_info(f"\n  {CYAN}{email}{RESET}:")
-            for uid in user_ids:
-                user_details = get_user_details(uid, token, base_url)
-                if (
-                    user_details
-                    and user_details.get("identities")
-                    and len(user_details["identities"]) > 0
-                ):
-                    connection = user_details["identities"][0].get(
-                        "connection", "unknown"
-                    )
-                    print_info(f"    - {uid} (Connection: {connection})")
-                else:
-                    print_info(f"    - {uid} (Connection: unknown)")
+    # Display multiple users using the extracted helper function
+    _display_multiple_users_details(multiple_users, token, base_url, fetch_details=True)
