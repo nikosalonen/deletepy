@@ -361,6 +361,95 @@ def unlink_user_identity(
         return False
 
 
+def _load_or_create_checkpoint(
+    resume_checkpoint_id: str | None,
+    checkpoint_manager: CheckpointManager,
+    operation: str,
+    operation_type: OperationType,
+    env: str,
+    user_ids: list[str]
+) -> Checkpoint:
+    """Load existing checkpoint or create a new one.
+
+    Args:
+        resume_checkpoint_id: Optional checkpoint ID to resume from
+        checkpoint_manager: Checkpoint manager instance
+        operation: Operation to perform
+        operation_type: Operation type enum
+        env: Environment (dev/prod)
+        user_ids: List of user IDs to process
+
+    Returns:
+        Checkpoint: Loaded or newly created checkpoint
+    """
+    # Check if we're resuming from a checkpoint
+    checkpoint = None
+    if resume_checkpoint_id:
+        checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
+        if not checkpoint:
+            print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
+        elif checkpoint.status != CheckpointStatus.ACTIVE:
+            print_warning(f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})")
+            checkpoint = None
+        elif not checkpoint.is_resumable():
+            print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
+            checkpoint = None
+
+    # If not resuming, create a new checkpoint
+    if checkpoint is None:
+        # Create operation config
+        config = OperationConfig(
+            environment=env,
+            additional_params={"operation": operation}
+        )
+
+        # Create new checkpoint
+        checkpoint = checkpoint_manager.create_checkpoint(
+            operation_type=operation_type,
+            config=config,
+            items=user_ids,
+            batch_size=50
+        )
+
+        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+    else:
+        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
+
+    return checkpoint
+
+
+def _handle_checkpoint_error(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    operation: str,
+    error: Exception | None = None
+) -> str:
+    """Handle checkpoint error by marking status and saving.
+
+    Args:
+        checkpoint: Checkpoint to handle
+        checkpoint_manager: Checkpoint manager instance
+        operation: Operation being performed
+        error: Optional exception that occurred
+
+    Returns:
+        str: Checkpoint ID
+    """
+    if isinstance(error, KeyboardInterrupt):
+        print_warning(f"\n{operation.title()} operation interrupted by user")
+        checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
+        checkpoint_manager.save_checkpoint(checkpoint)
+        print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
+        print_info("You can resume this operation later using:")
+        print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
+    else:
+        print_warning(f"\n{operation.title()} operation failed: {error}")
+        checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
+        checkpoint_manager.save_checkpoint(checkpoint)
+
+    return checkpoint.checkpoint_id
+
+
 def batch_user_operations_with_checkpoints(
     user_ids: list[str],
     token: str,
@@ -400,39 +489,13 @@ def batch_user_operations_with_checkpoints(
 
     operation_type = operation_type_map[operation]
 
-    # Check if we're resuming from a checkpoint
-    checkpoint = None
-    if resume_checkpoint_id:
-        checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
-        if not checkpoint:
-            print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
-        elif checkpoint.status != CheckpointStatus.ACTIVE:
-            print_warning(f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})")
-            checkpoint = None
-        elif not checkpoint.is_resumable():
-            print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
-            checkpoint = None
+    # Load or create checkpoint
+    checkpoint = _load_or_create_checkpoint(
+        resume_checkpoint_id, checkpoint_manager, operation, operation_type, env, user_ids
+    )
 
-    # If not resuming, create a new checkpoint
-    if checkpoint is None:
-        # Create operation config
-        config = OperationConfig(
-            environment=env,
-            additional_params={"operation": operation}
-        )
-
-        # Create new checkpoint
-        checkpoint = checkpoint_manager.create_checkpoint(
-            operation_type=operation_type,
-            config=config,
-            items=user_ids,
-            batch_size=50
-        )
-
-        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
-    else:
-        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
-        # Use configuration from checkpoint
+    # Use configuration from checkpoint if resuming
+    if resume_checkpoint_id and checkpoint.config:
         env = checkpoint.config.environment
         operation = checkpoint.config.additional_params.get("operation", operation)
 
@@ -447,19 +510,8 @@ def batch_user_operations_with_checkpoints(
             operation=operation,
             checkpoint_manager=checkpoint_manager
         )
-    except KeyboardInterrupt:
-        print_warning(f"\n{operation.title()} operation interrupted by user")
-        checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
-        checkpoint_manager.save_checkpoint(checkpoint)
-        print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
-        print_info("You can resume this operation later using:")
-        print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
-        return checkpoint.checkpoint_id
-    except Exception as e:
-        print_warning(f"\n{operation.title()} operation failed: {e}")
-        checkpoint_manager.mark_checkpoint_failed(checkpoint, str(e))
-        checkpoint_manager.save_checkpoint(checkpoint)
-        return checkpoint.checkpoint_id
+    except (KeyboardInterrupt, Exception) as e:
+        return _handle_checkpoint_error(checkpoint, checkpoint_manager, operation, e)
 
 
 def _process_batch_user_operations_with_checkpoints(
