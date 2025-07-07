@@ -1,6 +1,7 @@
 """CSV-specific CLI commands for Auth0 user management."""
 
 import argparse
+from typing import Any
 
 from ..utils.csv_utils import (
     extract_identifiers_from_csv,
@@ -81,7 +82,7 @@ def print_csv_usage() -> None:
 
 
 def create_csv_parser(
-    subparsers: argparse._SubParsersAction[argparse.ArgumentParser],
+    subparsers: Any,
 ) -> None:
     """Create CSV subparser for the main argument parser.
 
