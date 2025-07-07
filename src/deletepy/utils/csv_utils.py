@@ -2,12 +2,12 @@
 
 import csv
 import re
-from typing import Any, NamedTuple, TextIO
+from typing import Any, NamedTuple, TextIO, cast
 
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
 from ..core.exceptions import FileOperationError
-from ..operations.user_ops import get_user_details, get_user_id_from_email
+from ..operations.user_ops import get_user_details
 from ..utils.display_utils import (
     print_error,
     print_info,
@@ -151,14 +151,14 @@ def _needs_username_resolution(username: str) -> bool:
 
 
 def _try_auth0_username_resolution(username: str, env: str) -> str | None:
-    """Try to resolve username using Auth0 API.
+    """Try to resolve encoded username using Auth0 API.
 
     Args:
         username: Encoded username to resolve
-        env: Environment to use for Auth0 API
+        env: Environment for Auth0 API
 
     Returns:
-        Resolved email or None if resolution failed
+        Resolved email or None if resolution fails
     """
     try:
         token = get_access_token(env)
@@ -168,7 +168,7 @@ def _try_auth0_username_resolution(username: str, env: str) -> str | None:
             # Search for user by encoded username
             user_details = _search_user_by_field(username, token, base_url)
             if user_details and user_details.get("email"):
-                return user_details["email"]
+                return cast(str, user_details["email"])
     except Exception:
         # If Auth0 API fails, fall back to string replacement
         pass
@@ -337,7 +337,7 @@ def _process_csv_file(
     return identifiers, skip_resolution
 
 
-def _setup_csv_reader(infile: TextIO) -> tuple[csv.DictReader[Any] | None, list[str] | None]:
+def _setup_csv_reader(infile: TextIO) -> tuple[csv.DictReader[str] | None, list[str] | None]:
     """Setup CSV reader and validate headers.
 
     Args:
@@ -354,7 +354,7 @@ def _setup_csv_reader(infile: TextIO) -> tuple[csv.DictReader[Any] | None, list[
         return None, None
 
     print_info(f"Available columns: {', '.join(headers)}")
-    return reader, headers
+    return reader, list(headers)
 
 
 def _determine_csv_columns(
@@ -595,30 +595,32 @@ def extract_identifiers_from_csv(
 def _detect_and_process_file(
     infile: TextIO, output_type: str, env: str | None
 ) -> tuple[list[str | CsvRowData], bool]:
-    """Detect file type and process file accordingly.
+    """Detect file type and process accordingly.
 
     Args:
         infile: File object to read from
-        output_type: Type of output desired
+        output_type: Type of output desired (username|email|user_id)
         env: Environment for Auth0 API resolution
 
     Returns:
-        Tuple of (identifiers, skip_resolution flag)
+        Tuple of (identifiers/row_data list, skip_resolution flag)
     """
-    # Detect file type by peeking at first line
+    # Store position and read first line
+    start_pos = infile.tell()
     first_line = infile.readline()
-    infile.seek(0)
+    if not first_line:
+        return [], False
 
+    # Detect file type
     file_type = _detect_file_type(first_line)
 
-    # Process file based on detected type
+    # Reset file position
+    infile.seek(start_pos)
+
     if file_type == "plain_text":
         plain_identifiers = _process_plain_text(infile, env)
-        # Plain text identifiers are already strings, not CsvRowData
-        return (
-            plain_identifiers,
-            True,
-        )  # Skip resolution since plain text is already processed
+        # Convert to tuple format for consistency
+        return cast(list[str | CsvRowData], plain_identifiers), False
     else:
         return _process_csv_file(infile, output_type, env)
 
@@ -759,23 +761,19 @@ def write_identifiers_to_file(
 def _search_user_by_field(
     identifier: str, token: str, base_url: str
 ) -> dict[str, Any] | None:
-    """Search for a user using the appropriate Auth0 Management API endpoint.
+    """Search for a user in Auth0 by identifier.
 
     Args:
-        identifier: Email or username to search for
+        identifier: User identifier (email, username, user_id)
         token: Auth0 access token
         base_url: Auth0 API base URL
 
     Returns:
-        User details dict or None if not found
+        User details dictionary or None if not found
     """
-    if "@" in identifier:
-        # Use the dedicated users-by-email endpoint for email lookups
-        user_ids = get_user_id_from_email(identifier, token, base_url)
-        if user_ids and len(user_ids) > 0:
-            # Get full user details for the first user
-            return get_user_details(user_ids[0], token, base_url)
-        return None
+    if is_auth0_user_id(identifier):
+        # Direct user ID lookup
+        return get_user_details(identifier, token, base_url)
     else:
         # Use search API for username lookups
         url = f"{base_url}/api/v2/users"
@@ -796,7 +794,7 @@ def _search_user_by_field(
             users = response.json()
             if users and isinstance(users, list) and len(users) > 0:
                 # Return the first match
-                return users[0]
+                return cast(dict[str, Any], users[0])
         except ValueError:
             return None
 
@@ -817,11 +815,11 @@ def _extract_output_value(
         Extracted value or fallback
     """
     if output_type == "email":
-        return user_details.get("email", fallback)
+        return cast(str, user_details.get("email", fallback))
     elif output_type == "username":
-        return user_details.get("username", user_details.get("email", fallback))
+        return cast(str, user_details.get("username", user_details.get("email", fallback)))
     elif output_type == "user_id":
-        return user_details.get("user_id", fallback)
+        return cast(str, user_details.get("user_id", fallback))
     else:
         return fallback
 

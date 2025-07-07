@@ -1,7 +1,7 @@
 """Configuration utilities for Auth0 API access."""
 
 import os
-from typing import Any
+from typing import Any, cast
 
 import dotenv
 
@@ -93,7 +93,7 @@ def get_env_config(env: str = "dev") -> dict[str, Any]:
 def get_base_url(env: str = "dev") -> str:
     """Get the Auth0 base URL for the given environment."""
     config = get_env_config(env)
-    return config["base_url"]
+    return cast(str, config["base_url"])
 
 
 def get_optimal_batch_size(total_emails: int) -> int:

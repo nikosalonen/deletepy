@@ -2,7 +2,7 @@
 
 import time
 from contextlib import suppress
-from typing import Any
+from typing import Any, cast
 
 import requests
 
@@ -155,7 +155,7 @@ def get_json_response(response: requests.Response) -> dict[str, Any] | None:
     """
     try:
         json_data = response.json()
-        return json_data
+        return cast(dict[str, Any], json_data)
     except ValueError as e:
         print(f"Error parsing JSON response: {e}")
         return None

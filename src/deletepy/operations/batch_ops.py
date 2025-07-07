@@ -1,6 +1,7 @@
 """Batch processing operations for Auth0 user management."""
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
@@ -1251,7 +1252,7 @@ def _execute_batch_processing_loop(
     batch_size: int,
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
-    batch_processor_func: callable,
+    batch_processor_func: Callable[..., dict[str, int]],
     operation_name: str,
     *processor_args,
 ) -> str | None:
@@ -1308,7 +1309,7 @@ def _execute_batch_processing_loop(
 def _process_batch_items_with_checkpoints(
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
-    batch_processor_func: callable,
+    batch_processor_func: Callable[..., dict[str, int]],
     operation_name: str,
     *processor_args,
 ) -> str | None:
@@ -1375,7 +1376,7 @@ def _execute_with_checkpoints(
     operation_type: OperationType,
     items: list[str],
     config: CheckpointOperationConfig,
-    process_func: callable,
+    process_func: Callable[..., str | None],
     operation_name: str,
     auto_delete: bool = True,
     processing_config: ProcessingConfig | None = None,
@@ -1469,57 +1470,48 @@ def find_users_by_social_media_ids_with_checkpoints(
 def _process_social_search_batch(
     batch_social_ids: list[str], token: str, base_url: str, accumulator: dict[str, list]
 ) -> dict[str, int]:
-    """Process a batch of social IDs and accumulate results.
+    """Process a batch of social IDs and update accumulator.
 
     Args:
-        batch_social_ids: List of social media IDs to search
+        batch_social_ids: Batch of social IDs to process
         token: Auth0 access token
         base_url: Auth0 API base URL
-        accumulator: Dictionary to accumulate found users and not found IDs
+        accumulator: Results accumulator to update
 
     Returns:
-        dict: Batch processing results for checkpoint update
+        Dict[str, int]: Batch processing results
     """
-    batch_found_users, batch_not_found = _search_batch_social_ids(
+    found_users, not_found_ids = _search_batch_social_ids(
         batch_social_ids, token, base_url
     )
-
-    # Add batch results to overall results
-    accumulator["found_users"].extend(batch_found_users)
-    accumulator["not_found_ids"].extend(batch_not_found)
-
-    return {
-        "not_found_count": len(batch_not_found),
-    }
+    accumulator["found_users"].extend(found_users)
+    accumulator["not_found_ids"].extend(not_found_ids)
+    return {"processed_count": len(batch_social_ids)}
 
 
 def _handle_social_search_completion(
-    results_accumulator: dict,
+    results_accumulator: dict[str, list],
     checkpoint: Checkpoint,
     token: str,
     base_url: str,
     env: str,
     auto_delete: bool,
 ) -> None:
-    """Handle the completion of social search operation by processing final results.
+    """Handle completion of social search with results processing.
 
     Args:
-        results_accumulator: Dictionary containing found_users and not_found_ids
-        checkpoint: Current checkpoint
+        results_accumulator: Accumulated search results
+        checkpoint: Checkpoint being processed
         token: Auth0 access token
         base_url: Auth0 API base URL
-        env: Environment
-        auto_delete: Whether to auto-delete users
+        env: Environment name
+        auto_delete: Whether auto-delete is enabled
     """
-    # Process final search results
+    found_users = results_accumulator["found_users"]
+    not_found_ids = results_accumulator["not_found_ids"]
+
     _process_final_social_search_results(
-        results_accumulator["found_users"],
-        results_accumulator["not_found_ids"],
-        checkpoint,
-        token,
-        base_url,
-        env,
-        auto_delete,
+        found_users, not_found_ids, checkpoint, token, base_url, env, auto_delete
     )
 
 
@@ -1545,7 +1537,7 @@ def _process_social_search_with_checkpoints(
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
     # Initialize accumulator for results
-    results_accumulator = {"found_users": [], "not_found_ids": []}
+    results_accumulator: dict[str, list] = {"found_users": [], "not_found_ids": []}
 
     # Process batches using common batch processing logic
     result = _process_batch_items_with_checkpoints(
@@ -1685,8 +1677,8 @@ def _process_check_unblocked_with_checkpoints(
     token: str,
     base_url: str,
     checkpoint_manager: CheckpointManager,
-    env: str = None,  # Ignored for check operations
-    auto_delete: bool = None,  # Ignored for check operations
+    env: str | None = None,  # Ignored for check operations
+    auto_delete: bool | None = None,  # Ignored for check operations
     dry_run: bool = False,  # Processing config parameter
     batch_timeout: int | None = None,  # Processing config parameter
     max_retries: int | None = None,  # Processing config parameter
@@ -1695,39 +1687,46 @@ def _process_check_unblocked_with_checkpoints(
     verify_results: bool = True,  # Processing config parameter
     **custom_params,  # Custom parameters from ProcessingConfig
 ) -> str | None:
-    """Process check unblocked operation with checkpointing support.
+    """Process check unblocked users with checkpoints.
 
     Args:
         checkpoint: Checkpoint to process
         token: Auth0 access token
         base_url: Auth0 API base URL
         checkpoint_manager: Checkpoint manager instance
+        env: Environment (ignored for check operations)
+        auto_delete: Auto-delete flag (ignored for check operations)
+        dry_run: Processing config parameter
+        batch_timeout: Processing config parameter
+        max_retries: Processing config parameter
+        connection_filter: Processing config parameter
+        include_inactive: Processing config parameter
+        verify_results: Processing config parameter
+        **custom_params: Custom parameters from ProcessingConfig
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
-    # Initialize accumulator for results
-    results_accumulator = {"unblocked_users": []}
+    # Initialize results accumulator
+    results_accumulator: dict[str, list] = {"unblocked_users": []}
 
-    # Process batches using common batch processing logic
-    result = _process_batch_items_with_checkpoints(
+    # Process with checkpoint support
+    checkpoint_result = _process_batch_items_with_checkpoints(
         checkpoint,
         checkpoint_manager,
         _process_check_unblocked_batch,
-        "Check unblocked",
+        "check_unblocked_users",
         token,
         base_url,
         results_accumulator,
     )
 
-    # If operation was interrupted, return checkpoint ID
-    if result is not None:
-        return result
+    if checkpoint_result is not None:
+        return checkpoint_result
 
-    # Display final results
+    # Display results
     _display_check_unblocked_results(results_accumulator["unblocked_users"])
-
-    return None  # Operation completed successfully
+    return None
 
 
 def _display_check_unblocked_results(unblocked_users: list[str]) -> None:

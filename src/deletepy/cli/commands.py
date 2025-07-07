@@ -3,7 +3,7 @@
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import click
 
@@ -25,7 +25,6 @@ from ..operations.preview_ops import (
 from ..operations.user_ops import (
     block_user,
     delete_user,
-    get_user_details,
     get_user_email,
     get_user_id_from_email,
 )
@@ -50,7 +49,7 @@ class OperationHandler:
     operations with proper error handling, progress tracking, and user feedback.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize the operation handler."""
         pass
 
@@ -234,14 +233,14 @@ class OperationHandler:
         self._execute_user_operation(operation, resolved_user_id, token, base_url)
         state["processed_count"] += 1
 
-    def _create_processing_results(self, state: dict[str, Any]) -> dict:
+    def _create_processing_results(self, state: dict[str, Any]) -> dict[str, Any]:
         """Create the final processing results dictionary.
 
         Args:
             state: Processing state with counters and lists
 
         Returns:
-            dict: Processing results
+            Dict[str, Any]: Processing results
         """
         return {
             "processed_count": state["processed_count"],
@@ -258,7 +257,7 @@ class OperationHandler:
         base_url: str,
         operation: str,
         operation_display: str,
-    ) -> dict:
+    ) -> dict[str, Any]:
         """Process users for the specified operation.
 
         Args:
@@ -269,7 +268,7 @@ class OperationHandler:
             operation_display: Display name for progress
 
         Returns:
-            dict: Processing results with counts and user lists
+            Dict[str, Any]: Processing results with counts and user lists
         """
         state = self._initialize_processing_state()
         total_users = len(user_ids)
@@ -286,9 +285,9 @@ class OperationHandler:
         user_id: str,
         token: str,
         base_url: str,
-        multiple_users: dict,
-        not_found_users: list,
-        invalid_user_ids: list,
+        multiple_users: dict[str, list[str]],
+        not_found_users: list[str],
+        invalid_user_ids: list[str],
     ) -> str | None:
         """Resolve user identifier (email or user ID) to a valid user ID.
 
@@ -372,7 +371,7 @@ class OperationHandler:
                     click.echo(f"{GREEN}✓ API access test successful{RESET}")
             else:
                 click.echo(f"{RED}✗ Auth0 credentials test failed{RESET}", err=True)
-            return result["success"]
+            return cast(bool, result["success"])
         except Exception as e:
             click.echo(f"{RED}Doctor check failed: {e}{RESET}", err=True)
             return False
@@ -653,37 +652,35 @@ class OperationHandler:
         token: str,
         base_url: str,
     ) -> None:
-        """Print a summary of the operation results."""
+        """Print summary of operation results.
+
+        Args:
+            processed_count: Number of users processed
+            skipped_count: Number of users skipped
+            not_found_users: List of users not found
+            invalid_user_ids: List of invalid user IDs
+            multiple_users: Dictionary of emails with multiple users
+            token: Auth0 access token
+            base_url: Auth0 API base URL
+        """
         click.echo(f"\n{CYAN}Operation Summary:{RESET}")
-        click.echo(f"  Total processed: {processed_count}")
-        click.echo(f"  Skipped: {skipped_count}")
+        click.echo(f"Processed: {processed_count}")
+        click.echo(f"Skipped: {skipped_count}")
 
         if not_found_users:
-            click.echo(f"  {RED}Not found: {len(not_found_users)}{RESET}")
-            if click.confirm("Show not found users?"):
-                for user_id in not_found_users:
-                    click.echo(f"    - {user_id}")
+            click.echo(f"Not found: {len(not_found_users)}")
+            for user in not_found_users:
+                click.echo(f"  - {user}")
 
         if invalid_user_ids:
-            click.echo(f"  {RED}Invalid user IDs: {len(invalid_user_ids)}{RESET}")
-            if click.confirm("Show invalid user IDs?"):
-                for user_id in invalid_user_ids:
-                    click.echo(f"    - {user_id}")
+            click.echo(f"Invalid user IDs: {len(invalid_user_ids)}")
+            for user_id in invalid_user_ids:
+                click.echo(f"  - {user_id}")
 
         if multiple_users:
-            click.echo(f"  {YELLOW}Multiple users found: {len(multiple_users)}{RESET}")
-            if click.confirm("Show multiple users?"):
-                for identifier, users in multiple_users.items():
-                    click.echo(f"    - {identifier}:")
-                    for user_id in users:
-                        # Get user details
-                        user_details = get_user_details(user_id, token, base_url)
-                        if user_details:
-                            username = user_details.get("username", "N/A")
-                            email = user_details.get("email", "N/A")
-                            click.echo(f"      - {user_id} ({username}, {email})")
-                        else:
-                            click.echo(f"      - {user_id}")
+            click.echo(f"Multiple users found: {len(multiple_users)}")
+            for email, user_ids in multiple_users.items():
+                click.echo(f"  - {email}: {len(user_ids)} users")
 
     def _parse_operation_type(self, operation_type: str | None) -> OperationType | None:
         """Parse operation type string to enum.

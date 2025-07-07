@@ -1,12 +1,12 @@
 """CLI module for Auth0 user management."""
 
 from .csv_commands import (
-    main as csv_main,
+    handle_csv_command,
+    parse_csv_args,
+    print_csv_usage,
 )
 from .csv_commands import (
-    parse_csv_arguments,
-    print_csv_usage,
-    process_csv_file,
+    main as csv_main,
 )
 from .validators import (
     validate_args,
@@ -20,9 +20,9 @@ from .validators import (
 __all__ = [
     # CSV commands
     "csv_main",
-    "parse_csv_arguments",
+    "parse_csv_args",
     "print_csv_usage",
-    "process_csv_file",
+    "handle_csv_command",
     # Validators
     "validate_args",
     "validate_connection_type",
