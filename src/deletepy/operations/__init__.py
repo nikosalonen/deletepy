@@ -3,6 +3,7 @@
 # Core user operations
 # Batch operations
 from .batch_ops import (
+    CheckpointOperationConfig,
     check_unblocked_users,
     find_users_by_social_media_ids,
 )
@@ -49,6 +50,7 @@ __all__ = [
     "revoke_user_grants",
     "unlink_user_identity",
     # Batch operations
+    "CheckpointOperationConfig",
     "check_unblocked_users",
     "find_users_by_social_media_ids",
     # Export operations

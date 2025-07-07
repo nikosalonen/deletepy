@@ -37,6 +37,16 @@ class SearchProcessingConfig:
     auto_delete: bool
 
 
+@dataclass
+class CheckpointOperationConfig:
+    """Configuration for checkpoint-enabled operations."""
+    token: str
+    base_url: str
+    env: str = "dev"
+    resume_checkpoint_id: str | None = None
+    checkpoint_manager: CheckpointManager | None = None
+
+
 def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
     """Print user IDs that are not blocked, with a progress indicator.
 
@@ -1275,23 +1285,15 @@ def _finalize_checkpoint_completion(
 
 def find_users_by_social_media_ids_with_checkpoints(
     social_ids: list[str],
-    token: str,
-    base_url: str,
-    env: str = "dev",
+    config: CheckpointOperationConfig,
     auto_delete: bool = True,
-    resume_checkpoint_id: str | None = None,
-    checkpoint_manager: CheckpointManager | None = None,
 ) -> str | None:
     """Find Auth0 users with social media IDs and optionally delete them with checkpointing.
 
     Args:
         social_ids: List of social media IDs to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-        env: Environment (dev/prod) for confirmation prompts
+        config: Configuration for checkpoint operations (token, base_url, env, etc.)
         auto_delete: Whether to automatically delete users with main identity matches
-        resume_checkpoint_id: Optional checkpoint ID to resume from
-        checkpoint_manager: Optional checkpoint manager instance
 
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
@@ -1299,18 +1301,18 @@ def find_users_by_social_media_ids_with_checkpoints(
     checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation(
         operation_type=OperationType.SOCIAL_UNLINK,
         items=social_ids,
-        env=env,
+        env=config.env,
         auto_delete=auto_delete,
-        resume_checkpoint_id=resume_checkpoint_id,
-        checkpoint_manager=checkpoint_manager,
+        resume_checkpoint_id=config.resume_checkpoint_id,
+        checkpoint_manager=config.checkpoint_manager,
         operation_name="social_unlink"
     )
 
     try:
         return _process_social_search_with_checkpoints(
             checkpoint=checkpoint,
-            token=token,
-            base_url=base_url,
+            token=config.token,
+            base_url=config.base_url,
             env=env,
             auto_delete=auto_delete,
             checkpoint_manager=checkpoint_manager
@@ -1483,21 +1485,13 @@ def _search_batch_social_ids(
 
 def check_unblocked_users_with_checkpoints(
     user_ids: list[str],
-    token: str,
-    base_url: str,
-    env: str = "dev",
-    resume_checkpoint_id: str | None = None,
-    checkpoint_manager: CheckpointManager | None = None,
+    config: CheckpointOperationConfig,
 ) -> str | None:
     """Check unblocked users with checkpointing support.
 
     Args:
         user_ids: List of Auth0 user IDs to check
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-        env: Environment
-        resume_checkpoint_id: Optional checkpoint ID to resume from
-        checkpoint_manager: Optional checkpoint manager instance
+        config: Configuration for checkpoint operations (token, base_url, env, etc.)
 
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
@@ -1505,18 +1499,18 @@ def check_unblocked_users_with_checkpoints(
     checkpoint, checkpoint_manager, env, _ = _setup_checkpoint_operation(
         operation_type=OperationType.CHECK_UNBLOCKED,
         items=user_ids,
-        env=env,
+        env=config.env,
         auto_delete=False,  # Not relevant for check operations
-        resume_checkpoint_id=resume_checkpoint_id,
-        checkpoint_manager=checkpoint_manager,
+        resume_checkpoint_id=config.resume_checkpoint_id,
+        checkpoint_manager=config.checkpoint_manager,
         operation_name="check_unblocked"
     )
 
     try:
         return _process_check_unblocked_with_checkpoints(
             checkpoint=checkpoint,
-            token=token,
-            base_url=base_url,
+            token=config.token,
+            base_url=config.base_url,
             checkpoint_manager=checkpoint_manager
         )
     except KeyboardInterrupt:

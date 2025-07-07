@@ -765,20 +765,38 @@ class OperationHandler:
                     connection=checkpoint.config.parameters.get("connection")
                 )
             elif operation_type == OperationType.CHECK_UNBLOCKED:
+                from ..core.auth import get_access_token
+                from ..core.config import get_base_url
                 from ..operations.batch_ops import (
+                    CheckpointOperationConfig,
                     check_unblocked_users_with_checkpoints,
                 )
+
+                config = CheckpointOperationConfig(
+                    token=get_access_token(env),
+                    base_url=get_base_url(env),
+                    env=env,
+                    resume_checkpoint_id=checkpoint_id
+                )
                 check_unblocked_users_with_checkpoints(
-                    checkpoint_id=checkpoint_id,
-                    env=env
+                    user_ids=[],  # Empty list as we're resuming from checkpoint
+                    config=config
                 )
             elif operation_type == OperationType.SOCIAL_UNLINK:
                 from ..operations.batch_ops import (
+                    CheckpointOperationConfig,
                     find_users_by_social_media_ids_with_checkpoints,
                 )
+
+                config = CheckpointOperationConfig(
+                    token=get_access_token(env),
+                    base_url=get_base_url(env),
+                    env=env,
+                    resume_checkpoint_id=checkpoint_id
+                )
                 find_users_by_social_media_ids_with_checkpoints(
-                    checkpoint_id=checkpoint_id,
-                    env=env
+                    social_ids=[],  # Empty list as we're resuming from checkpoint
+                    config=config
                 )
             elif operation_type in [OperationType.BATCH_DELETE, OperationType.BATCH_BLOCK, OperationType.BATCH_REVOKE_GRANTS]:
                 from ..operations.user_ops import batch_user_operations_with_checkpoints
