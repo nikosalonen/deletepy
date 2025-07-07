@@ -792,73 +792,124 @@ class OperationHandler:
         click.echo(f"{CYAN}Resuming {operation_type.value} operation from checkpoint {checkpoint_id}...{RESET}")
 
         if operation_type == OperationType.EXPORT_LAST_LOGIN:
-            from ..operations.export_ops import (
-                export_users_last_login_to_csv_with_checkpoints,
-            )
-            export_users_last_login_to_csv_with_checkpoints(
-                emails=checkpoint.remaining_items,
-                token=get_access_token(env),
-                base_url=get_base_url(env),
-                output_file=checkpoint.config.output_file or "users_last_login.csv",
-                connection=checkpoint.config.connection_filter,
-                env=env,
-                resume_checkpoint_id=checkpoint_id,
-                checkpoint_manager=checkpoint_manager
-            )
+            self._resume_export_last_login(checkpoint, checkpoint_manager)
         elif operation_type == OperationType.CHECK_UNBLOCKED:
-            from ..operations.batch_ops import (
-                CheckpointOperationConfig,
-                check_unblocked_users_with_checkpoints,
-            )
-
-            config = CheckpointOperationConfig(
-                token=get_access_token(env),
-                base_url=get_base_url(env),
-                env=env,
-                resume_checkpoint_id=checkpoint_id,
-                checkpoint_manager=checkpoint_manager
-            )
-            check_unblocked_users_with_checkpoints(
-                user_ids=checkpoint.remaining_items,
-                config=config
-            )
+            self._resume_check_unblocked(checkpoint, checkpoint_manager)
         elif operation_type == OperationType.SOCIAL_UNLINK:
-            from ..operations.batch_ops import (
-                CheckpointOperationConfig,
-                find_users_by_social_media_ids_with_checkpoints,
-            )
-
-            config = CheckpointOperationConfig(
-                token=get_access_token(env),
-                base_url=get_base_url(env),
-                env=env,
-                resume_checkpoint_id=checkpoint_id,
-                checkpoint_manager=checkpoint_manager
-            )
-            find_users_by_social_media_ids_with_checkpoints(
-                social_ids=checkpoint.remaining_items,
-                config=config,
-                auto_delete=checkpoint.config.auto_delete
-            )
+            self._resume_social_unlink(checkpoint, checkpoint_manager)
         elif operation_type in [OperationType.BATCH_DELETE, OperationType.BATCH_BLOCK, OperationType.BATCH_REVOKE_GRANTS]:
-            from ..operations.user_ops import batch_user_operations_with_checkpoints
-            operation_map = {
-                OperationType.BATCH_DELETE: "delete",
-                OperationType.BATCH_BLOCK: "block",
-                OperationType.BATCH_REVOKE_GRANTS: "revoke-grants-only",
-            }
-            batch_user_operations_with_checkpoints(
-                user_ids=checkpoint.remaining_items,
-                token=get_access_token(env),
-                base_url=get_base_url(env),
-                operation=operation_map[operation_type],
-                env=env,
-                resume_checkpoint_id=checkpoint_id,
-                checkpoint_manager=checkpoint_manager
-            )
+            self._resume_batch_user_operations(checkpoint, checkpoint_manager)
         else:
             click.echo(f"{RED}Resume not supported for operation type: {operation_type.value}{RESET}")
             return
+
+    def _resume_export_last_login(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+        """Resume export last login operation from checkpoint.
+
+        Args:
+            checkpoint: The checkpoint to resume
+            checkpoint_manager: Checkpoint manager instance
+        """
+        from ..operations.export_ops import (
+            export_users_last_login_to_csv_with_checkpoints,
+        )
+
+        env = checkpoint.config.environment
+        checkpoint_id = checkpoint.checkpoint_id
+
+        export_users_last_login_to_csv_with_checkpoints(
+            emails=checkpoint.remaining_items,
+            token=get_access_token(env),
+            base_url=get_base_url(env),
+            output_file=checkpoint.config.output_file or "users_last_login.csv",
+            connection=checkpoint.config.connection_filter,
+            env=env,
+            resume_checkpoint_id=checkpoint_id,
+            checkpoint_manager=checkpoint_manager
+        )
+
+    def _resume_check_unblocked(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+        """Resume check unblocked users operation from checkpoint.
+
+        Args:
+            checkpoint: The checkpoint to resume
+            checkpoint_manager: Checkpoint manager instance
+        """
+        from ..operations.batch_ops import (
+            CheckpointOperationConfig,
+            check_unblocked_users_with_checkpoints,
+        )
+
+        env = checkpoint.config.environment
+        checkpoint_id = checkpoint.checkpoint_id
+
+        config = CheckpointOperationConfig(
+            token=get_access_token(env),
+            base_url=get_base_url(env),
+            env=env,
+            resume_checkpoint_id=checkpoint_id,
+            checkpoint_manager=checkpoint_manager
+        )
+        check_unblocked_users_with_checkpoints(
+            user_ids=checkpoint.remaining_items,
+            config=config
+        )
+
+    def _resume_social_unlink(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+        """Resume social unlink operation from checkpoint.
+
+        Args:
+            checkpoint: The checkpoint to resume
+            checkpoint_manager: Checkpoint manager instance
+        """
+        from ..operations.batch_ops import (
+            CheckpointOperationConfig,
+            find_users_by_social_media_ids_with_checkpoints,
+        )
+
+        env = checkpoint.config.environment
+        checkpoint_id = checkpoint.checkpoint_id
+
+        config = CheckpointOperationConfig(
+            token=get_access_token(env),
+            base_url=get_base_url(env),
+            env=env,
+            resume_checkpoint_id=checkpoint_id,
+            checkpoint_manager=checkpoint_manager
+        )
+        find_users_by_social_media_ids_with_checkpoints(
+            social_ids=checkpoint.remaining_items,
+            config=config,
+            auto_delete=checkpoint.config.auto_delete
+        )
+
+    def _resume_batch_user_operations(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+        """Resume batch user operations from checkpoint.
+
+        Args:
+            checkpoint: The checkpoint to resume
+            checkpoint_manager: Checkpoint manager instance
+        """
+        from ..operations.user_ops import batch_user_operations_with_checkpoints
+
+        env = checkpoint.config.environment
+        checkpoint_id = checkpoint.checkpoint_id
+        operation_type = checkpoint.operation_type
+
+        operation_map = {
+            OperationType.BATCH_DELETE: "delete",
+            OperationType.BATCH_BLOCK: "block",
+            OperationType.BATCH_REVOKE_GRANTS: "revoke-grants-only",
+        }
+        batch_user_operations_with_checkpoints(
+            user_ids=checkpoint.remaining_items,
+            token=get_access_token(env),
+            base_url=get_base_url(env),
+            operation=operation_map[operation_type],
+            env=env,
+            resume_checkpoint_id=checkpoint_id,
+            checkpoint_manager=checkpoint_manager
+        )
 
     def _clean_all_checkpoints(
         self,
