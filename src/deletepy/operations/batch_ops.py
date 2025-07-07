@@ -1,7 +1,7 @@
 """Batch processing operations for Auth0 user management."""
 
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
 
@@ -29,6 +29,18 @@ from .user_ops import delete_user, unlink_user_identity
 
 
 @dataclass
+class CheckpointSetupConfig:
+    """Configuration for checkpoint setup operations."""
+    operation_type: OperationType
+    items: list[str]
+    env: str
+    auto_delete: bool = True
+    resume_checkpoint_id: str | None = None
+    checkpoint_manager: CheckpointManager | None = None
+    operation_name: str = "operation"
+
+
+@dataclass
 class SearchProcessingConfig:
     """Configuration for search result processing operations."""
     token: str
@@ -45,6 +57,45 @@ class CheckpointOperationConfig:
     env: str = "dev"
     resume_checkpoint_id: str | None = None
     checkpoint_manager: CheckpointManager | None = None
+
+
+@dataclass
+class ProcessingConfig:
+    """Configuration for process function parameters and additional settings."""
+
+    # Core processing parameters
+    dry_run: bool = False
+    batch_timeout: int | None = None
+    max_retries: int | None = None
+
+    # Operation-specific parameters
+    connection_filter: str | None = None
+    include_inactive: bool = False
+    verify_results: bool = True
+
+    # Additional custom parameters
+    custom_params: dict[str, Any] = field(default_factory=dict)
+
+    def get_all_params(self) -> dict[str, Any]:
+        """Get all parameters as a dictionary for function calls.
+
+        Returns:
+            dict: All configuration parameters combined
+        """
+        params = {
+            "dry_run": self.dry_run,
+            "batch_timeout": self.batch_timeout,
+            "max_retries": self.max_retries,
+            "connection_filter": self.connection_filter,
+            "include_inactive": self.include_inactive,
+            "verify_results": self.verify_results,
+        }
+
+        # Add custom parameters
+        params.update(self.custom_params)
+
+        # Remove None values to avoid passing unnecessary parameters
+        return {k: v for k, v in params.items() if v is not None}
 
 
 def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
@@ -1105,50 +1156,43 @@ def _create_new_checkpoint(
 
 
 def _setup_checkpoint_operation(
-    operation_type: OperationType,
-    items: list[str],
-    env: str,
-    auto_delete: bool = True,
-    resume_checkpoint_id: str | None = None,
-    checkpoint_manager: CheckpointManager | None = None,
-    operation_name: str = "operation"
+    setup_config: CheckpointSetupConfig
 ) -> tuple[Checkpoint, CheckpointManager, str, bool]:
     """Set up checkpoint operation by creating or resuming checkpoints.
 
     Args:
-        operation_type: Type of operation to checkpoint
-        items: List of items to process
-        env: Environment (dev/prod)
-        auto_delete: Whether auto-delete is enabled
-        resume_checkpoint_id: Optional checkpoint ID to resume from
-        checkpoint_manager: Optional checkpoint manager instance
-        operation_name: Name of the operation for logging
+        setup_config: Configuration for checkpoint setup containing all required parameters
 
     Returns:
         Tuple of (checkpoint, checkpoint_manager, env, auto_delete)
     """
-    checkpoint_manager = _initialize_checkpoint_manager(checkpoint_manager)
+    checkpoint_manager = _initialize_checkpoint_manager(setup_config.checkpoint_manager)
 
     # Try to load existing checkpoint if resuming
     checkpoint = None
-    if resume_checkpoint_id:
-        checkpoint = _load_existing_checkpoint(checkpoint_manager, resume_checkpoint_id)
+    if setup_config.resume_checkpoint_id:
+        checkpoint = _load_existing_checkpoint(checkpoint_manager, setup_config.resume_checkpoint_id)
 
     # Create new checkpoint if not resuming or loading failed
     if checkpoint is None:
         checkpoint = _create_new_checkpoint(
-            checkpoint_manager, operation_type, items, env, auto_delete, operation_name
+            checkpoint_manager,
+            setup_config.operation_type,
+            setup_config.items,
+            setup_config.env,
+            setup_config.auto_delete,
+            setup_config.operation_name
         )
     else:
         print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
         # Use configuration from checkpoint
-        env = checkpoint.config.environment
-        auto_delete = checkpoint.config.auto_delete
+        setup_config.env = checkpoint.config.environment
+        setup_config.auto_delete = checkpoint.config.auto_delete
 
     # Save initial checkpoint state
     checkpoint_manager.save_checkpoint(checkpoint)
 
-    return checkpoint, checkpoint_manager, env, auto_delete
+    return checkpoint, checkpoint_manager, setup_config.env, setup_config.auto_delete
 
 
 def _handle_checkpoint_interruption(
@@ -1331,7 +1375,7 @@ def _execute_with_checkpoints(
     process_func: callable,
     operation_name: str,
     auto_delete: bool = True,
-    **process_kwargs
+    processing_config: ProcessingConfig | None = None
 ) -> str | None:
     """Execute operation with checkpoint lifecycle management.
 
@@ -1342,12 +1386,15 @@ def _execute_with_checkpoints(
         process_func: Function to process the operation
         operation_name: Name of the operation for logging
         auto_delete: Whether auto-delete is enabled
-        **process_kwargs: Additional keyword arguments for process_func
+        processing_config: Additional processing configuration parameters
 
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
     """
-    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation(
+    if processing_config is None:
+        processing_config = ProcessingConfig()
+
+    setup_config = CheckpointSetupConfig(
         operation_type=operation_type,
         items=items,
         env=config.env,
@@ -1356,17 +1403,23 @@ def _execute_with_checkpoints(
         checkpoint_manager=config.checkpoint_manager,
         operation_name=operation_name
     )
+    checkpoint, checkpoint_manager, env, auto_delete = _setup_checkpoint_operation(setup_config)
+
+    # Prepare process function parameters
+    process_params = {
+        "checkpoint": checkpoint,
+        "token": config.token,
+        "base_url": config.base_url,
+        "env": env,
+        "auto_delete": auto_delete,
+        "checkpoint_manager": checkpoint_manager,
+    }
+
+    # Add processing configuration parameters
+    process_params.update(processing_config.get_all_params())
 
     try:
-        return process_func(
-            checkpoint=checkpoint,
-            token=config.token,
-            base_url=config.base_url,
-            env=env,
-            auto_delete=auto_delete,
-            checkpoint_manager=checkpoint_manager,
-            **process_kwargs
-        )
+        return process_func(**process_params)
     except KeyboardInterrupt:
         return _handle_checkpoint_interruption(
             checkpoint, checkpoint_manager, f"{operation_name.replace('_', ' ').title()} operation"
@@ -1398,7 +1451,8 @@ def find_users_by_social_media_ids_with_checkpoints(
         config=config,
         process_func=_process_social_search_with_checkpoints,
         operation_name="social_unlink",
-        auto_delete=auto_delete
+        auto_delete=auto_delete,
+        processing_config=ProcessingConfig()
     )
 
 
@@ -1601,7 +1655,8 @@ def check_unblocked_users_with_checkpoints(
         config=config,
         process_func=_process_check_unblocked_with_checkpoints,
         operation_name="check_unblocked",
-        auto_delete=False  # Not relevant for check operations
+        auto_delete=False,  # Not relevant for check operations
+        processing_config=ProcessingConfig()
     )
 
 
@@ -1638,7 +1693,13 @@ def _process_check_unblocked_with_checkpoints(
     checkpoint_manager: CheckpointManager,
     env: str = None,  # Ignored for check operations
     auto_delete: bool = None,  # Ignored for check operations
-    **kwargs  # Accept any additional parameters
+    dry_run: bool = False,  # Processing config parameter
+    batch_timeout: int | None = None,  # Processing config parameter
+    max_retries: int | None = None,  # Processing config parameter
+    connection_filter: str | None = None,  # Processing config parameter
+    include_inactive: bool = False,  # Processing config parameter
+    verify_results: bool = True,  # Processing config parameter
+    **custom_params  # Custom parameters from ProcessingConfig
 ) -> str | None:
     """Process check unblocked operation with checkpointing support.
 
