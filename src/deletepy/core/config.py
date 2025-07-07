@@ -1,116 +1,103 @@
+"""Configuration utilities for Auth0 API access."""
+
 import os
-from pathlib import Path
+from typing import Any
 
-from dotenv import load_dotenv
+import dotenv
 
-# Rate limiting constants (seconds between API calls)
-# Conservative default: 0.5 seconds between requests (2 requests per second max)
-API_RATE_LIMIT = 0.5
+from .exceptions import AuthConfigError
 
-# API timeout in seconds
-API_TIMEOUT = 30
-
-# Retry configuration for rate limiting
-MAX_RETRIES = 3
-BASE_RETRY_DELAY = 1.0  # Start with 1 second delay
-MAX_RETRY_DELAY = 60.0  # Maximum 60 seconds delay
-
-# Batch processing configuration
-DEFAULT_BATCH_SIZE = 50
-MAX_BATCH_SIZE = 100
-MIN_BATCH_SIZE = 10
-
-# Batch size thresholds for automatic adjustment
-LARGE_DATASET_THRESHOLD = 1000  # Use smaller batches for datasets > 1000
-MEDIUM_DATASET_THRESHOLD = 500  # Use medium batches for datasets > 500
+# Global constants for API configuration
+API_RATE_LIMIT = 0.5  # seconds between requests
+API_TIMEOUT = 30  # request timeout in seconds
+MAX_RETRIES = 3  # maximum number of retries
+BASE_RETRY_DELAY = 1.0  # base delay between retries in seconds
+MAX_RETRY_DELAY = 60.0  # maximum delay between retries in seconds
 
 
-def check_env_file():
-    """Check if .env file exists"""
-    if not Path(".env").is_file():
-        raise FileNotFoundError(
-            "Error: .env file not found. Please create a .env file with your credentials."
-        )
+def check_env_file() -> None:
+    """Check if .env file exists and load it."""
+    env_path = ".env"
+    if os.path.exists(env_path):
+        dotenv.load_dotenv(env_path)
 
 
 def validate_env_var(name: str, value: str | None) -> str:
-    """Validate that an environment variable exists and is not empty.
+    """Validate that an environment variable is set and not empty.
 
     Args:
-        name: The name of the environment variable
-        value: The value of the environment variable
+        name: Environment variable name
+        value: Environment variable value
 
     Returns:
-        The validated value
+        str: The validated value
 
     Raises:
-        ValueError: If the environment variable is missing or empty
+        AuthConfigError: If the environment variable is missing or empty
     """
-    if value is None or value.strip() == "":
-        raise ValueError(f"Required environment variable '{name}' is missing or empty")
-    return value
+    if not value or value.strip() == "":
+        raise AuthConfigError(
+            f"Environment variable {name} is required but not set or empty"
+        )
+    return value.strip()
 
 
-def get_env_config(env: str = "dev"):
-    """Get environment configuration based on environment.
+def get_env_config(env: str = "dev") -> dict[str, Any]:
+    """Get Auth0 configuration from environment variables.
 
     Args:
-        env: The environment to get configuration for ('dev' or 'prod')
+        env: Environment to get config for ('dev' or 'prod')
 
     Returns:
-        dict: Configuration dictionary with validated environment variables
+        Dict[str, Any]: Configuration dictionary
 
     Raises:
-        ValueError: If environment is invalid or required variables are missing
+        AuthConfigError: If required environment variables are missing
     """
-    # Load environment variables from .env file
-    load_dotenv()
+    check_env_file()
 
-    env_config = {
-        "prod": {
-            "client_id": "AUTH0_CLIENT_ID",
-            "client_secret": "AUTH0_CLIENT_SECRET",
-            "auth0_domain": "AUTH0_DOMAIN",
-            "api_url": "URL",
-        },
-        "dev": {
-            "client_id": "DEV_AUTH0_CLIENT_ID",
-            "client_secret": "DEV_AUTH0_CLIENT_SECRET",
-            "auth0_domain": "DEV_AUTH0_DOMAIN",
-            "api_url": "DEV_URL",
-        },
+    # Determine prefix based on environment
+    prefix = "DEV_" if env == "dev" else ""
+
+    # Get required environment variables
+    domain = validate_env_var(
+        f"{prefix}AUTH0_DOMAIN", os.getenv(f"{prefix}AUTH0_DOMAIN")
+    )
+    client_id = validate_env_var(
+        f"{prefix}AUTH0_CLIENT_ID", os.getenv(f"{prefix}AUTH0_CLIENT_ID")
+    )
+    client_secret = validate_env_var(
+        f"{prefix}AUTH0_CLIENT_SECRET", os.getenv(f"{prefix}AUTH0_CLIENT_SECRET")
+    )
+
+    # Validate domain format
+    if not domain.endswith(".auth0.com") and not domain.endswith(".eu.auth0.com"):
+        raise AuthConfigError(
+            f"Invalid Auth0 domain format: {domain}. "
+            "Domain should end with .auth0.com or .eu.auth0.com"
+        )
+
+    # Validate client_id format (basic check)
+    if len(client_id) < 10:
+        raise AuthConfigError(f"Invalid Auth0 client ID format: {client_id}")
+
+    return {
+        "domain": domain,
+        "client_id": client_id,
+        "client_secret": client_secret,
+        "environment": env,
+        "base_url": f"https://{domain}",
     }
-
-    if env not in env_config:
-        raise ValueError("Environment must be either 'dev' or 'prod'")
-
-    config = env_config[env]
-
-    # Validate all environment variables
-    validated_config = {
-        "client_id": validate_env_var(
-            config["client_id"], os.getenv(config["client_id"])
-        ),
-        "client_secret": validate_env_var(
-            config["client_secret"], os.getenv(config["client_secret"])
-        ),
-        "auth0_domain": validate_env_var(
-            config["auth0_domain"], os.getenv(config["auth0_domain"])
-        ),
-        "api_url": validate_env_var(config["api_url"], os.getenv(config["api_url"])),
-    }
-
-    return validated_config
 
 
 def get_base_url(env: str = "dev") -> str:
-    """Get base URL based on environment."""
+    """Get the Auth0 base URL for the given environment."""
     config = get_env_config(env)
-    return f"https://{config['auth0_domain']}"
+    return config["base_url"]
 
 
 def get_optimal_batch_size(total_emails: int) -> int:
-    """Calculate optimal batch size based on dataset size.
+    """Calculate optimal batch size based on total number of emails.
 
     Args:
         total_emails: Total number of emails to process
@@ -118,57 +105,56 @@ def get_optimal_batch_size(total_emails: int) -> int:
     Returns:
         int: Optimal batch size
     """
-    if total_emails > LARGE_DATASET_THRESHOLD:
-        return 25
-    if total_emails > MEDIUM_DATASET_THRESHOLD:
+    if total_emails <= 100:
+        return 10
+    elif total_emails <= 1000:
         return 50
-    return 100
+    else:
+        return 100
 
 
-def get_estimated_processing_time(total_emails: int, batch_size: int = None) -> float:
-    """Calculate estimated processing time in minutes.
+def get_estimated_processing_time(total_emails: int, batch_size: int | None = None) -> float:
+    """Estimate processing time based on email count and batch size.
 
     Args:
         total_emails: Total number of emails to process
-        batch_size: Batch size (optional, will be calculated if not provided)
+        batch_size: Batch size for processing (calculated if None)
 
     Returns:
-        float: Estimated processing time in minutes
+        float: Estimated processing time in seconds
     """
     if batch_size is None:
         batch_size = get_optimal_batch_size(total_emails)
 
-    # Each email requires:
-    # 1. One API call to get_user_id_from_email
-    # 2. One API call to get_user_details per user found
-    # For multiple users, we need additional API calls
-    # Conservative estimate: assume 1.5 users per email on average
-    api_calls_per_email = 1 + 1.5  # email lookup + user details
-    total_api_calls = total_emails * api_calls_per_email
-    total_time_seconds = total_api_calls * API_RATE_LIMIT
+    # Base time per email (including API calls, rate limiting, etc.)
+    base_time_per_email = 0.7  # seconds
 
-    return total_time_seconds / 60.0
+    # Additional overhead per batch
+    batch_overhead = 2.0  # seconds
+
+    # Calculate total batches
+    total_batches = (total_emails + batch_size - 1) // batch_size
+
+    # Calculate estimated time
+    estimated_time = (total_emails * base_time_per_email) + (
+        total_batches * batch_overhead
+    )
+
+    return estimated_time
 
 
-def validate_rate_limit_config():
-    """Validate that the rate limit configuration is safe for Auth0.
+def validate_rate_limit_config() -> None:
+    """Validate that rate limiting configuration is safe for Auth0 API.
 
-    Returns:
-        bool: True if configuration is safe, False otherwise
+    Auth0 has rate limits of approximately 2 requests per second for Management API.
+    This function ensures our configuration respects these limits.
+
+    Raises:
+        AuthConfigError: If rate limiting configuration is unsafe
     """
-    requests_per_second = 1.0 / API_RATE_LIMIT
-
-    if requests_per_second > 2.0:
-        print(
-            f"WARNING: Rate limit configured for {requests_per_second:.1f} requests/second"
+    if API_RATE_LIMIT < 0.5:
+        raise AuthConfigError(
+            f"API_RATE_LIMIT ({API_RATE_LIMIT}) is too aggressive. "
+            "Auth0 Management API allows max 2 requests/second. "
+            "Use at least 0.5 seconds between requests."
         )
-        print("Auth0 limit is 2 requests/second. Consider increasing API_RATE_LIMIT.")
-        return False
-
-    if requests_per_second > 1.5:
-        print(
-            f"INFO: Rate limit configured for {requests_per_second:.1f} requests/second"
-        )
-        print("This is close to Auth0's limit. Monitor for rate limit errors.")
-
-    return True
