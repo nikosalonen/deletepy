@@ -9,7 +9,7 @@ import click
 
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
-from ..models.checkpoint import CheckpointStatus, OperationType
+from ..models.checkpoint import Checkpoint, CheckpointStatus, OperationType
 from ..operations.batch_ops import (
     check_unblocked_users,
     find_users_by_social_media_ids,
@@ -741,81 +741,101 @@ class OperationHandler:
                 return
 
             # Check if checkpoint is resumable
-            if not checkpoint.can_resume():
+            if not checkpoint.is_resumable():
                 click.echo(f"{RED}Cannot resume checkpoint {checkpoint_id}: {checkpoint.status.value}{RESET}")
                 return
 
             # Override input file if provided
             if input_file:
-                checkpoint.config.input_files = [str(input_file)]
+                checkpoint.config.input_file = str(input_file)
 
-            # Resume based on operation type
-            env = checkpoint.config.environment
-            operation_type = checkpoint.operation_type
-
-            click.echo(f"{CYAN}Resuming {operation_type.value} operation from checkpoint {checkpoint_id}...{RESET}")
-
-            if operation_type == OperationType.EXPORT_LAST_LOGIN:
-                from ..operations.export_ops import (
-                    export_users_last_login_to_csv_with_checkpoints,
-                )
-                export_users_last_login_to_csv_with_checkpoints(
-                    checkpoint_id=checkpoint_id,
-                    env=env,
-                    connection=checkpoint.config.parameters.get("connection")
-                )
-            elif operation_type == OperationType.CHECK_UNBLOCKED:
-                from ..core.auth import get_access_token
-                from ..core.config import get_base_url
-                from ..operations.batch_ops import (
-                    CheckpointOperationConfig,
-                    check_unblocked_users_with_checkpoints,
-                )
-
-                config = CheckpointOperationConfig(
-                    token=get_access_token(env),
-                    base_url=get_base_url(env),
-                    env=env,
-                    resume_checkpoint_id=checkpoint_id
-                )
-                check_unblocked_users_with_checkpoints(
-                    user_ids=[],  # Empty list as we're resuming from checkpoint
-                    config=config
-                )
-            elif operation_type == OperationType.SOCIAL_UNLINK:
-                from ..operations.batch_ops import (
-                    CheckpointOperationConfig,
-                    find_users_by_social_media_ids_with_checkpoints,
-                )
-
-                config = CheckpointOperationConfig(
-                    token=get_access_token(env),
-                    base_url=get_base_url(env),
-                    env=env,
-                    resume_checkpoint_id=checkpoint_id
-                )
-                find_users_by_social_media_ids_with_checkpoints(
-                    social_ids=[],  # Empty list as we're resuming from checkpoint
-                    config=config
-                )
-            elif operation_type in [OperationType.BATCH_DELETE, OperationType.BATCH_BLOCK, OperationType.BATCH_REVOKE_GRANTS]:
-                from ..operations.user_ops import batch_user_operations_with_checkpoints
-                operation_map = {
-                    OperationType.BATCH_DELETE: "delete",
-                    OperationType.BATCH_BLOCK: "block",
-                    OperationType.BATCH_REVOKE_GRANTS: "revoke-grants-only",
-                }
-                batch_user_operations_with_checkpoints(
-                    checkpoint_id=checkpoint_id,
-                    env=env,
-                    operation=operation_map[operation_type]
-                )
-            else:
-                click.echo(f"{RED}Resume not supported for operation type: {operation_type.value}{RESET}")
-                return
+            # Dispatch to appropriate operation
+            self._dispatch_checkpoint_resume(checkpoint, manager)
 
         except Exception as e:
             self._handle_operation_error(e, "Resume checkpoint")
+
+    def _dispatch_checkpoint_resume(self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager) -> None:
+        """Dispatch checkpoint resume to the appropriate operation function.
+
+        Args:
+            checkpoint: The checkpoint to resume
+            checkpoint_manager: Checkpoint manager instance
+        """
+        env = checkpoint.config.environment
+        operation_type = checkpoint.operation_type
+        checkpoint_id = checkpoint.checkpoint_id
+
+        click.echo(f"{CYAN}Resuming {operation_type.value} operation from checkpoint {checkpoint_id}...{RESET}")
+
+        if operation_type == OperationType.EXPORT_LAST_LOGIN:
+            from ..operations.export_ops import (
+                export_users_last_login_to_csv_with_checkpoints,
+            )
+            export_users_last_login_to_csv_with_checkpoints(
+                emails=checkpoint.remaining_items,
+                token=get_access_token(env),
+                base_url=get_base_url(env),
+                output_file=checkpoint.config.output_file or "users_last_login.csv",
+                connection=checkpoint.config.connection_filter,
+                env=env,
+                resume_checkpoint_id=checkpoint_id,
+                checkpoint_manager=checkpoint_manager
+            )
+        elif operation_type == OperationType.CHECK_UNBLOCKED:
+            from ..operations.batch_ops import (
+                CheckpointOperationConfig,
+                check_unblocked_users_with_checkpoints,
+            )
+
+            config = CheckpointOperationConfig(
+                token=get_access_token(env),
+                base_url=get_base_url(env),
+                env=env,
+                resume_checkpoint_id=checkpoint_id,
+                checkpoint_manager=checkpoint_manager
+            )
+            check_unblocked_users_with_checkpoints(
+                user_ids=checkpoint.remaining_items,
+                config=config
+            )
+        elif operation_type == OperationType.SOCIAL_UNLINK:
+            from ..operations.batch_ops import (
+                CheckpointOperationConfig,
+                find_users_by_social_media_ids_with_checkpoints,
+            )
+
+            config = CheckpointOperationConfig(
+                token=get_access_token(env),
+                base_url=get_base_url(env),
+                env=env,
+                resume_checkpoint_id=checkpoint_id,
+                checkpoint_manager=checkpoint_manager
+            )
+            find_users_by_social_media_ids_with_checkpoints(
+                social_ids=checkpoint.remaining_items,
+                config=config,
+                auto_delete=checkpoint.config.auto_delete
+            )
+        elif operation_type in [OperationType.BATCH_DELETE, OperationType.BATCH_BLOCK, OperationType.BATCH_REVOKE_GRANTS]:
+            from ..operations.user_ops import batch_user_operations_with_checkpoints
+            operation_map = {
+                OperationType.BATCH_DELETE: "delete",
+                OperationType.BATCH_BLOCK: "block",
+                OperationType.BATCH_REVOKE_GRANTS: "revoke-grants-only",
+            }
+            batch_user_operations_with_checkpoints(
+                user_ids=checkpoint.remaining_items,
+                token=get_access_token(env),
+                base_url=get_base_url(env),
+                operation=operation_map[operation_type],
+                env=env,
+                resume_checkpoint_id=checkpoint_id,
+                checkpoint_manager=checkpoint_manager
+            )
+        else:
+            click.echo(f"{RED}Resume not supported for operation type: {operation_type.value}{RESET}")
+            return
 
     def handle_clean_checkpoints(
         self,
