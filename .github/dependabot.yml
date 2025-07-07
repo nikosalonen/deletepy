@@ -5,7 +5,21 @@
 
 version: 2
 updates:
-  - package-ecosystem: "pip" # See documentation for possible values
+  - package-ecosystem: "pip" # Supports pyproject.toml, requirements.txt, setup.py, etc.
     directory: "/" # Location of package manifests
     schedule:
       interval: "monthly"
+    # Optional: Group updates to reduce PR noise
+    groups:
+      dev-dependencies:
+        patterns:
+          - "pytest*"
+          - "ruff*"
+          - "mypy*"
+          - "pre-commit*"
+          - "types-*"
+      production-dependencies:
+        patterns:
+          - "requests*"
+          - "python-dotenv*"
+          - "click*"
