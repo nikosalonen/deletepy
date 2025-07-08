@@ -1,7 +1,7 @@
 """Core user operations for Auth0 user management."""
 
 import time
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import requests
@@ -149,7 +149,7 @@ def _fetch_users_by_email(
     try:
         users = response.json()
         if users and isinstance(users, list):
-            return users
+            return cast(list[dict[str, Any]], users)
         return None
     except ValueError as e:
         print_error(
@@ -204,7 +204,7 @@ def _user_matches_connection(user: dict[str, Any], connection: str, email: str) 
     # Check if identities array exists in the response
     if user.get("identities") and isinstance(user["identities"], list):
         # Filter by connection using data already in the response
-        user_connection = user["identities"][0].get("connection", "unknown")
+        user_connection = cast(str, user["identities"][0].get("connection", "unknown"))
         return user_connection == connection
     else:
         # Fallback: identities not included, skip this user to avoid API call
@@ -331,7 +331,7 @@ def _fetch_user_sessions(
     try:
         response = requests.get(list_url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
-        return response.json().get("sessions", [])
+        return cast(list[dict[str, Any]], response.json().get("sessions", []))
     except requests.exceptions.RequestException as e:
         print_error(
             f"Error fetching sessions for user {user_id}: {e}",
@@ -528,7 +528,9 @@ def _try_load_existing_checkpoint(
 
     checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
     if not checkpoint:
-        print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
+        print_warning(
+            f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
+        )
         return None
 
     # Validate checkpoint status
@@ -566,7 +568,9 @@ def _create_new_checkpoint(
         Checkpoint: Newly created checkpoint
     """
     # Create operation config
-    config = OperationConfig(environment=env, additional_params={"operation": operation})
+    config = OperationConfig(
+        environment=env, additional_params={"operation": operation}
+    )
 
     # Create new checkpoint
     return checkpoint_manager.create_checkpoint(
@@ -712,7 +716,7 @@ def _process_batch_user_operations_with_checkpoints(
         token,
         base_url,
         operation,
-        tracking_state
+        tracking_state,
     )
 
     if interrupted_checkpoint_id:
@@ -799,7 +803,13 @@ def _process_batch_loop(
 
         # Process and update batch
         _process_and_update_batch(
-            batch_user_ids, checkpoint, checkpoint_manager, token, base_url, operation, tracking_state
+            batch_user_ids,
+            checkpoint,
+            checkpoint_manager,
+            token,
+            base_url,
+            operation,
+            tracking_state,
         )
 
     return None
