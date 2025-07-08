@@ -359,6 +359,25 @@ def _revoke_individual_sessions(
         "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
     }
 
+    _process_session_revocations(sessions, user_id, token, base_url, headers)
+
+
+def _process_session_revocations(
+    sessions: list[dict[str, Any]],
+    user_id: str,
+    token: str,
+    base_url: str,
+    headers: dict[str, str],
+) -> None:
+    """Process the revocation of individual sessions.
+
+    Args:
+        sessions: List of session objects
+        user_id: Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        headers: HTTP headers for the request
+    """
     for session in sessions:
         if shutdown_requested():
             break
