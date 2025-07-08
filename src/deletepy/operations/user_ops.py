@@ -105,6 +105,30 @@ def get_user_id_from_email(
     Returns:
         Optional[List[str]]: List of user IDs matching the email and connection filter
     """
+    # Fetch users by email
+    users = _fetch_users_by_email(email, token, base_url)
+    if users is None:
+        return None
+
+    # Extract user IDs with connection filtering
+    user_ids = _extract_user_ids_from_response(users, connection, email)
+
+    return user_ids if user_ids else None
+
+
+def _fetch_users_by_email(
+    email: str, token: str, base_url: str
+) -> list[dict[str, Any]] | None:
+    """Fetch users from Auth0 API by email address.
+
+    Args:
+        email: Email address to search for
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        Optional[List[Dict[str, Any]]]: List of user objects or None if request failed
+    """
     url = f"{base_url}/api/v2/users-by-email"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -125,34 +149,7 @@ def get_user_id_from_email(
     try:
         users = response.json()
         if users and isinstance(users, list):
-            user_ids = []
-            for user in users:
-                if "user_id" in user:
-                    # If connection filter is specified, check if user matches
-                    if connection:
-                        # Check if identities array exists in the response and filter directly
-                        if user.get("identities") and isinstance(
-                            user["identities"], list
-                        ):
-                            # Filter by connection using data already in the response
-                            user_connection = user["identities"][0].get(
-                                "connection", "unknown"
-                            )
-                            if user_connection == connection:
-                                user_ids.append(user["user_id"])
-                        else:
-                            # Fallback: identities not included, skip this user to avoid API call
-                            print_warning(
-                                f"Connection info not available for user {user['user_id']}, skipping",
-                                user_id=user["user_id"],
-                                operation="get_user_id_from_email",
-                            )
-                    else:
-                        # No connection filter, include all users
-                        user_ids.append(user["user_id"])
-
-            if user_ids:
-                return user_ids
+            return users
         return None
     except ValueError as e:
         print_error(
@@ -162,6 +159,61 @@ def get_user_id_from_email(
             operation="get_user_id_from_email",
         )
         return None
+
+
+def _extract_user_ids_from_response(
+    users: list[dict[str, Any]], connection: str | None, email: str
+) -> list[str]:
+    """Extract user IDs from Auth0 API response with optional connection filtering.
+
+    Args:
+        users: List of user objects from Auth0 API
+        connection: Optional connection filter
+        email: Email address for logging purposes
+
+    Returns:
+        List[str]: List of user IDs matching the connection filter
+    """
+    user_ids = []
+    for user in users:
+        if "user_id" not in user:
+            continue
+
+        if connection:
+            # Check if connection filter matches
+            if _user_matches_connection(user, connection, email):
+                user_ids.append(user["user_id"])
+        else:
+            # No connection filter, include all users
+            user_ids.append(user["user_id"])
+
+    return user_ids
+
+
+def _user_matches_connection(user: dict[str, Any], connection: str, email: str) -> bool:
+    """Check if user matches the specified connection filter.
+
+    Args:
+        user: User object from Auth0 API
+        connection: Connection filter to match
+        email: Email address for logging purposes
+
+    Returns:
+        bool: True if user matches connection, False otherwise
+    """
+    # Check if identities array exists in the response
+    if user.get("identities") and isinstance(user["identities"], list):
+        # Filter by connection using data already in the response
+        user_connection = user["identities"][0].get("connection", "unknown")
+        return user_connection == connection
+    else:
+        # Fallback: identities not included, skip this user to avoid API call
+        print_warning(
+            f"Connection info not available for user {user['user_id']}, skipping",
+            user_id=user["user_id"],
+            operation="get_user_id_from_email",
+        )
+        return False
 
 
 def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
@@ -239,52 +291,114 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] 
 
 def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
     """Fetch all Auth0 sessions for a user and revoke them one by one."""
+    # Get list of sessions for the user
+    sessions = _fetch_user_sessions(user_id, token, base_url)
+    if sessions is None:
+        return
+
+    if not sessions:
+        print_info(
+            f"No sessions found for user {user_id}",
+            user_id=user_id,
+            operation="revoke_user_sessions",
+        )
+        return
+
+    # Revoke each session
+    _revoke_individual_sessions(sessions, user_id, token, base_url)
+
+
+def _fetch_user_sessions(
+    user_id: str, token: str, base_url: str
+) -> list[dict[str, Any]] | None:
+    """Fetch the list of sessions for a user.
+
+    Args:
+        user_id: Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        Optional[List[Dict[str, Any]]]: List of sessions or None if request failed
+    """
     list_url = f"{base_url}/api/v2/users/{quote(user_id)}/sessions"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
         "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
     }
+
     try:
         response = requests.get(list_url, headers=headers, timeout=API_TIMEOUT)
         response.raise_for_status()
-        sessions = response.json().get("sessions", [])
-        if not sessions:
-            print_info(
-                f"No sessions found for user {user_id}",
-                user_id=user_id,
-                operation="revoke_user_sessions",
-            )
-            return
-        for session in sessions:
-            if shutdown_requested():
-                break
-            session_id = session.get("id")
-            if not session_id:
-                continue
-            del_url = f"{base_url}/api/v2/sessions/{session_id}"
-            del_resp = requests.delete(del_url, headers=headers, timeout=API_TIMEOUT)
-            time.sleep(API_RATE_LIMIT)
-            try:
-                del_resp.raise_for_status()
-                print_success(
-                    f"Revoked session {session_id} for user {user_id}",
-                    user_id=user_id,
-                    session_id=session_id,
-                    operation="revoke_user_sessions",
-                )
-            except requests.exceptions.RequestException as e:
-                print_warning(
-                    f"Failed to revoke session {session_id} for user {user_id}: {e}",
-                    user_id=user_id,
-                    session_id=session_id,
-                    error=str(e),
-                    operation="revoke_user_sessions",
-                )
+        return response.json().get("sessions", [])
     except requests.exceptions.RequestException as e:
         print_error(
-            f"Error revoking sessions for user {user_id}: {e}",
+            f"Error fetching sessions for user {user_id}: {e}",
             user_id=user_id,
+            error=str(e),
+            operation="revoke_user_sessions",
+        )
+        return None
+
+
+def _revoke_individual_sessions(
+    sessions: list[dict[str, Any]], user_id: str, token: str, base_url: str
+) -> None:
+    """Revoke individual sessions for a user.
+
+    Args:
+        sessions: List of session objects
+        user_id: Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+    """
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+    }
+
+    for session in sessions:
+        if shutdown_requested():
+            break
+
+        session_id = session.get("id")
+        if not session_id:
+            continue
+
+        _revoke_single_session(session_id, user_id, token, base_url, headers)
+
+
+def _revoke_single_session(
+    session_id: str, user_id: str, token: str, base_url: str, headers: dict[str, str]
+) -> None:
+    """Revoke a single session.
+
+    Args:
+        session_id: Session ID to revoke
+        user_id: Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        headers: HTTP headers for the request
+    """
+    del_url = f"{base_url}/api/v2/sessions/{session_id}"
+    del_resp = requests.delete(del_url, headers=headers, timeout=API_TIMEOUT)
+    time.sleep(API_RATE_LIMIT)
+
+    try:
+        del_resp.raise_for_status()
+        print_success(
+            f"Revoked session {session_id} for user {user_id}",
+            user_id=user_id,
+            session_id=session_id,
+            operation="revoke_user_sessions",
+        )
+    except requests.exceptions.RequestException as e:
+        print_warning(
+            f"Failed to revoke session {session_id} for user {user_id}: {e}",
+            user_id=user_id,
+            session_id=session_id,
             error=str(e),
             operation="revoke_user_sessions",
         )
@@ -382,40 +496,82 @@ def _load_or_create_checkpoint(
     Returns:
         Checkpoint: Loaded or newly created checkpoint
     """
-    # Check if we're resuming from a checkpoint
-    checkpoint = None
-    if resume_checkpoint_id:
-        checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
-        if not checkpoint:
-            print_warning(
-                f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
-            )
-        elif checkpoint.status != CheckpointStatus.ACTIVE:
-            print_warning(
-                f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
-            )
-            checkpoint = None
-        elif not checkpoint.is_resumable():
-            print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
-            checkpoint = None
+    # Try to load existing checkpoint
+    checkpoint = _try_load_existing_checkpoint(resume_checkpoint_id, checkpoint_manager)
 
     # If not resuming, create a new checkpoint
     if checkpoint is None:
-        # Create operation config
-        config = OperationConfig(
-            environment=env, additional_params={"operation": operation}
+        checkpoint = _create_new_checkpoint(
+            checkpoint_manager, operation, operation_type, env, user_ids
         )
-
-        # Create new checkpoint
-        checkpoint = checkpoint_manager.create_checkpoint(
-            operation_type=operation_type, config=config, items=user_ids, batch_size=50
-        )
-
         print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
     else:
         print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
 
     return checkpoint
+
+
+def _try_load_existing_checkpoint(
+    resume_checkpoint_id: str | None, checkpoint_manager: CheckpointManager
+) -> Checkpoint | None:
+    """Try to load an existing checkpoint with validation.
+
+    Args:
+        resume_checkpoint_id: Optional checkpoint ID to resume from
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Optional[Checkpoint]: Valid checkpoint if found and resumable, None otherwise
+    """
+    if not resume_checkpoint_id:
+        return None
+
+    checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
+    if not checkpoint:
+        print_warning(f"Could not load checkpoint {resume_checkpoint_id}, starting fresh")
+        return None
+
+    # Validate checkpoint status
+    if checkpoint.status != CheckpointStatus.ACTIVE:
+        print_warning(
+            f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
+        )
+        return None
+
+    # Validate checkpoint is resumable
+    if not checkpoint.is_resumable():
+        print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
+        return None
+
+    return checkpoint
+
+
+def _create_new_checkpoint(
+    checkpoint_manager: CheckpointManager,
+    operation: str,
+    operation_type: OperationType,
+    env: str,
+    user_ids: list[str],
+) -> Checkpoint:
+    """Create a new checkpoint for the operation.
+
+    Args:
+        checkpoint_manager: Checkpoint manager instance
+        operation: Operation to perform
+        operation_type: Operation type enum
+        env: Environment (dev/prod)
+        user_ids: List of user IDs to process
+
+    Returns:
+        Checkpoint: Newly created checkpoint
+    """
+    # Create operation config
+    config = OperationConfig(environment=env, additional_params={"operation": operation})
+
+    # Create new checkpoint
+    return checkpoint_manager.create_checkpoint(
+        operation_type=operation_type, config=config, items=user_ids, batch_size=50
+    )
 
 
 def _handle_checkpoint_error(
@@ -541,20 +697,89 @@ def _process_batch_user_operations_with_checkpoints(
     remaining_user_ids = checkpoint.remaining_items.copy()
     batch_size = checkpoint.progress.batch_size
 
-    operation_display = {
+    operation_display = _get_operation_display_name(operation)
+    print_info(f"{operation_display} - {len(remaining_user_ids)} remaining users...")
+
+    # Initialize processing state
+    tracking_state = _initialize_batch_processing_state()
+
+    # Process remaining user IDs in batches
+    interrupted_checkpoint_id = _process_batch_loop(
+        remaining_user_ids,
+        batch_size,
+        checkpoint,
+        checkpoint_manager,
+        token,
+        base_url,
+        operation,
+        tracking_state
+    )
+
+    if interrupted_checkpoint_id:
+        return interrupted_checkpoint_id
+
+    # Finalize processing
+    _finalize_batch_processing(
+        checkpoint, checkpoint_manager, operation, tracking_state, token, base_url
+    )
+
+    return None  # Operation completed successfully
+
+
+def _get_operation_display_name(operation: str) -> str:
+    """Get display name for operation.
+
+    Args:
+        operation: Operation type
+
+    Returns:
+        str: Display name for the operation
+    """
+    return {
         "delete": "Deleting users",
         "block": "Blocking users",
         "revoke-grants-only": "Revoking grants and sessions",
     }.get(operation, "Processing users")
 
-    print_info(f"{operation_display} - {len(remaining_user_ids)} remaining users...")
 
-    # Initialize processing state
-    multiple_users: dict[str, list[str]] = {}
-    not_found_users: list[str] = []
-    invalid_user_ids: list[str] = []
+def _initialize_batch_processing_state() -> dict[str, Any]:
+    """Initialize state tracking for batch processing.
 
-    # Process remaining user IDs in batches
+    Returns:
+        dict: Initialized tracking state
+    """
+    return {
+        "multiple_users": {},
+        "not_found_users": [],
+        "invalid_user_ids": [],
+    }
+
+
+def _process_batch_loop(
+    remaining_user_ids: list[str],
+    batch_size: int,
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    token: str,
+    base_url: str,
+    operation: str,
+    tracking_state: dict[str, Any],
+) -> str | None:
+    """Process user IDs in batches with checkpoint management.
+
+    Args:
+        remaining_user_ids: List of user IDs to process
+        batch_size: Size of each batch
+        checkpoint: Checkpoint object
+        checkpoint_manager: Checkpoint manager instance
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        operation: Operation to perform
+        tracking_state: State tracking dictionary
+
+    Returns:
+        Optional[str]: Checkpoint ID if interrupted, None if completed
+    """
     for batch_start in range(0, len(remaining_user_ids), batch_size):
         if shutdown_requested():
             print_warning("\nOperation interrupted")
@@ -568,42 +793,90 @@ def _process_batch_user_operations_with_checkpoints(
         total_batches = checkpoint.progress.total_batches
 
         print_info(
-            f"\nProcessing batch {current_batch}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)"
+            f"\nProcessing batch {current_batch}/{total_batches} "
+            f"({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)"
         )
 
-        # Process users in this batch
-        batch_results = _process_user_batch(batch_user_ids, token, base_url, operation)
-
-        # Update tracking lists
-        multiple_users.update(batch_results.get("multiple_users", {}))
-        not_found_users.extend(batch_results.get("not_found_users", []))
-        invalid_user_ids.extend(batch_results.get("invalid_user_ids", []))
-
-        # Update checkpoint progress
-        results_update = {
-            "processed_count": batch_results.get("processed_count", 0),
-            "skipped_count": batch_results.get("skipped_count", 0),
-            "multiple_users": batch_results.get("multiple_users", {}),
-            "not_found_users": batch_results.get("not_found_users", []),
-            "invalid_user_ids": batch_results.get("invalid_user_ids", []),
-        }
-
-        checkpoint_manager.update_checkpoint_progress(
-            checkpoint=checkpoint,
-            processed_items=batch_user_ids,
-            results_update=results_update,
+        # Process and update batch
+        _process_and_update_batch(
+            batch_user_ids, checkpoint, checkpoint_manager, token, base_url, operation, tracking_state
         )
 
-        # Save checkpoint after each batch
-        checkpoint_manager.save_checkpoint(checkpoint)
+    return None
 
+
+def _process_and_update_batch(
+    batch_user_ids: list[str],
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    token: str,
+    base_url: str,
+    operation: str,
+    tracking_state: dict[str, Any],
+) -> None:
+    """Process a single batch and update checkpoint.
+
+    Args:
+        batch_user_ids: User IDs in this batch
+        checkpoint: Checkpoint object
+        checkpoint_manager: Checkpoint manager instance
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        operation: Operation to perform
+        tracking_state: State tracking dictionary
+    """
+    # Process users in this batch
+    batch_results = _process_user_batch(batch_user_ids, token, base_url, operation)
+
+    # Update tracking lists
+    tracking_state["multiple_users"].update(batch_results.get("multiple_users", {}))
+    tracking_state["not_found_users"].extend(batch_results.get("not_found_users", []))
+    tracking_state["invalid_user_ids"].extend(batch_results.get("invalid_user_ids", []))
+
+    # Update checkpoint progress
+    results_update = {
+        "processed_count": batch_results.get("processed_count", 0),
+        "skipped_count": batch_results.get("skipped_count", 0),
+        "multiple_users": batch_results.get("multiple_users", {}),
+        "not_found_users": batch_results.get("not_found_users", []),
+        "invalid_user_ids": batch_results.get("invalid_user_ids", []),
+    }
+
+    checkpoint_manager.update_checkpoint_progress(
+        checkpoint=checkpoint,
+        processed_items=batch_user_ids,
+        results_update=results_update,
+    )
+
+    # Save checkpoint after each batch
+    checkpoint_manager.save_checkpoint(checkpoint)
+
+
+def _finalize_batch_processing(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    operation: str,
+    tracking_state: dict[str, Any],
+    token: str,
+    base_url: str,
+) -> None:
+    """Finalize batch processing with summary and completion.
+
+    Args:
+        checkpoint: Checkpoint object
+        checkpoint_manager: Checkpoint manager instance
+        operation: Operation that was performed
+        tracking_state: State tracking dictionary
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+    """
     # Display operation summary
     _print_user_operation_summary(
         checkpoint.results.processed_count,
         checkpoint.results.skipped_count,
-        not_found_users,
-        invalid_user_ids,
-        multiple_users,
+        tracking_state["not_found_users"],
+        tracking_state["invalid_user_ids"],
+        tracking_state["multiple_users"],
         token,
         base_url,
     )
@@ -615,7 +888,6 @@ def _process_batch_user_operations_with_checkpoints(
     print_success(
         f"{operation.title()} operation completed! Checkpoint: {checkpoint.checkpoint_id}"
     )
-    return None  # Operation completed successfully
 
 
 def _process_users_in_batch(

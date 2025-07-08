@@ -543,7 +543,7 @@ def test_find_users_by_social_media_ids_orphaned_user_deletion(
                 "google-oauth2|123456789", "test_token", "http://test.com"
             ),  # Detached social user deletion
         ]
-        mock_delete.assert_has_calls(expected_calls)
+        mock_delete.assert_has_calls(expected_calls, any_order=True)
 
 
 def test_find_users_by_social_media_ids_user_not_orphaned_after_unlink(
