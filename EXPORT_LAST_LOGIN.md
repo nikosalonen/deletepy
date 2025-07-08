@@ -134,8 +134,6 @@ The export functionality includes comprehensive rate limiting to respect Auth0's
 
 ### Built-in Protection
 - **Conservative rate limiting**: 0.5 seconds between requests (2 requests/second max)
-- **Exponential backoff**: Automatic retry with increasing delays on rate limit errors
-- **Retry logic**: Up to 3 retries with intelligent delay calculation
 - **Batch processing**: Processes emails in configurable batches to avoid overwhelming the API
 - **Progress tracking**: Real-time progress updates with estimated completion time
 
@@ -146,17 +144,14 @@ The system automatically adjusts batch sizes based on dataset size:
 - **Large datasets** (> 1000 emails): 25 emails per batch
 
 ### Configuration
-You can customize rate limiting behavior by editing `rate_limit_config.py`:
+You can customize rate limiting behavior by editing `core/config.py`:
 - `API_RATE_LIMIT`: Seconds between API calls (default: 0.5)
-- `MAX_RETRIES`: Maximum retry attempts (default: 3)
-- `BASE_RETRY_DELAY`: Initial retry delay (default: 1.0 seconds)
-- `MAX_RETRY_DELAY`: Maximum retry delay (default: 60.0 seconds)
 
 ## Features
 
 - **Progress tracking**: Shows progress as emails are processed
 - **Error handling**: Gracefully handles various error conditions
-- **Rate limiting**: Respects Auth0 API rate limits with exponential backoff
+- **Rate limiting**: Respects Auth0 API rate limits
 - **Comprehensive logging**: Provides detailed output and summary
 - **Timestamped output**: Creates unique filenames with timestamps
 - **Batch processing**: Processes data in configurable batches
@@ -175,4 +170,4 @@ See `export_last_login_example.py` for a complete example of how to use this fun
 - Works with both development and production Auth0 environments
 - Each email requires 2 API calls (email lookup + user details)
 - Processing time scales linearly with the number of emails
-- The system will automatically retry on rate limit errors with exponential backoff
+- The system handles rate limit errors gracefully

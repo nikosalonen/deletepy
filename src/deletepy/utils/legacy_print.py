@@ -5,33 +5,35 @@ functions to gradually migrate to structured logging while maintaining
 backward compatibility.
 """
 
+from typing import Any
+
 from .logging_utils import get_logger
 
 # Global logger for legacy functions
 _logger = get_logger(__name__)
 
 
-def print_info(message: str, **context) -> None:
+def print_info(message: str, **context: Any) -> None:
     """Print info message (legacy compatibility)."""
     _logger.info(message, extra=context)
 
 
-def print_success(message: str, **context) -> None:
+def print_success(message: str, **context: Any) -> None:
     """Print success message (legacy compatibility)."""
     _logger.info(f"✅ {message}", extra={**context, "status": "success"})
 
 
-def print_warning(message: str, **context) -> None:
+def print_warning(message: str, **context: Any) -> None:
     """Print warning message (legacy compatibility)."""
     _logger.warning(f"⚠️  {message}", extra=context)
 
 
-def print_error(message: str, **context) -> None:
+def print_error(message: str, **context: Any) -> None:
     """Print error message (legacy compatibility)."""
     _logger.error(f"❌ {message}", extra=context)
 
 
-def print_section_header(message: str, **context) -> None:
+def print_section_header(message: str, **context: Any) -> None:
     """Print section header (legacy compatibility)."""
     _logger.info(f"📋 {message}", extra={**context, "section": True})
 
@@ -41,7 +43,7 @@ def log_user_operation(
     user_id: str,
     status: str = "started",
     details: str | None = None,
-    **context,
+    **context: Any,
 ) -> None:
     """Log user operation with structured context.
 
@@ -85,7 +87,7 @@ def log_api_request(
     status_code: int | None = None,
     duration: float | None = None,
     error: str | None = None,
-    **context,
+    **context: Any,
 ) -> None:
     """Log API request with structured context.
 
@@ -124,7 +126,7 @@ def log_file_operation(
     file_path: str,
     status: str = "completed",
     details: str | None = None,
-    **context,
+    **context: Any,
 ) -> None:
     """Log file operation with structured context.
 
@@ -155,7 +157,7 @@ def log_file_operation(
 
 
 def log_progress(
-    current: int, total: int, operation: str = "Processing", **context
+    current: int, total: int, operation: str = "Processing", **context: Any
 ) -> None:
     """Log progress information.
 
@@ -185,7 +187,7 @@ def log_batch_operation(
     batch_size: int,
     total_items: int,
     estimated_time: float | None = None,
-    **context,
+    **context: Any,
 ) -> None:
     """Log batch operation start with parameters.
 

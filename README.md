@@ -38,11 +38,18 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Email resolution** - Automatically resolve emails to Auth0 user IDs with multi-user detection
 - **Environment separation** - Separate development and production configurations
 - **Production safeguards** - Explicit confirmation required for production operations
-- **Advanced rate limiting** - Built-in delays with exponential backoff and retry logic
+- **Advanced rate limiting** - Built-in delays to respect Auth0 API limits
 - **Progress tracking** - Real-time progress indicators for bulk operations
 - **Graceful shutdown** - Handle interruption signals safely
 - **Memory efficient** - Generator-based file processing for large datasets
 - **Robust error handling** - Comprehensive exception handling with detailed error reporting
+
+### Checkpoint System
+- **Automatic checkpointing** - All operations create recovery points automatically
+- **Interruption recovery** - Resume operations from exactly where they left off
+- **Progress preservation** - Never lose work on large datasets or long-running operations
+- **Production ready** - Robust handling of network failures, system restarts, and interruptions
+- **Zero configuration** - Works automatically without any setup or maintenance
 
 ## Architecture
 
@@ -85,7 +92,7 @@ deletepy/
 
 ## Prerequisites
 
-- **Python 3.13+** - The tool requires Python 3.13 or higher
+- **Python 3.11+** - The tool requires Python 3.11 or higher
 - Auth0 account with appropriate API permissions
 - Auth0 Management API access
 
@@ -185,6 +192,201 @@ deletepy users delete users.txt [dev|prod] [--dry-run]
 deletepy users revoke-grants-only users.txt [dev|prod] [--dry-run]
 ```
 
+## Checkpoint System
+
+DeletePy includes a comprehensive checkpoint system that automatically creates recovery points for all major operations. This ensures you can safely resume interrupted operations and never lose progress on large datasets.
+
+### Automatic Checkpointing
+
+**All operations now use checkpoints by default** - no additional configuration needed:
+
+```bash
+# These operations automatically create checkpoints
+deletepy users delete large_dataset.txt prod
+deletepy export-last-login emails.txt dev
+deletepy check-unblocked users.txt prod
+deletepy unlink-social-ids social_ids.txt dev
+```
+
+**Benefits:**
+- ✅ **Interruption Safe** - Safely handle Ctrl+C, network failures, or system restarts
+- ✅ **Progress Preservation** - Never lose work on large operations
+- ✅ **Automatic Resume** - Operations can be resumed from exactly where they left off
+- ✅ **Production Ready** - Robust handling of long-running operations
+- ✅ **Zero Configuration** - Works automatically without any setup
+
+### Managing Checkpoints
+
+#### List Checkpoints
+```bash
+# List all checkpoints
+deletepy checkpoint list
+
+# List with detailed information
+deletepy checkpoint list --details
+
+# Filter by operation type
+deletepy checkpoint list --operation-type export-last-login
+deletepy checkpoint list --operation-type batch-delete
+
+# Filter by status
+deletepy checkpoint list --status active
+deletepy checkpoint list --status completed
+deletepy checkpoint list --status failed
+
+# Filter by environment
+deletepy checkpoint list --env prod
+deletepy checkpoint list --env dev
+
+# Combine filters
+deletepy checkpoint list --status active --env prod --details
+```
+
+#### Resume Operations
+```bash
+# Resume from a specific checkpoint
+deletepy checkpoint resume checkpoint_20241217_142830_export_last_login_dev
+
+# Resume with a different input file (optional)
+deletepy checkpoint resume checkpoint_id --input-file new_users.txt
+```
+
+**Resume Examples:**
+```bash
+# Export operation was interrupted
+$ deletepy export-last-login emails.txt dev
+Processed 1,500/5,000 emails...
+^C Operation interrupted. Resume with:
+  deletepy checkpoint resume checkpoint_20241217_142830_export_last_login_dev
+
+# Resume the export
+$ deletepy checkpoint resume checkpoint_20241217_142830_export_last_login_dev
+Resuming export_last_login operation from checkpoint...
+Resuming from email 1,501/5,000...
+```
+
+#### Checkpoint Details
+```bash
+# Show detailed information about a specific checkpoint
+deletepy checkpoint details checkpoint_20241217_142830_export_last_login_dev
+```
+
+**Sample Output:**
+```
+📋 Checkpoint Details
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🆔 Checkpoint ID: checkpoint_20241217_142830_export_last_login_dev
+📊 Operation: export_last_login
+🔄 Status: active
+🌍 Environment: dev
+📅 Created: 2024-12-17 14:28:30
+🔄 Updated: 2024-12-17 14:35:15
+📁 Input File: /path/to/emails.txt
+📄 Output File: users_last_login_20241217_142830.csv
+
+📈 Progress Information
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Completion: 30.0% (1,500/5,000 items)
+✅ Success Rate: 95.5% (1,433/1,500 processed)
+📦 Current Batch: 30/100
+📋 Batch Size: 50
+
+📊 Processing Results
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Processed: 1,433
+⏭️  Skipped: 45
+❌ Errors: 22
+🔍 Not Found: 35
+👥 Multiple Users: 10
+
+▶️ Resumable: Yes
+```
+
+### Checkpoint Cleanup
+
+#### Clean Completed Checkpoints
+```bash
+# Clean all completed checkpoints (regardless of age)
+deletepy checkpoint clean --completed
+
+# Preview what would be cleaned
+deletepy checkpoint clean --completed --dry-run
+```
+
+#### Clean Failed Checkpoints
+```bash
+# Clean only failed checkpoints
+deletepy checkpoint clean --failed
+```
+
+#### Clean Old Checkpoints
+```bash
+# Clean checkpoints older than 30 days (default)
+deletepy checkpoint clean
+
+# Clean checkpoints older than 7 days
+deletepy checkpoint clean --days-old 7
+
+# Preview cleanup
+deletepy checkpoint clean --days-old 14 --dry-run
+```
+
+#### Clean All Checkpoints (Use with Caution)
+```bash
+# Clean ALL checkpoints - use with extreme caution
+deletepy checkpoint clean --all
+
+# Preview before cleaning all
+deletepy checkpoint clean --all --dry-run
+```
+
+#### Delete Specific Checkpoint
+```bash
+# Delete a specific checkpoint with confirmation
+deletepy checkpoint delete checkpoint_20241217_142830_export_last_login_dev
+
+# Delete without confirmation prompt
+deletepy checkpoint delete checkpoint_id --confirm
+```
+
+### When Checkpoints Are Created
+
+Checkpoints are automatically created for these operations:
+
+| Operation | Checkpoint Type | Use Case |
+|-----------|----------------|----------|
+| `deletepy users delete` | `batch_delete` | User deletion operations |
+| `deletepy users block` | `batch_block` | User blocking operations |
+| `deletepy users revoke-grants-only` | `batch_revoke_grants` | Grant/session revocation |
+| `deletepy export-last-login` | `export_last_login` | Data export operations |
+| `deletepy check-unblocked` | `check_unblocked` | Status checking operations |
+| `deletepy unlink-social-ids` | `social_unlink` | Identity management operations |
+
+### Storage and File Management
+
+- **Location**: Checkpoints are stored in `.checkpoints/` directory
+- **Format**: JSON files with structured metadata and progress tracking
+- **Backups**: Automatic backup files created during updates (`.backup` extension)
+- **Cleanup**: Automatic cleanup of backup files when checkpoints are deleted
+- **Size**: Checkpoint files are typically small (1-10KB) but scale with dataset size
+
+### Advanced Features
+
+#### Production Safety with Checkpoints
+- Checkpoints preserve environment information to prevent cross-environment resume
+- Production checkpoints require the same safety confirmations when resumed
+- Failed production operations can be safely resumed after fixing underlying issues
+
+#### Error Recovery
+- Failed operations create checkpoints with error details for debugging
+- Resume operations can handle partial failures and continue processing
+- Graceful handling of network issues and API errors
+
+#### Performance Optimization
+- Batch processing state is preserved across interruptions
+- Optimal batch sizes are maintained when resuming
+- Rate limiting state is reset appropriately on resume
 
 ## Preparing Input Files
 

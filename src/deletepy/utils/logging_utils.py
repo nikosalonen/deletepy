@@ -7,6 +7,7 @@ import os
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 
 class ColoredFormatter(logging.Formatter):
@@ -72,7 +73,7 @@ class StructuredFormatter(logging.Formatter):
 class OperationFilter(logging.Filter):
     """Filter to add operation context to log records."""
 
-    def __init__(self, operation: str = None):
+    def __init__(self, operation: str | None = None):
         """Initialize the filter with an operation context.
 
         Args:
@@ -118,7 +119,7 @@ def setup_logging(
     console_handler.setLevel(log_level)
 
     if structured:
-        console_formatter = StructuredFormatter()
+        console_formatter: logging.Formatter = StructuredFormatter()
     else:
         console_formatter = ColoredFormatter(
             fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
@@ -187,7 +188,7 @@ def configure_from_env() -> logging.Logger:
 class LogContext:
     """Context manager for adding structured context to log records."""
 
-    def __init__(self, logger: logging.Logger, **context):
+    def __init__(self, logger: logging.Logger, **context: Any) -> None:
         """Initialize log context.
 
         Args:
@@ -196,9 +197,9 @@ class LogContext:
         """
         self.logger = logger
         self.context = context
-        self.old_context = {}
+        self.old_context: dict[str, Any] = {}
 
-    def __enter__(self):
+    def __enter__(self) -> "LogContext":
         """Enter the context and apply context variables."""
         # Store old context and apply new context
         for key, value in self.context.items():
@@ -207,7 +208,7 @@ class LogContext:
             setattr(self.logger, key, value)
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         """Exit the context and restore previous context."""
         # Restore old context
         for key in self.context:
@@ -217,7 +218,7 @@ class LogContext:
                 delattr(self.logger, key)
 
 
-def log_operation(operation: str, user_id: str = None, **kwargs):
+def log_operation(operation: str, user_id: str | None = None, **kwargs: Any) -> Any:
     """Decorator for logging operation start/end with context.
 
     Args:
@@ -226,8 +227,8 @@ def log_operation(operation: str, user_id: str = None, **kwargs):
         **kwargs: Additional context variables
     """
 
-    def decorator(func):
-        def wrapper(*args, **func_kwargs):
+    def decorator(func: Any) -> Any:
+        def wrapper(*args: Any, **func_kwargs: Any) -> Any:
             logger = get_logger(func.__module__)
 
             # Create context
@@ -263,7 +264,7 @@ def log_operation(operation: str, user_id: str = None, **kwargs):
 
 
 # Default logger configuration
-def init_default_logging():
+def init_default_logging() -> None:
     """Initialize default logging configuration if not already configured."""
     if not logging.getLogger("deletepy").handlers:
         # Use environment configuration or defaults

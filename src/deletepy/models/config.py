@@ -120,9 +120,6 @@ class APIConfig:
 
     rate_limit: float = 0.5  # Seconds between requests
     timeout: int = 30  # Request timeout in seconds
-    max_retries: int = 3
-    base_retry_delay: float = 1.0
-    max_retry_delay: float = 60.0
 
     def get_requests_per_second(self) -> float:
         """Calculate requests per second based on rate limit.
@@ -228,7 +225,6 @@ class AppConfig:
             result["api"] = {
                 "rate_limit": self.api.rate_limit,
                 "timeout": self.api.timeout,
-                "max_retries": self.api.max_retries,
                 "requests_per_second": self.api.get_requests_per_second(),
             }
 
