@@ -900,10 +900,22 @@ class OperationHandler:
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
 
+        # Handle case where output_file might be None for older checkpoints
+        output_file = checkpoint.config.output_file
+        if not output_file:
+            # Generate a default output file for older checkpoints that lack this field
+            from datetime import datetime
+
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"users_last_login_resumed_{timestamp}.csv"
+            click.echo(
+                f"{YELLOW}Warning: Checkpoint missing output_file, using: {output_file}{RESET}"
+            )
+
         config = ExportWithCheckpointsConfig(
             token=get_access_token(env),
             base_url=get_base_url(env),
-            output_file=checkpoint.config.output_file or "users_last_login.csv",
+            output_file=output_file,
             connection=checkpoint.config.connection_filter,
             env=env,
             resume_checkpoint_id=checkpoint_id,
