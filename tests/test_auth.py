@@ -11,7 +11,7 @@ def mock_config():
         mock.return_value = {
             "client_id": "test_client_id",
             "client_secret": "test_client_secret",
-            "auth0_domain": "test.auth0.com",
+            "domain": "test.auth0.com",
         }
         yield mock
 
@@ -45,7 +45,7 @@ def test_get_access_token_missing_client_id(mock_config):
     mock_config.return_value = {
         "client_id": "",
         "client_secret": "test_client_secret",
-        "auth0_domain": "test.auth0.com",
+        "domain": "test.auth0.com",
     }
 
     with pytest.raises(AuthConfigError) as exc_info:
@@ -57,7 +57,7 @@ def test_get_access_token_missing_client_secret(mock_config):
     mock_config.return_value = {
         "client_id": "test_client_id",
         "client_secret": "",
-        "auth0_domain": "test.auth0.com",
+        "domain": "test.auth0.com",
     }
 
     with pytest.raises(AuthConfigError) as exc_info:
@@ -69,7 +69,7 @@ def test_get_access_token_missing_domain(mock_config):
     mock_config.return_value = {
         "client_id": "test_client_id",
         "client_secret": "test_client_secret",
-        "auth0_domain": "",
+        "domain": "",
     }
 
     with pytest.raises(AuthConfigError) as exc_info:
@@ -107,8 +107,8 @@ def test_doctor_success():
         mock_get_config.return_value = {
             "client_id": "test_client_id",
             "client_secret": "test_secret",
-            "auth0_domain": "test.auth0.com",
-            "api_url": "https://test.api.com",
+            "domain": "test.auth0.com",
+            "base_url": "https://test.auth0.com",
         }
 
         # Mock successful token retrieval
@@ -134,8 +134,8 @@ def test_doctor_with_api_test_success():
         mock_get_config.return_value = {
             "client_id": "test_client_id",
             "client_secret": "test_secret",
-            "auth0_domain": "test.auth0.com",
-            "api_url": "https://test.api.com",
+            "domain": "test.auth0.com",
+            "base_url": "https://test.auth0.com",
         }
 
         # Mock successful token retrieval
@@ -167,8 +167,8 @@ def test_doctor_with_api_test_failure():
         mock_get_config.return_value = {
             "client_id": "test_client_id",
             "client_secret": "test_secret",
-            "auth0_domain": "test.auth0.com",
-            "api_url": "https://test.api.com",
+            "domain": "test.auth0.com",
+            "base_url": "https://test.auth0.com",
         }
 
         # Mock successful token retrieval
