@@ -15,8 +15,6 @@ from ..utils.display_utils import (
 
 def check_email_domains(
     emails: list[str],
-    token: str = "",
-    base_url: str = "",
     allowed_domains: list[str] | None = None,
     blocked_domains: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -24,8 +22,6 @@ def check_email_domains(
 
     Args:
         emails: List of email addresses to check
-        token: Auth0 access token
-        base_url: Auth0 API base URL
         allowed_domains: List of allowed domains (if None, all domains allowed)
         blocked_domains: List of blocked domains (if None, no domains blocked)
 

@@ -1779,20 +1779,25 @@ def _process_check_unblocked_with_checkpoints(
 ) -> str | None:
     """Process check unblocked users with checkpoints.
 
+    This function is part of a generic interface system where all process functions
+    receive the same set of parameters from ProcessingConfig via _execute_with_checkpoints.
+    Only the first four parameters are used by this specific operation; the remaining
+    parameters are kept for interface consistency but are not used in the function body.
+
     Args:
         checkpoint: Checkpoint to process
         token: Auth0 access token
         base_url: Auth0 API base URL
         checkpoint_manager: Checkpoint manager instance
-        env: Environment (ignored for check operations)
-        auto_delete: Auto-delete flag (ignored for check operations)
-        dry_run: Processing config parameter
-        batch_timeout: Processing config parameter
-        max_retries: Processing config parameter
-        connection_filter: Processing config parameter
-        include_inactive: Processing config parameter
-        verify_results: Processing config parameter
-        **custom_params: Custom parameters from ProcessingConfig
+        env: Environment (unused - kept for interface consistency)
+        auto_delete: Auto-delete flag (unused - kept for interface consistency)
+        dry_run: Processing config parameter (unused - kept for interface consistency)
+        batch_timeout: Processing config parameter (unused - kept for interface consistency)
+        max_retries: Processing config parameter (unused - kept for interface consistency)
+        connection_filter: Processing config parameter (unused - kept for interface consistency)
+        include_inactive: Processing config parameter (unused - kept for interface consistency)
+        verify_results: Processing config parameter (unused - kept for interface consistency)
+        **custom_params: Custom parameters from ProcessingConfig (unused - kept for interface consistency)
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed

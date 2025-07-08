@@ -379,9 +379,6 @@ def _process_session_revocations(
         headers: HTTP headers for the request
     """
     for session in sessions:
-        if shutdown_requested():
-            break
-
         session_id = session.get("id")
         if not session_id:
             continue
