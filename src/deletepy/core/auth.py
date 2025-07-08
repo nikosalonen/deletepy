@@ -32,7 +32,7 @@ def get_access_token(env: str = "dev") -> str:
 
     client_id = config["client_id"]
     client_secret = config["client_secret"]
-    domain = config["auth0_domain"]
+    domain = config["domain"]
 
     # Validate required environment variables
     if not client_id:
