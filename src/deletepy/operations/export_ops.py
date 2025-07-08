@@ -635,23 +635,35 @@ def _create_new_export_checkpoint(
 
     Returns:
         Checkpoint: Newly created checkpoint
+
+    Raises:
+        ValueError: If configuration is invalid for export operation
     """
+    # Ensure output_file is set with a default if not provided
+    output_file = config.output_file
+    if not output_file:
+        from datetime import datetime
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = f"users_last_login_{timestamp}.csv"
+        config.output_file = output_file
+
     # Validate and setup export parameters
     batch_size, estimated_time = _validate_and_setup_export(
-        emails, config.output_file, config.batch_size, config.connection
+        emails, output_file, config.batch_size, config.connection
     )
 
-    # Create operation config
+    # Create operation config with validated output_file
     operation_config = OperationConfig(
         environment=config.env,
         input_file=None,  # emails are passed directly
-        output_file=config.output_file,
+        output_file=output_file,
         connection_filter=config.connection,
         batch_size=batch_size,
         additional_params={"estimated_time": estimated_time},
     )
 
-    # Create new checkpoint
+    # Create new checkpoint (this will now validate the configuration)
     return checkpoint_manager.create_checkpoint(
         operation_type=OperationType.EXPORT_LAST_LOGIN,
         config=operation_config,
@@ -721,9 +733,10 @@ def _process_export_with_checkpoints(
     connection = checkpoint.config.connection_filter
     output_file = checkpoint.config.output_file
 
-    # Ensure output_file is not None
-    if output_file is None:
-        output_file = "users_last_login.csv"
+    # Assert output_file is not None (should be guaranteed by validation)
+    assert output_file is not None, (
+        "output_file should be validated during checkpoint creation/loading"
+    )
 
     print_info(f"Processing {len(checkpoint.remaining_items)} remaining emails...")
 

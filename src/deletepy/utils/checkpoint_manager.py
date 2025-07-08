@@ -325,7 +325,16 @@ class CheckpointManager:
 
         Returns:
             Checkpoint: New checkpoint instance
+
+        Raises:
+            ValueError: If configuration is invalid for the operation type
         """
+        # Validate configuration for the operation type
+        try:
+            config.validate_for_operation(operation_type)
+        except ValueError as e:
+            raise ValueError(f"Cannot create checkpoint: {e}") from e
+
         checkpoint_id = self.generate_checkpoint_id(operation_type, config.environment)
         now = datetime.now()
 

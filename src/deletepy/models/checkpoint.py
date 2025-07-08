@@ -121,6 +121,32 @@ class OperationConfig:
     batch_size: int | None = None
     additional_params: dict[str, Any] = field(default_factory=dict)
 
+    def validate_for_operation(self, operation_type: OperationType) -> None:
+        """Validate configuration for specific operation types.
+
+        Args:
+            operation_type: The type of operation to validate for
+
+        Raises:
+            ValueError: If required fields are missing for the operation type
+        """
+        if operation_type == OperationType.EXPORT_LAST_LOGIN:
+            if not self.output_file:
+                raise ValueError(
+                    f"output_file is required for {operation_type.value} operations"
+                )
+
+        # Add validation for other operation types as needed
+        if operation_type in [
+            OperationType.BATCH_DELETE,
+            OperationType.BATCH_BLOCK,
+            OperationType.BATCH_REVOKE_GRANTS,
+            OperationType.CHECK_UNBLOCKED,
+            OperationType.SOCIAL_UNLINK,
+        ]:
+            # These operations typically don't require output_file but may need other validations
+            pass
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -206,13 +232,20 @@ class Checkpoint:
         if updated_at_str is None:
             raise ValueError("Missing required field: updated_at")
 
+        # Create and validate configuration
+        config = OperationConfig.from_dict(data.get("config", {}))
+        try:
+            config.validate_for_operation(operation_type)
+        except ValueError as e:
+            raise ValueError(f"Invalid checkpoint configuration: {e}") from e
+
         return cls(
             checkpoint_id=data.get("checkpoint_id", ""),
             operation_type=operation_type,
             status=status,
             created_at=datetime.fromisoformat(created_at_str),
             updated_at=datetime.fromisoformat(updated_at_str),
-            config=OperationConfig.from_dict(data.get("config", {})),
+            config=config,
             progress=BatchProgress.from_dict(data.get("progress", {})),
             results=ProcessingResults.from_dict(data.get("results", {})),
             remaining_items=data.get("remaining_items", []),
