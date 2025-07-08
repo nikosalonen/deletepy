@@ -11,18 +11,21 @@ from ..core.auth import get_access_token
 from ..core.config import get_base_url
 from ..models.checkpoint import Checkpoint, CheckpointStatus, OperationType
 from ..operations.batch_ops import (
-    check_unblocked_users,
-    find_users_by_social_media_ids,
+    CheckpointOperationConfig,
+    check_unblocked_users_with_checkpoints,
+    find_users_by_social_media_ids_with_checkpoints,
 )
 from ..operations.domain_ops import check_email_domains
 from ..operations.export_ops import (
-    export_users_last_login_to_csv,
+    ExportWithCheckpointsConfig,
+    export_users_last_login_to_csv_with_checkpoints,
 )
 from ..operations.preview_ops import (
     preview_social_unlink_operations,
     preview_user_operations,
 )
 from ..operations.user_ops import (
+    batch_user_operations_with_checkpoints,
     block_user,
     delete_user,
     get_user_email,
@@ -383,7 +386,25 @@ class OperationHandler:
             click.echo(
                 f"\n{CYAN}Checking {len(user_ids)} users for blocked status...{RESET}"
             )
-            check_unblocked_users(user_ids, token, base_url)
+
+            # Use checkpoint-enabled operation
+            config = CheckpointOperationConfig(
+                token=token,
+                base_url=base_url,
+                env=env,
+            )
+
+            checkpoint_id = check_unblocked_users_with_checkpoints(
+                user_ids=user_ids, config=config
+            )
+
+            if checkpoint_id:
+                click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+                click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
+
+        except KeyboardInterrupt:
+            click.echo(f"\n{YELLOW}Check unblocked operation interrupted by user.{RESET}")
+            sys.exit(0)
         except Exception as e:
             self._handle_operation_error(e, "Check unblocked users")
 
@@ -429,9 +450,23 @@ class OperationHandler:
                 len(emails), batch_size, estimated_time, connection, output_file
             )
 
-            export_users_last_login_to_csv(
-                emails, token, base_url, output_file, batch_size, connection
+            # Use checkpoint-enabled operation
+            config = ExportWithCheckpointsConfig(
+                token=token,
+                base_url=base_url,
+                env=env,
+                connection=connection,
+                output_file=output_file,
+                batch_size=batch_size,
             )
+
+            checkpoint_id = export_users_last_login_to_csv_with_checkpoints(
+                emails=emails, config=config
+            )
+
+            if checkpoint_id:
+                click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+                click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
 
         except KeyboardInterrupt:
             click.echo(f"\n{YELLOW}Export operation interrupted by user.{RESET}")
@@ -464,21 +499,18 @@ class OperationHandler:
 
             click.echo(f"\n{CYAN}{operation_display}...{RESET}")
 
-            # Process users and collect results
-            results = self._process_users(
-                user_ids, token, base_url, operation, operation_display
+            # Use checkpoint-enabled batch operation
+            checkpoint_id = batch_user_operations_with_checkpoints(
+                user_ids=user_ids,
+                token=token,
+                base_url=base_url,
+                operation=operation,
+                env=env,
             )
 
-            # Print summary
-            self._print_operation_summary(
-                results["processed_count"],
-                results["skipped_count"],
-                results["not_found_users"],
-                results["invalid_user_ids"],
-                results["multiple_users"],
-                token,
-                base_url,
-            )
+            if checkpoint_id:
+                click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+                click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
 
         except Exception as e:
             self._handle_operation_error(e, f"User {operation}")
@@ -502,9 +534,20 @@ class OperationHandler:
                 self._handle_social_dry_run_preview(social_ids, token, base_url, env)
                 return
 
-            find_users_by_social_media_ids(
-                social_ids, token, base_url, env, auto_delete=True
+            # Use checkpoint-enabled operation
+            config = CheckpointOperationConfig(
+                token=token,
+                base_url=base_url,
+                env=env,
             )
+
+            checkpoint_id = find_users_by_social_media_ids_with_checkpoints(
+                social_ids=social_ids, config=config, auto_delete=True
+            )
+
+            if checkpoint_id:
+                click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+                click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
 
         except KeyboardInterrupt:
             click.echo(f"\n{YELLOW}Social media ID search interrupted by user.{RESET}")
@@ -566,10 +609,20 @@ class OperationHandler:
                     click.echo(
                         f"\n{CYAN}Proceeding with actual social unlink operation...{RESET}"
                     )
-                    # Execute the actual operation
-                    find_users_by_social_media_ids(
-                        social_ids, token, base_url, env, auto_delete=True
+                    # Execute the actual operation with checkpoints
+                    config = CheckpointOperationConfig(
+                        token=token,
+                        base_url=base_url,
+                        env=env,
                     )
+
+                    checkpoint_id = find_users_by_social_media_ids_with_checkpoints(
+                        social_ids=social_ids, config=config, auto_delete=True
+                    )
+
+                    if checkpoint_id:
+                        click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+                        click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
                 else:
                     click.echo("Operation cancelled by user.")
             else:
@@ -586,21 +639,21 @@ class OperationHandler:
         """Execute the actual operation after dry-run preview."""
         operation_display = self._get_operation_display_name(operation)
 
-        # Process users and collect results
-        results = self._process_users(
-            user_ids, token, base_url, operation, operation_display
+        # Determine environment from base_url (simple heuristic)
+        env = "prod" if "prod" in base_url or "p." in base_url else "dev"
+
+        # Use checkpoint-enabled batch operation
+        checkpoint_id = batch_user_operations_with_checkpoints(
+            user_ids=user_ids,
+            token=token,
+            base_url=base_url,
+            operation=operation,
+            env=env,
         )
 
-        # Print summary
-        self._print_operation_summary(
-            results["processed_count"],
-            results["skipped_count"],
-            results["not_found_users"],
-            results["invalid_user_ids"],
-            results["multiple_users"],
-            token,
-            base_url,
-        )
+        if checkpoint_id:
+            click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+            click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
 
     def _print_domain_results(self, results: dict[str, Any], emails: list[str]) -> None:
         """Print domain check results summary."""
@@ -834,10 +887,6 @@ class OperationHandler:
             checkpoint: The checkpoint to resume
             checkpoint_manager: Checkpoint manager instance
         """
-        from ..operations.export_ops import (
-            ExportWithCheckpointsConfig,
-            export_users_last_login_to_csv_with_checkpoints,
-        )
 
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
@@ -866,10 +915,6 @@ class OperationHandler:
             checkpoint: The checkpoint to resume
             checkpoint_manager: Checkpoint manager instance
         """
-        from ..operations.batch_ops import (
-            CheckpointOperationConfig,
-            check_unblocked_users_with_checkpoints,
-        )
 
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
@@ -894,10 +939,6 @@ class OperationHandler:
             checkpoint: The checkpoint to resume
             checkpoint_manager: Checkpoint manager instance
         """
-        from ..operations.batch_ops import (
-            CheckpointOperationConfig,
-            find_users_by_social_media_ids_with_checkpoints,
-        )
 
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
@@ -924,7 +965,6 @@ class OperationHandler:
             checkpoint: The checkpoint to resume
             checkpoint_manager: Checkpoint manager instance
         """
-        from ..operations.user_ops import batch_user_operations_with_checkpoints
 
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
