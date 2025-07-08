@@ -269,7 +269,12 @@ class Checkpoint:
     def is_resumable(self) -> bool:
         """Check if checkpoint can be resumed."""
         return (
-            self.status == CheckpointStatus.ACTIVE
+            self.status
+            in (
+                CheckpointStatus.ACTIVE,
+                CheckpointStatus.FAILED,
+                CheckpointStatus.CANCELLED,
+            )
             and len(self.remaining_items) > 0
             and self._is_version_compatible()
         )

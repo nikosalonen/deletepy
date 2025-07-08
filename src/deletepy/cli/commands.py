@@ -836,6 +836,13 @@ class OperationHandler:
                 )
                 return
 
+            # Reactivate checkpoint if it was cancelled or failed
+            if checkpoint.status in (
+                CheckpointStatus.CANCELLED,
+                CheckpointStatus.FAILED,
+            ):
+                manager.reactivate_checkpoint(checkpoint)
+
             # Override input file if provided
             if input_file:
                 checkpoint.config.input_file = str(input_file)

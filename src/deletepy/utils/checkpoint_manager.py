@@ -473,6 +473,20 @@ class CheckpointManager:
         checkpoint.status = CheckpointStatus.CANCELLED
         checkpoint.updated_at = datetime.now()
 
+    def reactivate_checkpoint(self, checkpoint: Checkpoint) -> None:
+        """Reactivate a cancelled or failed checkpoint for resumption.
+
+        Args:
+            checkpoint: Checkpoint to reactivate
+        """
+        if checkpoint.status in (CheckpointStatus.CANCELLED, CheckpointStatus.FAILED):
+            checkpoint.status = CheckpointStatus.ACTIVE
+            checkpoint.updated_at = datetime.now()
+            self.save_checkpoint(checkpoint)
+            print_info(
+                f"Checkpoint {checkpoint.checkpoint_id} reactivated for resumption"
+            )
+
     def display_checkpoints(self, checkpoints: list[Checkpoint]) -> None:
         """Display checkpoints in a formatted table.
 
