@@ -18,9 +18,6 @@ from .core.auth import doctor, get_access_token
 from .core.config import (
     API_RATE_LIMIT,
     API_TIMEOUT,
-    BASE_RETRY_DELAY,
-    MAX_RETRIES,
-    MAX_RETRY_DELAY,
     get_base_url,
     get_env_config,
     get_estimated_processing_time,
@@ -53,10 +50,7 @@ from .operations.batch_ops import (
     _categorize_users,
     _display_search_results,
     _handle_auto_delete_operations,
-    _search_users_by_social_id,
-    check_unblocked_users,
     check_unblocked_users_with_checkpoints,
-    find_users_by_social_media_ids,
     find_users_by_social_media_ids_with_checkpoints,
 )
 from .operations.domain_ops import (
@@ -75,7 +69,6 @@ from .operations.export_ops import (
     _process_email_batch,
     _validate_and_setup_export,
     _write_csv_batch,
-    export_users_last_login_to_csv,
     export_users_last_login_to_csv_with_checkpoints,
 )
 from .operations.preview_ops import (
@@ -141,9 +134,6 @@ __all__ = [
     "get_base_url",
     "API_RATE_LIMIT",
     "API_TIMEOUT",
-    "MAX_RETRIES",
-    "BASE_RETRY_DELAY",
-    "MAX_RETRY_DELAY",
     "get_optimal_batch_size",
     "get_estimated_processing_time",
     "validate_rate_limit_config",
@@ -173,9 +163,6 @@ __all__ = [
     "revoke_user_grants",
     "revoke_user_sessions",
     "unlink_user_identity",
-    "check_unblocked_users",
-    "find_users_by_social_media_ids",
-    "export_users_last_login_to_csv",
     "check_email_domains",
     "validate_domain_format",
     "extract_domains_from_emails",

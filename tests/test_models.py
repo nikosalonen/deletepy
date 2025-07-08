@@ -445,7 +445,6 @@ class TestAPIConfig:
 
         assert config.rate_limit == 0.5
         assert config.timeout == 30
-        assert config.max_retries == 3
 
     def test_get_requests_per_second(self):
         """Test calculating requests per second."""

@@ -70,7 +70,6 @@ class ProcessingConfig:
     # Core processing parameters
     dry_run: bool = False
     batch_timeout: int | None = None
-    max_retries: int | None = None
 
     # Operation-specific parameters
     connection_filter: str | None = None
@@ -89,7 +88,6 @@ class ProcessingConfig:
         params = {
             "dry_run": self.dry_run,
             "batch_timeout": self.batch_timeout,
-            "max_retries": self.max_retries,
             "connection_filter": self.connection_filter,
             "include_inactive": self.include_inactive,
             "verify_results": self.verify_results,
@@ -113,226 +111,6 @@ class ExecuteCheckpointConfig:
     operation_name: str
     auto_delete: bool = True
     processing_config: ProcessingConfig | None = None
-
-
-def check_unblocked_users(user_ids: list[str], token: str, base_url: str) -> None:
-    """Print user IDs that are not blocked, with a progress indicator.
-
-    Args:
-        user_ids: List of Auth0 user IDs to check
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-    """
-    unblocked = []
-    total_users = len(user_ids)
-
-    for idx, user_id in enumerate(user_ids, 1):
-        if shutdown_requested():
-            break
-        url = f"{base_url}/api/v2/users/{quote(user_id)}"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        }
-        try:
-            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-            response.raise_for_status()
-            user_data = response.json()
-            if not user_data.get("blocked", False):
-                unblocked.append(user_id)
-            show_progress(idx, total_users, "Checking users")
-            time.sleep(API_RATE_LIMIT)
-        except requests.exceptions.RequestException as e:
-            print_error(
-                f"Error checking user {user_id}: {e}",
-                user_id=user_id,
-                operation="check_blocked",
-            )
-            continue
-
-    print("\n")  # Clear progress line
-    if unblocked:
-        print_warning(
-            f"Found {len(unblocked)} unblocked users:",
-            count=len(unblocked),
-            operation="check_unblocked",
-        )
-        for user_id in unblocked:
-            print_info(f"  {user_id}", user_id=user_id, status="unblocked")
-    else:
-        print_success("All users are blocked.", operation="check_unblocked")
-
-
-def _search_all_social_ids(
-    social_ids: list[str], token: str, base_url: str
-) -> tuple[list[dict[str, Any]], list[str]]:
-    """Search for users with all provided social media IDs.
-
-    Args:
-        social_ids: List of social media IDs to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-
-    Returns:
-        Tuple of (found_users, not_found_ids)
-    """
-    found_users = []
-    not_found_ids = []
-    total_ids = len(social_ids)
-
-    for idx, social_id in enumerate(social_ids, 1):
-        if shutdown_requested():
-            break
-
-        show_progress(idx, total_ids, "Searching social IDs")
-
-        # Search for users with this social ID
-        users_found = _search_users_by_social_id(social_id, token, base_url)
-        if users_found:
-            # Add social_id to each user for later processing
-            for user in users_found:
-                user["social_id"] = social_id
-            found_users.extend(users_found)
-        else:
-            not_found_ids.append(social_id.strip())
-
-    print("\n")  # Clear progress line
-    return found_users, not_found_ids
-
-
-def _process_search_results(
-    found_users: list[dict[str, Any]],
-    not_found_ids: list[str],
-    total_ids: int,
-    config: SearchProcessingConfig,
-) -> None:
-    """Process search results through categorization, display, and operations.
-
-    Args:
-        found_users: Users found during search
-        not_found_ids: Social IDs that were not found
-        total_ids: Total number of social IDs searched
-        config: Configuration containing token, base_url, env, and auto_delete settings
-    """
-    # Categorize users based on their identity configuration
-    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
-        found_users, config.auto_delete
-    )
-
-    # Display search results
-    _display_search_results(
-        total_ids,
-        found_users,
-        not_found_ids,
-        users_to_delete,
-        identities_to_unlink,
-        auth0_main_protected,
-        config.auto_delete,
-    )
-
-    # Handle auto-delete operations
-    _handle_auto_delete_operations(
-        users_to_delete,
-        identities_to_unlink,
-        config.token,
-        config.base_url,
-        config.env,
-        config.auto_delete,
-    )
-
-
-def find_users_by_social_media_ids(
-    social_ids: list[str],
-    token: str,
-    base_url: str,
-    env: str = "dev",
-    auto_delete: bool = True,
-) -> None:
-    """Find Auth0 users who have the specified social media IDs in their identities array.
-
-    If auto_delete is True, users where the social media ID is their main/only identity will be deleted.
-
-    Args:
-        social_ids: List of social media IDs to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-        env: Environment (dev/prod) for confirmation prompts
-        auto_delete: Whether to automatically delete users with main identity matches
-    """
-    print_info(
-        f"Searching for users with {len(social_ids)} social media IDs...",
-        social_ids_count=len(social_ids),
-        operation="social_search",
-    )
-
-    # Search for users with each social ID
-    found_users, not_found_ids = _search_all_social_ids(social_ids, token, base_url)
-
-    # Process the search results
-    config = SearchProcessingConfig(
-        token=token, base_url=base_url, env=env, auto_delete=auto_delete
-    )
-    _process_search_results(found_users, not_found_ids, len(social_ids), config)
-
-
-def _search_users_by_social_id(
-    social_id: str, token: str, base_url: str
-) -> list[dict[str, Any]]:
-    """Search for users with a specific social media ID.
-
-    Args:
-        social_id: The social media ID to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-
-    Returns:
-        List[Dict[str, Any]]: List of users found with this social ID
-    """
-    url = f"{base_url}/api/v2/users"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-
-    # Search for users with this social ID in their identities
-    params = {
-        "q": f'identities.user_id:"{social_id}"',
-        "search_engine": "v3",
-        "include_totals": "true",
-        "page": "0",
-        "per_page": "100",
-    }
-
-    found_users = []
-
-    try:
-        response = requests.get(
-            url, headers=headers, params=params, timeout=API_TIMEOUT
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        if "users" in data:
-            for user in data["users"]:
-                # Verify this user actually has the social ID
-                if "identities" in user and isinstance(user["identities"], list):
-                    for identity in user["identities"]:
-                        if identity.get("user_id") == social_id:
-                            found_users.append(user)
-                            break
-
-        time.sleep(API_RATE_LIMIT)
-
-    except requests.exceptions.RequestException as e:
-        print_error(
-            f"Error searching for social ID {social_id}: {e}",
-            social_id=social_id,
-            operation="social_search",
-        )
-
-    return found_users
 
 
 def _categorize_users(
@@ -1671,11 +1449,31 @@ def _process_final_social_search_results(
     """
     total_processed = len(checkpoint.processed_items) + len(checkpoint.remaining_items)
 
-    config = SearchProcessingConfig(
-        token=token, base_url=base_url, env=env, auto_delete=auto_delete
+    # Categorize users based on their identity configuration
+    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
+        found_users, auto_delete
     )
 
-    _process_search_results(found_users, not_found_ids, total_processed, config)
+    # Display search results
+    _display_search_results(
+        total_processed,
+        found_users,
+        not_found_ids,
+        users_to_delete,
+        identities_to_unlink,
+        auth0_main_protected,
+        auto_delete,
+    )
+
+    # Handle auto-delete operations
+    _handle_auto_delete_operations(
+        users_to_delete,
+        identities_to_unlink,
+        token,
+        base_url,
+        env,
+        auto_delete,
+    )
 
 
 def _search_batch_social_ids(
@@ -1701,7 +1499,7 @@ def _search_batch_social_ids(
         show_progress(idx, len(social_ids), "Searching social IDs")
 
         # Search for users with this social ID
-        users_found = _search_users_by_social_id(social_id, token, base_url)
+        users_found = _search_single_social_id(social_id, token, base_url)
         if users_found:
             # Add social_id to each user for later processing
             for user in users_found:
@@ -1712,6 +1510,65 @@ def _search_batch_social_ids(
 
     print("\n")  # Clear progress line
     return found_users, not_found_ids
+
+
+def _search_single_social_id(
+    social_id: str, token: str, base_url: str
+) -> list[dict[str, Any]]:
+    """Search for users with a specific social media ID.
+
+    Args:
+        social_id: The social media ID to search for
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        List[Dict[str, Any]]: List of users found with this social ID
+    """
+    url = f"{base_url}/api/v2/users"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+    }
+
+    # Search for users with this social ID in their identities
+    params = {
+        "q": f'identities.user_id:"{social_id}"',
+        "search_engine": "v3",
+        "include_totals": "true",
+        "page": "0",
+        "per_page": "100",
+    }
+
+    found_users = []
+
+    try:
+        response = requests.get(
+            url, headers=headers, params=params, timeout=API_TIMEOUT
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        if "users" in data:
+            for user in data["users"]:
+                # Verify this user actually has the social ID
+                if "identities" in user and isinstance(user["identities"], list):
+                    for identity in user["identities"]:
+                        if identity.get("user_id") == social_id:
+                            found_users.append(user)
+                            break
+
+        time.sleep(API_RATE_LIMIT)
+
+    except requests.exceptions.RequestException as e:
+        print_error(
+            f"Error searching for social ID {social_id}: {e}",
+            social_id=social_id,
+            operation="social_search",
+        )
+
+    return found_users
 
 
 def check_unblocked_users_with_checkpoints(
@@ -1771,7 +1628,6 @@ def _process_check_unblocked_with_checkpoints(
     auto_delete: bool | None = None,  # Ignored for check operations
     dry_run: bool = False,  # Processing config parameter
     batch_timeout: int | None = None,  # Processing config parameter
-    max_retries: int | None = None,  # Processing config parameter
     connection_filter: str | None = None,  # Processing config parameter
     include_inactive: bool = False,  # Processing config parameter
     verify_results: bool = True,  # Processing config parameter
@@ -1793,7 +1649,6 @@ def _process_check_unblocked_with_checkpoints(
         auto_delete: Auto-delete flag (unused - kept for interface consistency)
         dry_run: Processing config parameter (unused - kept for interface consistency)
         batch_timeout: Processing config parameter (unused - kept for interface consistency)
-        max_retries: Processing config parameter (unused - kept for interface consistency)
         connection_filter: Processing config parameter (unused - kept for interface consistency)
         include_inactive: Processing config parameter (unused - kept for interface consistency)
         verify_results: Processing config parameter (unused - kept for interface consistency)
