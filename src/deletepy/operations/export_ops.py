@@ -404,17 +404,66 @@ def export_users_last_login_to_csv(
         emails, output_file, batch_size, connection
     )
 
-    # Initialize counters and data
+    # Initialize processing state
     csv_data = []
-    total_emails = len(emails)
-    total_counters = {
+    total_counters = _initialize_export_counters()
+
+    # Process emails in batches
+    _process_emails_in_batches(
+        emails, batch_size, csv_data, total_counters, token, base_url, connection, output_file
+    )
+
+    # Generate final summary
+    _generate_export_summary(
+        len(emails),
+        total_counters["processed_count"],
+        total_counters["not_found_count"],
+        total_counters["multiple_users_count"],
+        total_counters["error_count"],
+        connection,
+        output_file,
+        csv_data,
+    )
+
+
+def _initialize_export_counters() -> dict[str, int]:
+    """Initialize counters for export operations.
+
+    Returns:
+        dict: Initial counters dictionary
+    """
+    return {
         "processed_count": 0,
         "not_found_count": 0,
         "multiple_users_count": 0,
         "error_count": 0,
     }
 
-    # Process emails in batches
+
+def _process_emails_in_batches(
+    emails: list[str],
+    batch_size: int,
+    csv_data: list[dict[str, Any]],
+    total_counters: dict[str, int],
+    token: str,
+    base_url: str,
+    connection: str | None,
+    output_file: str,
+) -> None:
+    """Process emails in batches and update CSV data.
+
+    Args:
+        emails: List of email addresses to process
+        batch_size: Size of each batch
+        csv_data: List to store CSV data
+        total_counters: Dictionary to track counters
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        connection: Optional connection filter
+        output_file: Output CSV file path
+    """
+    total_emails = len(emails)
+
     for batch_start in range(0, total_emails, batch_size):
         batch_end = min(batch_start + batch_size, total_emails)
         batch_emails = emails[batch_start:batch_end]
@@ -422,7 +471,8 @@ def export_users_last_login_to_csv(
         total_batches = (total_emails + batch_size - 1) // batch_size
 
         print(
-            f"\n{YELLOW}Processing batch {batch_number}/{total_batches} ({batch_start + 1}-{batch_end} of {total_emails}){RESET}"
+            f"\n{YELLOW}Processing batch {batch_number}/{total_batches} "
+            f"({batch_start + 1}-{batch_end} of {total_emails}){RESET}"
         )
 
         # Process this batch
@@ -443,18 +493,6 @@ def export_users_last_login_to_csv(
 
         if shutdown_requested():
             break
-
-    # Generate final summary
-    _generate_export_summary(
-        total_emails,
-        total_counters["processed_count"],
-        total_counters["not_found_count"],
-        total_counters["multiple_users_count"],
-        total_counters["error_count"],
-        connection,
-        output_file,
-        csv_data,
-    )
 
 
 def export_users_last_login_to_csv_with_checkpoints(
@@ -479,55 +517,10 @@ def export_users_last_login_to_csv_with_checkpoints(
     if checkpoint_manager is None:
         checkpoint_manager = CheckpointManager()
 
-    # Check if we're resuming from a checkpoint
-    checkpoint = None
-    if config.resume_checkpoint_id:
-        checkpoint = checkpoint_manager.load_checkpoint(config.resume_checkpoint_id)
-        if not checkpoint:
-            print_warning(
-                f"Could not load checkpoint {config.resume_checkpoint_id}, starting fresh"
-            )
-        elif checkpoint.status != CheckpointStatus.ACTIVE:
-            print_warning(
-                f"Checkpoint {config.resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
-            )
-            checkpoint = None
-        elif not checkpoint.is_resumable():
-            print_warning(f"Checkpoint {config.resume_checkpoint_id} is not resumable")
-            checkpoint = None
-
-    # If not resuming, create a new checkpoint
-    if checkpoint is None:
-        # Validate and setup export parameters
-        batch_size, estimated_time = _validate_and_setup_export(
-            emails, config.output_file, config.batch_size, config.connection
-        )
-
-        # Create operation config
-        operation_config = OperationConfig(
-            environment=config.env,
-            input_file=None,  # emails are passed directly
-            output_file=config.output_file,
-            connection_filter=config.connection,
-            batch_size=batch_size,
-            additional_params={"estimated_time": estimated_time},
-        )
-
-        # Create new checkpoint
-        checkpoint = checkpoint_manager.create_checkpoint(
-            operation_type=OperationType.EXPORT_LAST_LOGIN,
-            config=operation_config,
-            items=emails,
-            batch_size=batch_size,
-        )
-
-        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
-    else:
-        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
-        # Use configuration from checkpoint
-        batch_size = checkpoint.config.batch_size or checkpoint.progress.batch_size
-        config.connection = checkpoint.config.connection_filter
-        config.output_file = checkpoint.config.output_file or config.output_file
+    # Load or create checkpoint
+    checkpoint = _load_or_create_export_checkpoint(
+        emails, config, checkpoint_manager
+    )
 
     # Save initial checkpoint
     checkpoint_manager.save_checkpoint(checkpoint)
@@ -540,18 +533,166 @@ def export_users_last_login_to_csv_with_checkpoints(
             checkpoint_manager=checkpoint_manager,
         )
     except KeyboardInterrupt:
-        print_warning("\nExport operation interrupted by user")
-        checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
-        checkpoint_manager.save_checkpoint(checkpoint)
-        print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
-        print_info("You can resume this operation later using:")
-        print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
-        return checkpoint.checkpoint_id
+        return _handle_export_interruption(checkpoint, checkpoint_manager)
     except Exception as e:
-        print_warning(f"\nExport operation failed: {e}")
-        checkpoint_manager.mark_checkpoint_failed(checkpoint, str(e))
-        checkpoint_manager.save_checkpoint(checkpoint)
-        return checkpoint.checkpoint_id
+        return _handle_export_error(checkpoint, checkpoint_manager, e)
+
+
+def _load_or_create_export_checkpoint(
+    emails: list[str],
+    config: ExportWithCheckpointsConfig,
+    checkpoint_manager: CheckpointManager,
+) -> Checkpoint:
+    """Load existing checkpoint or create a new one for export operation.
+
+    Args:
+        emails: List of email addresses to process
+        config: Configuration for the export operation
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Checkpoint: Loaded or newly created checkpoint
+    """
+    # Check if we're resuming from a checkpoint
+    checkpoint = None
+    if config.resume_checkpoint_id:
+        checkpoint = _try_load_export_checkpoint(
+            config.resume_checkpoint_id, checkpoint_manager
+        )
+        if checkpoint:
+            _apply_checkpoint_config(checkpoint, config)
+            print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
+            return checkpoint
+
+    # Create new checkpoint
+    checkpoint = _create_new_export_checkpoint(emails, config, checkpoint_manager)
+    print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+    return checkpoint
+
+
+def _try_load_export_checkpoint(
+    resume_checkpoint_id: str, checkpoint_manager: CheckpointManager
+) -> Checkpoint | None:
+    """Try to load an existing export checkpoint.
+
+    Args:
+        resume_checkpoint_id: Checkpoint ID to resume from
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Optional[Checkpoint]: Loaded checkpoint if valid, None otherwise
+    """
+    checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
+    if not checkpoint:
+        print_warning(
+            f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
+        )
+        return None
+
+    if checkpoint.status != CheckpointStatus.ACTIVE:
+        print_warning(
+            f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
+        )
+        return None
+
+    if not checkpoint.is_resumable():
+        print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
+        return None
+
+    return checkpoint
+
+
+def _apply_checkpoint_config(
+    checkpoint: Checkpoint, config: ExportWithCheckpointsConfig
+) -> None:
+    """Apply checkpoint configuration to the config object.
+
+    Args:
+        checkpoint: Checkpoint with configuration
+        config: Configuration object to update
+    """
+    # Use configuration from checkpoint
+    config.connection = checkpoint.config.connection_filter
+    config.output_file = checkpoint.config.output_file or config.output_file
+
+
+def _create_new_export_checkpoint(
+    emails: list[str],
+    config: ExportWithCheckpointsConfig,
+    checkpoint_manager: CheckpointManager,
+) -> Checkpoint:
+    """Create a new checkpoint for export operation.
+
+    Args:
+        emails: List of email addresses to process
+        config: Configuration for the export operation
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Checkpoint: Newly created checkpoint
+    """
+    # Validate and setup export parameters
+    batch_size, estimated_time = _validate_and_setup_export(
+        emails, config.output_file, config.batch_size, config.connection
+    )
+
+    # Create operation config
+    operation_config = OperationConfig(
+        environment=config.env,
+        input_file=None,  # emails are passed directly
+        output_file=config.output_file,
+        connection_filter=config.connection,
+        batch_size=batch_size,
+        additional_params={"estimated_time": estimated_time},
+    )
+
+    # Create new checkpoint
+    return checkpoint_manager.create_checkpoint(
+        operation_type=OperationType.EXPORT_LAST_LOGIN,
+        config=operation_config,
+        items=emails,
+        batch_size=batch_size,
+    )
+
+
+def _handle_export_interruption(
+    checkpoint: Checkpoint, checkpoint_manager: CheckpointManager
+) -> str:
+    """Handle export operation interruption.
+
+    Args:
+        checkpoint: Checkpoint to handle
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        str: Checkpoint ID
+    """
+    print_warning("\nExport operation interrupted by user")
+    checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
+    checkpoint_manager.save_checkpoint(checkpoint)
+    print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
+    print_info("You can resume this operation later using:")
+    print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
+    return checkpoint.checkpoint_id
+
+
+def _handle_export_error(
+    checkpoint: Checkpoint, checkpoint_manager: CheckpointManager, error: Exception
+) -> str:
+    """Handle export operation error.
+
+    Args:
+        checkpoint: Checkpoint to handle
+        checkpoint_manager: Checkpoint manager instance
+        error: Exception that occurred
+
+    Returns:
+        str: Checkpoint ID
+    """
+    print_warning(f"\nExport operation failed: {error}")
+    checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
+    checkpoint_manager.save_checkpoint(checkpoint)
+    return checkpoint.checkpoint_id
 
 
 def _process_export_with_checkpoints(
