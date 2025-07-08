@@ -437,13 +437,14 @@ class TestCLIIntegration:
 
     @patch("src.deletepy.cli.commands.get_access_token")
     @patch("src.deletepy.cli.commands.get_base_url")
-    @patch("src.deletepy.cli.commands.check_unblocked_users")
+    @patch("src.deletepy.cli.commands.check_unblocked_users_with_checkpoints")
     def test_check_unblocked_integration(
         self, mock_check_unblocked, mock_get_base_url, mock_get_token
     ):
         """Test check-unblocked command integration."""
         mock_get_base_url.return_value = "https://test.auth0.com"
         mock_get_token.return_value = "test_token"
+        mock_check_unblocked.return_value = None  # Completed operation
 
         # Create temporary file
         with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp:
@@ -456,9 +457,11 @@ class TestCLIIntegration:
 
             assert result.exit_code == 0
             mock_check_unblocked.assert_called_once()
-            # Verify the correct user IDs were passed
-            args = mock_check_unblocked.call_args[0]
-            assert "auth0|123" in args[0]
-            assert "auth0|456" in args[0]
+            # Verify the checkpoint-enabled function was called with user_ids and config
+            call_args = mock_check_unblocked.call_args
+            assert call_args[1]["user_ids"] is not None  # Check keyword arguments
+            user_ids = call_args[1]["user_ids"]
+            assert "auth0|123" in user_ids
+            assert "auth0|456" in user_ids
         finally:
             os.unlink(temp_path)

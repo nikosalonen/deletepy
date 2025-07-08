@@ -403,7 +403,9 @@ class OperationHandler:
                 click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
 
         except KeyboardInterrupt:
-            click.echo(f"\n{YELLOW}Check unblocked operation interrupted by user.{RESET}")
+            click.echo(
+                f"\n{YELLOW}Check unblocked operation interrupted by user.{RESET}"
+            )
             sys.exit(0)
         except Exception as e:
             self._handle_operation_error(e, "Check unblocked users")
@@ -621,7 +623,9 @@ class OperationHandler:
                     )
 
                     if checkpoint_id:
-                        click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+                        click.echo(
+                            f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}"
+                        )
                         click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
                 else:
                     click.echo("Operation cancelled by user.")
@@ -637,8 +641,6 @@ class OperationHandler:
         self, user_ids: list[str], token: str, base_url: str, operation: str
     ) -> None:
         """Execute the actual operation after dry-run preview."""
-        operation_display = self._get_operation_display_name(operation)
-
         # Determine environment from base_url (simple heuristic)
         env = "prod" if "prod" in base_url or "p." in base_url else "dev"
 
@@ -1029,6 +1031,32 @@ class OperationHandler:
         else:
             click.echo(f"{YELLOW}No failed checkpoints found to clean.{RESET}")
 
+    def _clean_completed_checkpoints(
+        self, manager: CheckpointManager, dry_run: bool = False
+    ) -> None:
+        """Clean completed checkpoints.
+
+        Args:
+            manager: Checkpoint manager instance
+            dry_run: Whether to perform a dry run
+        """
+        # Clean all completed checkpoints regardless of age
+        deleted_count = manager.clean_completed_checkpoints(dry_run)
+        if dry_run:
+            if deleted_count > 0:
+                click.echo(
+                    f"{CYAN}Would delete {deleted_count} completed checkpoints.{RESET}"
+                )
+            else:
+                click.echo(f"{YELLOW}No completed checkpoints found to clean.{RESET}")
+        else:
+            if deleted_count > 0:
+                click.echo(
+                    f"{GREEN}Cleaned {deleted_count} completed checkpoints.{RESET}"
+                )
+            else:
+                click.echo(f"{YELLOW}No completed checkpoints found to clean.{RESET}")
+
     def _clean_old_checkpoints(
         self, manager: CheckpointManager, days_old: int, dry_run: bool
     ) -> None:
@@ -1063,7 +1091,12 @@ class OperationHandler:
             click.echo(f"{YELLOW}No old checkpoints found to clean.{RESET}")
 
     def handle_clean_checkpoints(
-        self, clean_all: bool, failed: bool, days_old: int, dry_run: bool
+        self,
+        clean_all: bool,
+        failed: bool,
+        completed: bool,
+        days_old: int,
+        dry_run: bool,
     ) -> None:
         """Handle cleaning checkpoints."""
         try:
@@ -1073,6 +1106,8 @@ class OperationHandler:
                 self._clean_all_checkpoints(manager, dry_run)
             elif failed:
                 self._clean_failed_checkpoints(manager)
+            elif completed:
+                self._clean_completed_checkpoints(manager, dry_run)
             else:
                 self._clean_old_checkpoints(manager, days_old, dry_run)
 
