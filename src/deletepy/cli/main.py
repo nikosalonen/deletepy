@@ -210,6 +210,7 @@ def resume(checkpoint_id: str, input_file: Path | None) -> None:
     "--all", "clean_all", is_flag=True, help="Clean all checkpoints (use with caution)"
 )
 @click.option("--failed", is_flag=True, help="Clean only failed checkpoints")
+@click.option("--completed", is_flag=True, help="Clean all completed checkpoints")
 @click.option(
     "--days-old",
     type=int,
@@ -221,10 +222,12 @@ def resume(checkpoint_id: str, input_file: Path | None) -> None:
     is_flag=True,
     help="Preview what would be cleaned without actually deleting",
 )
-def clean(clean_all: bool, failed: bool, days_old: int, dry_run: bool) -> None:
-    """Clean up old or failed checkpoints."""
+def clean(
+    clean_all: bool, failed: bool, completed: bool, days_old: int, dry_run: bool
+) -> None:
+    """Clean up old, failed, or completed checkpoints."""
     handler = OperationHandler()
-    handler.handle_clean_checkpoints(clean_all, failed, days_old, dry_run)
+    handler.handle_clean_checkpoints(clean_all, failed, completed, days_old, dry_run)
 
 
 @checkpoint.command()

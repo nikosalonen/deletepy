@@ -269,6 +269,45 @@ class CheckpointManager:
 
         return deleted_count
 
+    def clean_completed_checkpoints(self, dry_run: bool = False) -> int:
+        """Clean up completed checkpoints regardless of age.
+
+        Args:
+            dry_run: If True, only show what would be deleted without deleting
+
+        Returns:
+            int: Number of checkpoints deleted (or would be deleted in dry-run)
+        """
+        deleted_count = 0
+
+        try:
+            checkpoints = self.list_checkpoints(status=CheckpointStatus.COMPLETED)
+
+            if dry_run:
+                if checkpoints:
+                    print_info(
+                        f"Would delete {len(checkpoints)} completed checkpoints:"
+                    )
+                    self.display_checkpoints(checkpoints)
+                    return len(checkpoints)
+                else:
+                    print_info("No completed checkpoints found to clean up")
+                    return 0
+
+            for checkpoint in checkpoints:
+                if self.delete_checkpoint(checkpoint.checkpoint_id):
+                    deleted_count += 1
+
+            if deleted_count > 0:
+                print_success(f"Cleaned up {deleted_count} completed checkpoints")
+            else:
+                print_info("No completed checkpoints to clean up")
+
+        except Exception as e:
+            print_error(f"Failed to clean completed checkpoints: {e}")
+
+        return deleted_count
+
     def create_checkpoint(
         self,
         operation_type: OperationType,
