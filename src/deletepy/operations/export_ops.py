@@ -405,12 +405,19 @@ def export_users_last_login_to_csv(
     )
 
     # Initialize processing state
-    csv_data = []
+    csv_data: list[dict[str, Any]] = []
     total_counters = _initialize_export_counters()
 
     # Process emails in batches
     _process_emails_in_batches(
-        emails, batch_size, csv_data, total_counters, token, base_url, connection, output_file
+        emails,
+        batch_size,
+        csv_data,
+        total_counters,
+        token,
+        base_url,
+        connection,
+        output_file,
     )
 
     # Generate final summary
@@ -518,9 +525,7 @@ def export_users_last_login_to_csv_with_checkpoints(
         checkpoint_manager = CheckpointManager()
 
     # Load or create checkpoint
-    checkpoint = _load_or_create_export_checkpoint(
-        emails, config, checkpoint_manager
-    )
+    checkpoint = _load_or_create_export_checkpoint(emails, config, checkpoint_manager)
 
     # Save initial checkpoint
     checkpoint_manager.save_checkpoint(checkpoint)
