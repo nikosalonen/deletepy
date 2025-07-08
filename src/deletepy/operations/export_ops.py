@@ -608,10 +608,11 @@ def _process_export_with_checkpoints(
     connection = checkpoint.config.connection_filter
     output_file = checkpoint.config.output_file
 
-    # Assert output_file is not None (should be guaranteed by validation)
-    assert output_file is not None, (
-        "output_file should be validated during checkpoint creation/loading"
-    )
+    # Validate output_file is not None (should be guaranteed by validation)
+    if output_file is None:
+        raise ValueError(
+            "output_file should be validated during checkpoint creation/loading"
+        )
 
     print_info(f"Processing {len(checkpoint.remaining_items)} remaining emails...")
 
