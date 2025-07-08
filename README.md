@@ -38,7 +38,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Email resolution** - Automatically resolve emails to Auth0 user IDs with multi-user detection
 - **Environment separation** - Separate development and production configurations
 - **Production safeguards** - Explicit confirmation required for production operations
-- **Advanced rate limiting** - Built-in delays with exponential backoff and retry logic
+- **Advanced rate limiting** - Built-in delays to respect Auth0 API limits
 - **Progress tracking** - Real-time progress indicators for bulk operations
 - **Graceful shutdown** - Handle interruption signals safely
 - **Memory efficient** - Generator-based file processing for large datasets
@@ -381,7 +381,7 @@ Checkpoints are automatically created for these operations:
 #### Error Recovery
 - Failed operations create checkpoints with error details for debugging
 - Resume operations can handle partial failures and continue processing
-- Automatic retry logic for transient network issues
+- Graceful handling of network issues and API errors
 
 #### Performance Optimization
 - Batch processing state is preserved across interruptions

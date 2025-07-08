@@ -253,36 +253,6 @@ class OperationHandler:
             "multiple_users": state["multiple_users"],
         }
 
-    def _process_users(
-        self,
-        user_ids: list[str],
-        token: str,
-        base_url: str,
-        operation: str,
-        operation_display: str,
-    ) -> dict[str, Any]:
-        """Process users for the specified operation.
-
-        Args:
-            user_ids: List of user IDs/emails to process
-            token: Auth0 access token
-            base_url: Auth0 API base URL
-            operation: Operation to perform
-            operation_display: Display name for progress
-
-        Returns:
-            Dict[str, Any]: Processing results with counts and user lists
-        """
-        state = self._initialize_processing_state()
-        total_users = len(user_ids)
-
-        for idx, user_id in enumerate(user_ids, 1):
-            show_progress(idx, total_users, operation_display)
-            self._process_single_user(user_id, token, base_url, operation, state)
-
-        click.echo("\n")  # Clear progress line
-        return self._create_processing_results(state)
-
     def _resolve_user_identifier(
         self,
         user_id: str,

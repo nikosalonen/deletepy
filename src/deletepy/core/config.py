@@ -10,9 +10,6 @@ from .exceptions import AuthConfigError
 # Global constants for API configuration
 API_RATE_LIMIT = 0.5  # seconds between requests
 API_TIMEOUT = 30  # request timeout in seconds
-MAX_RETRIES = 3  # maximum number of retries
-BASE_RETRY_DELAY = 1.0  # base delay between retries in seconds
-MAX_RETRY_DELAY = 60.0  # maximum delay between retries in seconds
 
 
 def check_env_file() -> None:
