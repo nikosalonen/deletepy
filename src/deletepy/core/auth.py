@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import requests
 from dotenv import load_dotenv
 
@@ -30,7 +32,7 @@ def get_access_token(env: str = "dev") -> str:
 
     client_id = config["client_id"]
     client_secret = config["client_secret"]
-    domain = config["auth0_domain"]
+    domain = config["domain"]
 
     # Validate required environment variables
     if not client_id:
@@ -61,15 +63,15 @@ def get_access_token(env: str = "dev") -> str:
     response = requests.post(url, json=payload, headers=headers, timeout=API_TIMEOUT)
     response.raise_for_status()
     try:
-        json_response = response.json()
+        json_response: dict[str, Any] = response.json()
         if "access_token" not in json_response:
             raise AuthConfigError("Access token not found in Auth0 response")
-        return json_response["access_token"]
+        return cast(str, json_response["access_token"])
     except ValueError as e:
         raise AuthConfigError(f"Invalid JSON response from Auth0: {str(e)}") from e
 
 
-def doctor(env: str = "dev", test_api: bool = False) -> dict:
+def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
     """Test if the credentials work by getting an access token and optionally testing API access.
 
     Args:
@@ -77,7 +79,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
         test_api: Whether to test API access with the token
 
     Returns:
-        dict: Status information including success status and details
+        Dict[str, Any]: Status information including success status and details
 
     Raises:
         AuthConfigError: If authentication fails
@@ -93,8 +95,8 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
         config = get_env_config(env)
         logger.info(f"    ✅ Client ID: {config['client_id'][:8]}...")
         logger.info(f"    ✅ Client Secret: {'*' * 8}...")
-        logger.info(f"    ✅ Auth0 Domain: {config['auth0_domain']}")
-        logger.info(f"    ✅ API URL: {config['api_url']}")
+        logger.info(f"    ✅ Auth0 Domain: {config['domain']}")
+        logger.info(f"    ✅ API URL: {config['base_url']}")
 
         logger.info("  🔑 Getting access token...")
         token = get_access_token(env)
@@ -113,7 +115,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict:
 
         if test_api:
             logger.info("  🌐 Testing API access...")
-            base_url = f"https://{config['auth0_domain']}"
+            base_url = f"https://{config['domain']}"
             headers = {
                 "Authorization": f"Bearer {token}",
                 "Content-Type": "application/json",

@@ -46,6 +46,7 @@ def mock_requests(request):
         with patch(f"{module_paths[0]}.requests") as mock:
             # Ensure exceptions module is properly mocked
             import requests
+
             mock.exceptions = requests.exceptions
             yield mock
     else:
@@ -55,6 +56,7 @@ def mock_requests(request):
             mock = MagicMock()
             # Ensure exceptions module is properly mocked
             import requests
+
             mock.exceptions = requests.exceptions
             for module_path in module_paths:
                 patcher = patch(f"{module_path}.requests", mock)

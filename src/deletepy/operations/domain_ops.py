@@ -15,8 +15,6 @@ from ..utils.display_utils import (
 
 def check_email_domains(
     emails: list[str],
-    token: str,
-    base_url: str,
     allowed_domains: list[str] | None = None,
     blocked_domains: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -24,15 +22,13 @@ def check_email_domains(
 
     Args:
         emails: List of email addresses to check
-        token: Auth0 access token
-        base_url: Auth0 API base URL
         allowed_domains: List of allowed domains (if None, all domains allowed)
         blocked_domains: List of blocked domains (if None, no domains blocked)
 
     Returns:
         Dict[str, Any]: Results summary with categorized emails
     """
-    results = {
+    results: dict[str, Any] = {
         "allowed": [],
         "blocked": [],
         "unknown": [],
@@ -195,7 +191,7 @@ def get_domain_statistics(emails: list[str]) -> dict[str, int]:
     Returns:
         Dict[str, int]: Dictionary with domain counts
     """
-    domain_counts = {}
+    domain_counts: dict[str, int] = {}
 
     for email in emails:
         if "@" in email:

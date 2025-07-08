@@ -195,3 +195,4 @@ domain_cache.json
 *.txt
 
 shady
+.checkpoints

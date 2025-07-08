@@ -10,6 +10,7 @@ from .auth_utils import (
     parse_auth0_user_id,
     validate_auth0_user_id,
 )
+from .checkpoint_manager import CheckpointManager
 from .csv_utils import (
     clean_identifier,
     extract_identifiers_from_csv,
@@ -64,6 +65,8 @@ __all__ = [
     "is_social_connection",
     "parse_auth0_user_id",
     "validate_auth0_user_id",
+    # Checkpoint utilities
+    "CheckpointManager",
     # CSV utilities
     "clean_identifier",
     "extract_identifiers_from_csv",

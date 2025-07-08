@@ -3,8 +3,7 @@
 # Core user operations
 # Batch operations
 from .batch_ops import (
-    check_unblocked_users,
-    find_users_by_social_media_ids,
+    CheckpointOperationConfig,
 )
 
 # Domain operations
@@ -17,10 +16,6 @@ from .domain_ops import (
 )
 
 # Export operations
-from .export_ops import (
-    export_users_last_login_to_csv,
-)
-
 # Preview operations
 from .preview_ops import (
     PreviewResult,
@@ -49,10 +44,7 @@ __all__ = [
     "revoke_user_grants",
     "unlink_user_identity",
     # Batch operations
-    "check_unblocked_users",
-    "find_users_by_social_media_ids",
-    # Export operations
-    "export_users_last_login_to_csv",
+    "CheckpointOperationConfig",
     # Preview operations
     "PreviewResult",
     "preview_user_operations",

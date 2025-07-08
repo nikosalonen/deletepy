@@ -4,9 +4,9 @@
 # CLI
 from .cli import (
     csv_main,
-    parse_csv_arguments,
+    handle_csv_command,
+    parse_csv_args,
     print_csv_usage,
-    process_csv_file,
     validate_args,
     validate_connection_type,
     validate_environment,
@@ -18,9 +18,6 @@ from .core.auth import doctor, get_access_token
 from .core.config import (
     API_RATE_LIMIT,
     API_TIMEOUT,
-    BASE_RETRY_DELAY,
-    MAX_RETRIES,
-    MAX_RETRY_DELAY,
     get_base_url,
     get_env_config,
     get_estimated_processing_time,
@@ -36,14 +33,25 @@ from .core.exceptions import (
     ValidationError,
 )
 
+# Models
+from .models.checkpoint import (
+    BatchProgress,
+    Checkpoint,
+    CheckpointStatus,
+    OperationConfig,
+    OperationType,
+    ProcessingResults,
+)
+
 # Operations
 from .operations.batch_ops import (
+    CheckpointOperationConfig,
+    ExecuteCheckpointConfig,
     _categorize_users,
     _display_search_results,
     _handle_auto_delete_operations,
-    _search_users_by_social_id,
-    check_unblocked_users,
-    find_users_by_social_media_ids,
+    check_unblocked_users_with_checkpoints,
+    find_users_by_social_media_ids_with_checkpoints,
 )
 from .operations.domain_ops import (
     _display_domain_check_results,
@@ -54,13 +62,14 @@ from .operations.domain_ops import (
     validate_domain_format,
 )
 from .operations.export_ops import (
+    ExportWithCheckpointsConfig,
     _build_csv_data_dict,
     _fetch_user_data,
     _generate_export_summary,
     _process_email_batch,
     _validate_and_setup_export,
     _write_csv_batch,
-    export_users_last_login_to_csv,
+    export_users_last_login_to_csv_with_checkpoints,
 )
 from .operations.preview_ops import (
     PreviewResult,
@@ -68,6 +77,7 @@ from .operations.preview_ops import (
     preview_user_operations,
 )
 from .operations.user_ops import (
+    batch_user_operations_with_checkpoints,
     block_user,
     delete_user,
     get_user_details,
@@ -112,6 +122,7 @@ from .utils import (
     validate_file_path,
     write_identifiers_to_file,
 )
+from .utils.checkpoint_manager import CheckpointManager
 
 __version__ = "1.0.0"
 
@@ -123,9 +134,6 @@ __all__ = [
     "get_base_url",
     "API_RATE_LIMIT",
     "API_TIMEOUT",
-    "MAX_RETRIES",
-    "BASE_RETRY_DELAY",
-    "MAX_RETRY_DELAY",
     "get_optimal_batch_size",
     "get_estimated_processing_time",
     "validate_rate_limit_config",
@@ -136,7 +144,17 @@ __all__ = [
     "FileOperationError",
     "APIError",
     "ValidationError",
+    # Models
+    "Checkpoint",
+    "CheckpointStatus",
+    "OperationType",
+    "OperationConfig",
+    "BatchProgress",
+    "ProcessingResults",
     # Operations
+    "CheckpointOperationConfig",
+    "ExecuteCheckpointConfig",
+    "ExportWithCheckpointsConfig",
     "block_user",
     "delete_user",
     "get_user_details",
@@ -145,14 +163,16 @@ __all__ = [
     "revoke_user_grants",
     "revoke_user_sessions",
     "unlink_user_identity",
-    "check_unblocked_users",
-    "find_users_by_social_media_ids",
-    "export_users_last_login_to_csv",
     "check_email_domains",
     "validate_domain_format",
     "extract_domains_from_emails",
     "get_domain_statistics",
     "filter_emails_by_domain",
+    # Checkpoint-enabled operations
+    "export_users_last_login_to_csv_with_checkpoints",
+    "check_unblocked_users_with_checkpoints",
+    "find_users_by_social_media_ids_with_checkpoints",
+    "batch_user_operations_with_checkpoints",
     # Preview operations
     "PreviewResult",
     "preview_user_operations",
@@ -189,6 +209,8 @@ __all__ = [
     "print_success",
     "print_info",
     "print_section_header",
+    # Checkpoint manager
+    "CheckpointManager",
     # CLI
     "validate_args",
     "validate_environment",
@@ -197,7 +219,7 @@ __all__ = [
     "validate_user_id_list",
     "validate_file_path_argument",
     "csv_main",
-    "parse_csv_arguments",
+    "parse_csv_args",
     "print_csv_usage",
-    "process_csv_file",
+    "handle_csv_command",
 ]

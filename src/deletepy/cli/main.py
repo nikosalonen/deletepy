@@ -64,7 +64,9 @@ def export_last_login(input_file: Path, env: str, connection: str | None) -> Non
 @cli.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+@click.option(
+    "--dry-run", is_flag=True, help="Preview what would happen without executing"
+)
 def unlink_social_ids(input_file: Path, env: str, dry_run: bool) -> None:
     """Unlink social identities from Auth0 users and delete detached accounts."""
     handler = OperationHandler()
@@ -84,10 +86,30 @@ def unlink_social_ids(input_file: Path, env: str, dry_run: bool) -> None:
 )
 def cleanup_csv(input_file: Path, env: str | None, output_type: str) -> None:
     """Process CSV file and extract/convert user identifiers."""
-    from .csv_commands import process_csv_file
+    from ..utils.csv_utils import (
+        extract_identifiers_from_csv,
+        write_identifiers_to_file,
+    )
 
-    success = process_csv_file(str(input_file), env, output_type, interactive=True)
-    if not success:
+    try:
+        identifiers = extract_identifiers_from_csv(
+            filename=str(input_file), env=env, output_type=output_type
+        )
+        if identifiers:
+            output_file = f"cleaned_{input_file.name}"
+            success = write_identifiers_to_file(identifiers, output_file)
+            if success:
+                click.echo(
+                    f"Successfully processed {len(identifiers)} identifiers to {output_file}"
+                )
+            else:
+                click.echo(f"Error writing output file: {output_file}")
+                sys.exit(1)
+        else:
+            click.echo("No identifiers found in input file")
+            sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error processing CSV file: {e}")
         sys.exit(1)
 
 
@@ -100,7 +122,9 @@ def users() -> None:
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+@click.option(
+    "--dry-run", is_flag=True, help="Preview what would happen without executing"
+)
 def block(input_file: Path, env: str, dry_run: bool) -> None:
     """Block the specified users."""
     handler = OperationHandler()
@@ -110,7 +134,9 @@ def block(input_file: Path, env: str, dry_run: bool) -> None:
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+@click.option(
+    "--dry-run", is_flag=True, help="Preview what would happen without executing"
+)
 def delete(input_file: Path, env: str, dry_run: bool) -> None:
     """Delete the specified users."""
     handler = OperationHandler()
@@ -120,11 +146,105 @@ def delete(input_file: Path, env: str, dry_run: bool) -> None:
 @users.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-@click.option("--dry-run", is_flag=True, help="Preview what would happen without executing")
+@click.option(
+    "--dry-run", is_flag=True, help="Preview what would happen without executing"
+)
 def revoke_grants_only(input_file: Path, env: str, dry_run: bool) -> None:
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
     handler.handle_user_operations(input_file, env, "revoke-grants-only", dry_run)
+
+
+@cli.group()
+def checkpoint() -> None:
+    """Checkpoint management operations."""
+    pass
+
+
+@checkpoint.command()
+@click.option(
+    "--operation-type",
+    type=click.Choice(
+        [
+            "export-last-login",
+            "batch-delete",
+            "batch-block",
+            "batch-revoke-grants",
+            "social-unlink",
+            "check-unblocked",
+            "check-domains",
+        ]
+    ),
+    help="Filter by operation type",
+)
+@click.option(
+    "--status",
+    type=click.Choice(["active", "completed", "failed", "cancelled"]),
+    help="Filter by checkpoint status",
+)
+@click.option("--env", type=click.Choice(["dev", "prod"]), help="Filter by environment")
+@click.option("--details", is_flag=True, help="Show detailed checkpoint information")
+def list(
+    operation_type: str | None, status: str | None, env: str | None, details: bool
+) -> None:
+    """List all checkpoints with optional filters."""
+    handler = OperationHandler()
+    handler.handle_list_checkpoints(operation_type, status, env, details)
+
+
+@checkpoint.command()
+@click.argument("checkpoint_id", type=str)
+@click.option(
+    "--input-file",
+    type=click.Path(exists=True, path_type=Path),
+    help="Override input file from checkpoint (optional)",
+)
+def resume(checkpoint_id: str, input_file: Path | None) -> None:
+    """Resume an operation from a checkpoint."""
+    handler = OperationHandler()
+    handler.handle_resume_checkpoint(checkpoint_id, input_file)
+
+
+@checkpoint.command()
+@click.option(
+    "--all", "clean_all", is_flag=True, help="Clean all checkpoints (use with caution)"
+)
+@click.option("--failed", is_flag=True, help="Clean only failed checkpoints")
+@click.option("--completed", is_flag=True, help="Clean all completed checkpoints")
+@click.option(
+    "--days-old",
+    type=int,
+    default=30,
+    help="Clean checkpoints older than specified days (default: 30)",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview what would be cleaned without actually deleting",
+)
+def clean(
+    clean_all: bool, failed: bool, completed: bool, days_old: int, dry_run: bool
+) -> None:
+    """Clean up old, failed, or completed checkpoints."""
+    handler = OperationHandler()
+    handler.handle_clean_checkpoints(clean_all, failed, completed, days_old, dry_run)
+
+
+@checkpoint.command()
+@click.argument("checkpoint_id", type=str)
+@click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
+def delete_checkpoint(checkpoint_id: str, confirm: bool) -> None:
+    """Delete a specific checkpoint."""
+    handler = OperationHandler()
+    handler.handle_delete_checkpoint(checkpoint_id, confirm)
+
+
+@checkpoint.command()
+@click.argument("checkpoint_id", type=str)
+def details(checkpoint_id: str) -> None:
+    """Show detailed information about a specific checkpoint."""
+    handler = OperationHandler()
+    handler.handle_checkpoint_details(checkpoint_id)
 
 
 def main() -> None:

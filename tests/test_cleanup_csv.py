@@ -95,7 +95,7 @@ class TestExtractIdentifiersFromCSV:
             temp_path = temp.name
 
         try:
-            result = extract_identifiers_from_csv(temp_path)
+            result = extract_identifiers_from_csv(temp_path, interactive=False)
             assert len(result) == 2
             assert result == ["user@example.com", "test@domain.org"]
         finally:
@@ -107,7 +107,7 @@ class TestExtractIdentifiersFromCSV:
             temp_path = temp.name
 
         try:
-            result = extract_identifiers_from_csv(temp_path)
+            result = extract_identifiers_from_csv(temp_path, interactive=False)
             assert len(result) == 2
             assert result == ["user@example.com", "test@domain.org"]
         finally:

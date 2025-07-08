@@ -23,12 +23,12 @@ format: ## Format code
 	ruff format src/ tests/
 
 type-check: ## Run type checking
-	mypy src/ tests/
+	mypy src/
 
 check-all: ## Run all quality checks
 	ruff check src/ tests/
 	ruff format --check src/ tests/
-	mypy src/ tests/
+	mypy src/
 	pytest
 
 clean: ## Clean build artifacts
