@@ -136,17 +136,6 @@ class OperationConfig:
                     f"output_file is required for {operation_type.value} operations"
                 )
 
-        # Add validation for other operation types as needed
-        if operation_type in [
-            OperationType.BATCH_DELETE,
-            OperationType.BATCH_BLOCK,
-            OperationType.BATCH_REVOKE_GRANTS,
-            OperationType.CHECK_UNBLOCKED,
-            OperationType.SOCIAL_UNLINK,
-        ]:
-            # These operations typically don't require output_file but may need other validations
-            pass
-
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -210,12 +199,11 @@ class Checkpoint:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Checkpoint":
         """Create from dictionary."""
-        # Handle enum fields with proper enum defaults
+        # Handle enum fields - require operation_type to be present
         operation_type = data.get("operation_type")
         if operation_type is None:
-            operation_type = OperationType.EXPORT_LAST_LOGIN
-        else:
-            operation_type = OperationType(operation_type)
+            raise ValueError("Missing required field: operation_type")
+        operation_type = OperationType(operation_type)
 
         status = data.get("status")
         if status is None:

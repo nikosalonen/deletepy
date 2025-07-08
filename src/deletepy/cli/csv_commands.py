@@ -9,14 +9,43 @@ from ..utils.csv_utils import (
 )
 
 
-def parse_csv_args(args: argparse.Namespace) -> tuple[str | None, str | None, str]:
+class CSVCommandError(Exception):
+    """Exception raised for CSV command argument errors."""
+
+    def __init__(self, error_type: str, details: str | None = None):
+        """Initialize CSV command error.
+
+        Args:
+            error_type: Type of error (e.g., 'missing_filename', 'invalid_output_type')
+            details: Optional additional details about the error
+        """
+        self.error_type = error_type
+        self.details = details
+        super().__init__(f"CSV command error: {error_type}")
+
+    def is_missing_filename(self) -> bool:
+        """Check if this is a missing filename error."""
+        return self.error_type == "missing_filename"
+
+    def is_invalid_output_type(self) -> bool:
+        """Check if this is an invalid output type error."""
+        return self.error_type == "invalid_output_type"
+
+
+def parse_csv_args(args: argparse.Namespace) -> tuple[str, str | None, str]:
     """Parse CSV command arguments and return configuration.
 
     Args:
         args: Parsed command line arguments
 
     Returns:
-        Tuple[str | None, str | None, str]: (filename, env, output_type)
+        Tuple[str, str | None, str]: (filename, env, output_type)
+            - filename: Always a string (never None, raises exception if missing)
+            - env: Environment string or None if not specified
+            - output_type: Always a valid output type string
+
+    Raises:
+        CSVCommandError: If filename is missing or output_type is invalid
     """
     filename = getattr(args, "filename", None)
     env = getattr(args, "env", None)
@@ -24,17 +53,15 @@ def parse_csv_args(args: argparse.Namespace) -> tuple[str | None, str | None, st
 
     # Handle special case where no filename is provided
     if not filename:
-        # Check if user wants to see usage
-        if hasattr(args, "command") and args.command == "csv":
-            print_csv_usage()
-            return None, None, "user_id"
+        raise CSVCommandError("missing_filename")
 
     # Validate output type
     valid_types = ["user_id", "email", "username"]
     if output_type not in valid_types:
-        print(f"Invalid output type: {output_type}")
-        print(f"Valid types: {', '.join(valid_types)}")
-        return None, None, "user_id"
+        raise CSVCommandError(
+            "invalid_output_type",
+            f"Invalid output type: {output_type}. Valid types: {', '.join(valid_types)}",
+        )
 
     return filename, env, output_type
 
@@ -45,9 +72,13 @@ def handle_csv_command(args: argparse.Namespace) -> None:
     Args:
         args: Parsed command line arguments
     """
-    filename, env, output_type = parse_csv_args(args)
-
-    if filename is None:
+    try:
+        filename, env, output_type = parse_csv_args(args)
+    except CSVCommandError as e:
+        if e.is_missing_filename():
+            print_csv_usage()
+        elif e.is_invalid_output_type():
+            print(e.details)
         return
 
     print(f"Processing CSV file: {filename}")
