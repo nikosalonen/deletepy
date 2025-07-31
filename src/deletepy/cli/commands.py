@@ -54,7 +54,6 @@ class OperationHandler:
 
     def __init__(self) -> None:
         """Initialize the operation handler."""
-        pass
 
     def _setup_auth_and_files(
         self, input_file: Path, env: str

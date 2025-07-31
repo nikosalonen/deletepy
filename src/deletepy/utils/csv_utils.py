@@ -8,11 +8,7 @@ from ..core.auth import get_access_token
 from ..core.config import get_base_url
 from ..core.exceptions import FileOperationError
 from ..operations.user_ops import get_user_details
-from ..utils.display_utils import (
-    print_error,
-    print_info,
-    print_warning,
-)
+from ..utils.display_utils import print_error, print_info, print_warning
 from ..utils.request_utils import make_rate_limited_request
 from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
 from .file_utils import safe_file_read, safe_file_write
@@ -29,9 +25,11 @@ def sanitize_identifiers(identifiers: list[str]) -> list[str]:
     """
     redacted_keywords = ["client_secret", "auth0"]
     return [
-        identifier
-        if not any(keyword in identifier.lower() for keyword in redacted_keywords)
-        else "[REDACTED]"
+        (
+            identifier
+            if not any(keyword in identifier.lower() for keyword in redacted_keywords)
+            else "[REDACTED]"
+        )
         for identifier in identifiers
     ]
 

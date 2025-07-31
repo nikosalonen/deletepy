@@ -16,17 +16,45 @@ from ..models.checkpoint import (
     OperationType,
 )
 from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import (
-    show_progress,
-    shutdown_requested,
-)
-from ..utils.legacy_print import (
-    print_error,
-    print_info,
-    print_success,
-    print_warning,
-)
+from ..utils.display_utils import show_progress, shutdown_requested
+from ..utils.legacy_print import print_error, print_info, print_success, print_warning
+from ..utils.validators import InputValidator
 from .user_ops import delete_user, unlink_user_identity
+
+
+def secure_url_encode(value: str, context: str = "URL parameter") -> str:
+    """Securely URL encode a value with validation.
+
+    Args:
+        value: Value to encode
+        context: Context description for error messages
+
+    Returns:
+        str: Safely encoded value
+
+    Raises:
+        ValueError: If value fails security validation
+    """
+    if not value:
+        raise ValueError(f"{context} cannot be empty")
+
+    # Validate the original value
+    if "user" in context.lower() or "id" in context.lower():
+        result = InputValidator.validate_auth0_user_id_enhanced(value)
+        if not result.is_valid:
+            raise ValueError(f"Invalid {context}: {result.error_message}")
+
+    # URL encode the value
+    encoded = quote(value, safe="")
+
+    # Validate the encoded result
+    validation_result = InputValidator.validate_url_encoding_secure(encoded)
+    if not validation_result.is_valid:
+        raise ValueError(
+            f"URL encoding failed security validation for {context}: {validation_result.error_message}"
+        )
+
+    return encoded
 
 
 @dataclass
@@ -749,7 +777,7 @@ def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
     Returns:
         int: Number of identities for the user
     """
-    url = f"{base_url}/api/v2/users/{quote(user_id)}"
+    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -909,7 +937,11 @@ def _load_existing_checkpoint(
         return None
 
     if not checkpoint.is_resumable():
-        print_warning(f"Checkpoint {checkpoint_id} is not resumable")
+        print_warning(
+            f"Checkpoint {checkpoint_id} is not resumable",
+            operation="checkpoint_resume",
+            checkpoint_id=checkpoint_id,
+        )
         return None
 
     return checkpoint
@@ -946,7 +978,11 @@ def _create_new_checkpoint(
         operation_type=operation_type, config=config, items=items, batch_size=50
     )
 
-    print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+    print_info(
+        f"Created checkpoint: {checkpoint.checkpoint_id}",
+        operation="checkpoint_create",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
     return checkpoint
 
 
@@ -981,7 +1017,11 @@ def _setup_checkpoint_operation(
             setup_config.operation_name,
         )
     else:
-        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
+        print_success(
+            f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
+            operation="checkpoint_resume",
+            checkpoint_id=checkpoint.checkpoint_id,
+        )
         # Use configuration from checkpoint
         setup_config.env = checkpoint.config.environment
         setup_config.auto_delete = checkpoint.config.auto_delete
@@ -1290,9 +1330,12 @@ def _execute_with_checkpoints(
         processing_config=processing_config,
     )
 
-    checkpoint, checkpoint_manager, env, auto_delete = (
-        _setup_checkpoint_operation_from_config(exec_config)
-    )
+    (
+        checkpoint,
+        checkpoint_manager,
+        env,
+        auto_delete,
+    ) = _setup_checkpoint_operation_from_config(exec_config)
 
     process_params = _prepare_process_parameters(
         exec_config, checkpoint, checkpoint_manager, env, auto_delete
@@ -1735,7 +1778,7 @@ def _check_batch_unblocked_users(
         if shutdown_requested():
             break
 
-        url = f"{base_url}/api/v2/users/{quote(user_id)}"
+        url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",

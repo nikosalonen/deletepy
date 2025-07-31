@@ -11,6 +11,7 @@ from ..utils.display_utils import (
     show_progress,
     shutdown_requested,
 )
+from ..utils.validators import InputValidator
 
 
 def check_email_domains(
@@ -45,6 +46,17 @@ def check_email_domains(
         show_progress(idx, total_emails, "Checking domains")
 
         try:
+            # Validate email format first
+            validation_result = InputValidator.validate_email_comprehensive(email)
+            if not validation_result.is_valid:
+                results["errors"].append(
+                    {
+                        "email": email,
+                        "reason": f"Invalid email format: {validation_result.error_message}",
+                    }
+                )
+                continue
+
             # Extract domain from email
             domain = email.split("@")[-1].lower() if "@" in email else ""
 

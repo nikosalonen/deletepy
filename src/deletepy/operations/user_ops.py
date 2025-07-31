@@ -14,17 +14,45 @@ from ..models.checkpoint import (
     OperationType,
 )
 from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import (
-    show_progress,
-    shutdown_requested,
-)
-from ..utils.legacy_print import (
-    print_error,
-    print_info,
-    print_success,
-    print_warning,
-)
+from ..utils.display_utils import show_progress, shutdown_requested
+from ..utils.legacy_print import print_error, print_info, print_success, print_warning
 from ..utils.request_utils import make_rate_limited_request
+from ..utils.validators import InputValidator
+
+
+def secure_url_encode(value: str, context: str = "URL parameter") -> str:
+    """Securely URL encode a value with validation.
+
+    Args:
+        value: Value to encode
+        context: Context description for error messages
+
+    Returns:
+        str: Safely encoded value
+
+    Raises:
+        ValueError: If value fails security validation
+    """
+    if not value:
+        raise ValueError(f"{context} cannot be empty")
+
+    # Validate the original value
+    if "user" in context.lower() or "id" in context.lower():
+        result = InputValidator.validate_auth0_user_id_enhanced(value)
+        if not result.is_valid:
+            raise ValueError(f"Invalid {context}: {result.error_message}")
+
+    # URL encode the value
+    encoded = quote(value, safe="")
+
+    # Validate the encoded result
+    validation_result = InputValidator.validate_url_encoding_secure(encoded)
+    if not validation_result.is_valid:
+        raise ValueError(
+            f"URL encoding failed security validation for {context}: {validation_result.error_message}"
+        )
+
+    return encoded
 
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
@@ -34,7 +62,7 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
     # First revoke all sessions
     revoke_user_sessions(user_id, token, base_url)
 
-    url = f"{base_url}/api/v2/users/{quote(user_id)}"
+    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -65,7 +93,7 @@ def block_user(user_id: str, token: str, base_url: str) -> None:
     revoke_user_sessions(user_id, token, base_url)
     revoke_user_grants(user_id, token, base_url)
 
-    url = f"{base_url}/api/v2/users/{quote(user_id)}"
+    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -110,6 +138,10 @@ def get_user_id_from_email(
     if users is None:
         return None
 
+    # Handle empty list consistently - return None when no users found
+    if not users:
+        return None
+
     # Extract user IDs with connection filtering
     user_ids = _extract_user_ids_from_response(users, connection, email)
 
@@ -129,6 +161,9 @@ def _fetch_users_by_email(
     Returns:
         Optional[List[Dict[str, Any]]]: List of user objects or None if request failed
     """
+    from ..utils.logging_utils import get_logger
+
+    logger = get_logger(__name__)
     url = f"{base_url}/api/v2/users-by-email"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -139,24 +174,60 @@ def _fetch_users_by_email(
 
     response = make_rate_limited_request("GET", url, headers, params=params)
     if response is None:
-        print_error(
+        logger.error(
             f"Error fetching user_id for email {email}: Request failed after retries",
-            email=email,
-            operation="get_user_id_from_email",
+            extra={
+                "email": email,
+                "operation": "get_user_id_from_email",
+                "api_endpoint": url,
+                "error_type": "request_failed",
+            },
         )
         return None
 
     try:
         users = response.json()
-        if users and isinstance(users, list):
-            return cast(list[dict[str, Any]], users)
-        return None
+        if isinstance(users, list):
+            if users:
+                logger.info(
+                    f"Found {len(users)} user(s) for email {email}",
+                    extra={
+                        "email": email,
+                        "operation": "get_user_id_from_email",
+                        "user_count": len(users),
+                    },
+                )
+                return cast(list[dict[str, Any]], users)
+            else:
+                logger.info(
+                    f"No users found for email {email}",
+                    extra={
+                        "email": email,
+                        "operation": "get_user_id_from_email",
+                        "user_count": 0,
+                    },
+                )
+                return []  # Return empty list instead of None for consistency
+        else:
+            logger.warning(
+                f"Unexpected response format for email {email}: expected list, got {type(users)}",
+                extra={
+                    "email": email,
+                    "operation": "get_user_id_from_email",
+                    "response_type": str(type(users)),
+                },
+            )
+            return []
     except ValueError as e:
-        print_error(
+        logger.error(
             f"Error parsing response for email {email}: {e}",
-            email=email,
-            error=str(e),
-            operation="get_user_id_from_email",
+            extra={
+                "email": email,
+                "error": str(e),
+                "operation": "get_user_id_from_email",
+                "error_type": "json_parse_error",
+            },
+            exc_info=True,
         )
         return None
 
@@ -227,7 +298,7 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
     Returns:
         Optional[str]: User's email address if found, None otherwise
     """
-    url = f"{base_url}/api/v2/users/{quote(user_id)}"
+    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -260,7 +331,7 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] 
     Returns:
         Optional[Dict[str, Any]]: User details if found, None otherwise
     """
-    url = f"{base_url}/api/v2/users/{quote(user_id)}"
+    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -321,7 +392,9 @@ def _fetch_user_sessions(
     Returns:
         Optional[List[Dict[str, Any]]]: List of sessions or None if request failed
     """
-    list_url = f"{base_url}/api/v2/users/{quote(user_id)}/sessions"
+    list_url = (
+        f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}/sessions"
+    )
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -422,7 +495,9 @@ def _revoke_single_session(
 
 def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
     """Revoke all application grants (authorized applications) for a user in one call."""
-    grants_url = f"{base_url}/api/v2/grants?user_id={quote(user_id)}"
+    grants_url = (
+        f"{base_url}/api/v2/grants?user_id={secure_url_encode(user_id, 'user ID')}"
+    )
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -461,7 +536,7 @@ def unlink_user_identity(
     Returns:
         bool: True if successful, False otherwise
     """
-    url = f"{base_url}/api/v2/users/{quote(user_id)}/identities/{provider}/{user_identity_id}"
+    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}/identities/{provider}/{user_identity_id}"
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -520,9 +595,17 @@ def _load_or_create_checkpoint(
         checkpoint = _create_new_checkpoint(
             checkpoint_manager, operation, operation_type, env, user_ids
         )
-        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+        print_info(
+            f"Created checkpoint: {checkpoint.checkpoint_id}",
+            operation=operation,
+            checkpoint_id=checkpoint.checkpoint_id,
+        )
     else:
-        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
+        print_success(
+            f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
+            operation=operation,
+            checkpoint_id=checkpoint.checkpoint_id,
+        )
 
     return checkpoint
 
@@ -558,7 +641,11 @@ def _try_load_existing_checkpoint(
 
     # Validate checkpoint is resumable
     if not checkpoint.is_resumable():
-        print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
+        print_warning(
+            f"Checkpoint {resume_checkpoint_id} is not resumable",
+            operation="checkpoint_resume",
+            checkpoint_id=resume_checkpoint_id,
+        )
         return None
 
     return checkpoint
@@ -615,9 +702,17 @@ def _handle_checkpoint_error(
         print_warning(f"\n{operation.title()} operation interrupted by user")
         checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
         checkpoint_manager.save_checkpoint(checkpoint)
-        print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
-        print_info("You can resume this operation later using:")
-        print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
+        print_info(
+            f"Checkpoint saved: {checkpoint.checkpoint_id}",
+            operation=operation,
+            checkpoint_id=checkpoint.checkpoint_id,
+        )
+        print_info("You can resume this operation later using:", operation=operation)
+        print_info(
+            f"  deletepy resume {checkpoint.checkpoint_id}",
+            operation=operation,
+            checkpoint_id=checkpoint.checkpoint_id,
+        )
     elif error is not None:
         print_warning(f"\n{operation.title()} operation failed: {error}")
         checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
@@ -802,7 +897,7 @@ def _process_batch_loop(
     """
     for batch_start in range(0, len(remaining_user_ids), batch_size):
         if shutdown_requested():
-            print_warning("\nOperation interrupted")
+            print_warning("\nOperation interrupted", operation=operation)
             checkpoint_manager.save_checkpoint(checkpoint)
             return checkpoint.checkpoint_id
 
