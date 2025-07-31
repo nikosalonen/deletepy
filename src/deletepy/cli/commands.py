@@ -31,7 +31,6 @@ from ..operations.user_ops import (
     get_user_email,
     get_user_id_from_email,
 )
-from ..utils.auth_utils import validate_auth0_user_id
 from ..utils.checkpoint_manager import CheckpointManager
 from ..utils.display_utils import (
     CYAN,
@@ -215,7 +214,14 @@ class OperationHandler:
             operation: Operation to perform
             state: Processing state to update
         """
-        user_id = user_id.strip()
+        from ..utils.validators import SecurityValidator
+
+        # Sanitize user input first
+        user_id = SecurityValidator.sanitize_user_input(user_id)
+
+        if not user_id:
+            state["skipped_count"] += 1
+            return
 
         # Resolve email to user ID if needed
         resolved_user_id = self._resolve_user_identifier(
@@ -274,12 +280,25 @@ class OperationHandler:
         Returns:
             Optional[str]: Valid user ID if found, None if should skip
         """
-        # If input is an email, resolve to user_id
-        if (
-            "@" in user_id
-            and user_id.count("@") == 1
-            and len(user_id.split("@")[1]) > 0
-        ):
+        from ..utils.validators import InputValidator
+
+        # If input looks like an email, validate and resolve to user_id
+        if "@" in user_id:
+            # Validate email format comprehensively
+            email_result = InputValidator.validate_email_comprehensive(user_id)
+            if not email_result.is_valid:
+                invalid_user_ids.append(
+                    f"{user_id} (invalid email: {email_result.error_message})"
+                )
+                return None
+
+            # Show warnings if any
+            if email_result.warnings:
+                from ..utils.display_utils import print_warning
+
+                for warning in email_result.warnings:
+                    print_warning(f"Email validation warning for {user_id}: {warning}")
+
             resolved_ids = get_user_id_from_email(user_id, token, base_url)
             if not resolved_ids:
                 not_found_users.append(user_id)
@@ -291,12 +310,23 @@ class OperationHandler:
 
             return resolved_ids[0]
 
-        # Validate Auth0 user ID format
-        elif not validate_auth0_user_id(user_id):
-            invalid_user_ids.append(user_id)
-            return None
+        # Validate Auth0 user ID format using enhanced validation
+        else:
+            user_id_result = InputValidator.validate_auth0_user_id_enhanced(user_id)
+            if not user_id_result.is_valid:
+                invalid_user_ids.append(f"{user_id} ({user_id_result.error_message})")
+                return None
 
-        return user_id
+            # Show warnings if any
+            if user_id_result.warnings:
+                from ..utils.display_utils import print_warning
+
+                for warning in user_id_result.warnings:
+                    print_warning(
+                        f"User ID validation warning for {user_id}: {warning}"
+                    )
+
+            return user_id
 
     def _execute_user_operation(
         self, operation: str, user_id: str, token: str, base_url: str
@@ -403,8 +433,33 @@ class OperationHandler:
         try:
             base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
 
-            # For export operation, treat input as emails directly
-            emails = [line.strip() for line in user_ids if line.strip()]
+            # For export operation, treat input as emails directly with validation
+            from ..utils.validators import InputValidator, SecurityValidator
+
+            emails = []
+            for line in user_ids:
+                sanitized_line = SecurityValidator.sanitize_user_input(line)
+                if sanitized_line:
+                    # Validate email format if it looks like an email
+                    if "@" in sanitized_line:
+                        email_result = InputValidator.validate_email_comprehensive(
+                            sanitized_line
+                        )
+                        if email_result.is_valid:
+                            emails.append(sanitized_line)
+                            # Show warnings if any
+                            if email_result.warnings:
+                                for warning in email_result.warnings:
+                                    click.echo(
+                                        f"{YELLOW}Email validation warning for {sanitized_line}: {warning}{RESET}"
+                                    )
+                        else:
+                            click.echo(
+                                f"{RED}Invalid email skipped: {sanitized_line} - {email_result.error_message}{RESET}"
+                            )
+                    else:
+                        # Treat as user ID or other identifier
+                        emails.append(sanitized_line)
 
             if not emails:
                 click.echo("No valid emails found to export.")
@@ -493,8 +548,14 @@ class OperationHandler:
         try:
             base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
 
-            # For social media ID search, treat input as social media IDs
-            social_ids = [line.strip() for line in user_ids if line.strip()]
+            # For social media ID search, treat input as social media IDs with validation
+            from ..utils.validators import SecurityValidator
+
+            social_ids = []
+            for line in user_ids:
+                sanitized_line = SecurityValidator.sanitize_user_input(line)
+                if sanitized_line:
+                    social_ids.append(sanitized_line)
 
             if not social_ids:
                 click.echo("No valid social media IDs found to search.")

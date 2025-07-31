@@ -1039,7 +1039,10 @@ def _process_users_in_batch(
 
         show_progress(idx, len(user_ids), f"Processing {operation}")
 
-        user_id = user_id.strip()
+        # Sanitize user input first
+        from ..utils.validators import SecurityValidator
+
+        user_id = SecurityValidator.sanitize_user_input(user_id)
 
         # Resolve user identifier
         resolved_user_id = _resolve_user_identifier_for_batch(
