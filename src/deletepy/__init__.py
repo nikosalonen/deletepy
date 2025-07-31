@@ -20,9 +20,11 @@ from .core.config import (
     API_TIMEOUT,
     get_base_url,
     get_env_config,
+    validate_rate_limit_config,
+)
+from .utils.request_utils import (
     get_estimated_processing_time,
     get_optimal_batch_size,
-    validate_rate_limit_config,
 )
 from .core.exceptions import (
     APIError,

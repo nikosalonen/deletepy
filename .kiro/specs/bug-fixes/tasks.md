@@ -2,7 +2,7 @@
 
 ## Phase 1: Foundation Fixes (High Priority)
 
-- [ ] 1. Consolidate Rate Limiting Logic
+- [x] 1. Consolidate Rate Limiting Logic
   - Remove duplicate `get_optimal_batch_size()` and `get_estimated_processing_time()` functions from `src/deletepy/core/config.py`
   - Ensure all rate limiting logic is centralized in `src/deletepy/utils/request_utils.py`
   - Update all import statements across the codebase to use the centralized functions
