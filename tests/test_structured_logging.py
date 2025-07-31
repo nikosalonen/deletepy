@@ -207,7 +207,7 @@ class TestLegacyPrintFunctions:
                 captured_records.append(record)
 
         # Configure the logger to use our capturing handler
-        logger = logging.getLogger("deletepy.deletepy.utils.legacy_print")
+        logger = logging.getLogger("deletepy.utils.legacy_print")
         original_handlers = logger.handlers.copy()
         logger.handlers = []
         handler = CapturingHandler()
