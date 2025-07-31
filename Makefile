@@ -17,7 +17,7 @@ test-coverage: ## Run tests with coverage
 	pytest --cov=src/deletepy --cov-report=html --cov-report=term
 
 lint: ## Run linting checks
-	ruff check src/ tests/
+	ruff check src/ tests/ --fix
 
 format: ## Format code
 	ruff format src/ tests/
