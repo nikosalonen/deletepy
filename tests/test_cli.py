@@ -6,9 +6,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from click.testing import CliRunner
-
-from src.deletepy.cli.commands import OperationHandler
-from src.deletepy.cli.main import cli
+from deletepy.cli.commands import OperationHandler
+from deletepy.cli.main import cli
 
 
 class TestCLIMain:
@@ -32,7 +31,7 @@ class TestCLIMain:
         assert result.exit_code == 0
         assert "DeletePy - Auth0 User Management Tool" in result.output
 
-    @patch("src.deletepy.cli.main.OperationHandler")
+    @patch("deletepy.cli.main.OperationHandler")
     def test_doctor_command(self, mock_handler_class):
         """Test doctor command."""
         mock_handler = MagicMock()
@@ -45,7 +44,7 @@ class TestCLIMain:
         assert result.exit_code == 0
         mock_handler.handle_doctor.assert_called_once_with("dev", False)
 
-    @patch("src.deletepy.cli.main.OperationHandler")
+    @patch("deletepy.cli.main.OperationHandler")
     def test_doctor_command_with_api_test(self, mock_handler_class):
         """Test doctor command with API test."""
         mock_handler = MagicMock()
@@ -69,7 +68,7 @@ class TestCLIMain:
         assert "delete" in result.output
         assert "revoke-grants-only" in result.output
 
-    @patch("src.deletepy.cli.main.OperationHandler")
+    @patch("deletepy.cli.main.OperationHandler")
     def test_check_unblocked_command(self, mock_handler_class):
         """Test check-unblocked command."""
         mock_handler = MagicMock()
@@ -92,7 +91,7 @@ class TestCLIMain:
         finally:
             os.unlink(temp_path)
 
-    @patch("src.deletepy.cli.main.OperationHandler")
+    @patch("deletepy.cli.main.OperationHandler")
     def test_export_last_login_command(self, mock_handler_class):
         """Test export-last-login command."""
         mock_handler = MagicMock()
@@ -118,7 +117,7 @@ class TestCLIMain:
         finally:
             os.unlink(temp_path)
 
-    @patch("src.deletepy.cli.main.OperationHandler")
+    @patch("deletepy.cli.main.OperationHandler")
     def test_users_block_command(self, mock_handler_class):
         """Test users block command."""
         mock_handler = MagicMock()
@@ -151,8 +150,8 @@ class TestOperationHandler:
         handler = OperationHandler()
         assert handler is not None
 
-    @patch("src.deletepy.cli.commands.get_access_token")
-    @patch("src.deletepy.cli.commands.get_base_url")
+    @patch("deletepy.cli.commands.get_access_token")
+    @patch("deletepy.cli.commands.get_base_url")
     def test_setup_auth_and_files(self, mock_get_base_url, mock_get_token):
         """Test _setup_auth_and_files helper method."""
         mock_get_base_url.return_value = "https://test.auth0.com"
@@ -186,7 +185,7 @@ class TestOperationHandler:
         )
         assert handler._get_operation_display_name("unknown") == "Processing users"
 
-    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("deletepy.utils.display_utils.confirm_production_operation")
     def test_confirm_production_operation(self, mock_confirm):
         """Test _confirm_production_operation helper method."""
         mock_confirm.return_value = True
@@ -197,7 +196,7 @@ class TestOperationHandler:
         assert result is True
         mock_confirm.assert_called_once_with("delete", 10)
 
-    @patch("src.deletepy.cli.commands.get_user_email")
+    @patch("deletepy.cli.commands.get_user_email")
     def test_fetch_user_emails(self, mock_get_email):
         """Test _fetch_user_emails helper method."""
         mock_get_email.side_effect = [
@@ -222,11 +221,9 @@ class TestOperationHandler:
         handler = OperationHandler()
 
         with (
+            patch("deletepy.utils.request_utils.get_optimal_batch_size") as mock_batch,
             patch(
-                "src.deletepy.utils.request_utils.get_optimal_batch_size"
-            ) as mock_batch,
-            patch(
-                "src.deletepy.utils.request_utils.get_estimated_processing_time"
+                "deletepy.utils.request_utils.get_estimated_processing_time"
             ) as mock_time,
         ):
             mock_batch.return_value = 50
@@ -239,10 +236,13 @@ class TestOperationHandler:
             mock_batch.assert_called_once_with(100)
             mock_time.assert_called_once_with(100, 50)
 
-    @patch("src.deletepy.cli.commands.validate_auth0_user_id")
-    @patch("src.deletepy.cli.commands.get_user_id_from_email")
-    def test_resolve_user_identifier_email(self, mock_get_user_id, mock_validate):
+    @patch("deletepy.utils.validators.InputValidator.validate_email_comprehensive")
+    @patch("deletepy.cli.commands.get_user_id_from_email")
+    def test_resolve_user_identifier_email(self, mock_get_user_id, mock_validate_email):
         """Test _resolve_user_identifier with email input."""
+        from deletepy.utils.validators import ValidationResult
+
+        mock_validate_email.return_value = ValidationResult(is_valid=True)
         mock_get_user_id.return_value = ["auth0|123"]
 
         handler = OperationHandler()
@@ -264,12 +264,43 @@ class TestOperationHandler:
         assert len(not_found_users) == 0
         assert len(invalid_user_ids) == 0
 
-    @patch("src.deletepy.cli.commands.validate_auth0_user_id")
-    @patch("src.deletepy.cli.commands.get_user_id_from_email")
+    @patch("deletepy.utils.validators.InputValidator.validate_email_comprehensive")
+    def test_resolve_user_identifier_invalid_email(self, mock_validate_email):
+        """Test _resolve_user_identifier with invalid email input."""
+        from deletepy.utils.validators import ValidationResult
+
+        mock_validate_email.return_value = ValidationResult(
+            is_valid=False, error_message="Invalid email format"
+        )
+
+        handler = OperationHandler()
+        multiple_users = {}
+        not_found_users = []
+        invalid_user_ids = []
+
+        result = handler._resolve_user_identifier(
+            "invalid@email",
+            "test_token",
+            "https://test.auth0.com",
+            multiple_users,
+            not_found_users,
+            invalid_user_ids,
+        )
+
+        assert result is None
+        assert len(invalid_user_ids) == 1
+        assert "invalid@email" in invalid_user_ids[0]
+        assert "Invalid email format" in invalid_user_ids[0]
+
+    @patch("deletepy.utils.validators.InputValidator.validate_email_comprehensive")
+    @patch("deletepy.cli.commands.get_user_id_from_email")
     def test_resolve_user_identifier_multiple_users(
-        self, mock_get_user_id, mock_validate
+        self, mock_get_user_id, mock_validate_email
     ):
         """Test _resolve_user_identifier with email that has multiple users."""
+        from deletepy.utils.validators import ValidationResult
+
+        mock_validate_email.return_value = ValidationResult(is_valid=True)
         mock_get_user_id.return_value = ["auth0|123", "google-oauth2|456"]
 
         handler = OperationHandler()
@@ -290,10 +321,12 @@ class TestOperationHandler:
         assert "user@example.com" in multiple_users
         assert multiple_users["user@example.com"] == ["auth0|123", "google-oauth2|456"]
 
-    @patch("src.deletepy.cli.commands.validate_auth0_user_id")
-    def test_resolve_user_identifier_auth0_id(self, mock_validate):
+    @patch("deletepy.utils.validators.InputValidator.validate_auth0_user_id_enhanced")
+    def test_resolve_user_identifier_auth0_id(self, mock_validate_user_id):
         """Test _resolve_user_identifier with Auth0 user ID."""
-        mock_validate.return_value = True
+        from deletepy.utils.validators import ValidationResult
+
+        mock_validate_user_id.return_value = ValidationResult(is_valid=True)
 
         handler = OperationHandler()
         multiple_users = {}
@@ -310,12 +343,16 @@ class TestOperationHandler:
         )
 
         assert result == "auth0|123456"
-        mock_validate.assert_called_once_with("auth0|123456")
+        mock_validate_user_id.assert_called_once_with("auth0|123456")
 
-    @patch("src.deletepy.cli.commands.validate_auth0_user_id")
-    def test_resolve_user_identifier_invalid_id(self, mock_validate):
+    @patch("deletepy.utils.validators.InputValidator.validate_auth0_user_id_enhanced")
+    def test_resolve_user_identifier_invalid_id(self, mock_validate_user_id):
         """Test _resolve_user_identifier with invalid user ID."""
-        mock_validate.return_value = False
+        from deletepy.utils.validators import ValidationResult
+
+        mock_validate_user_id.return_value = ValidationResult(
+            is_valid=False, error_message="Invalid format"
+        )
 
         handler = OperationHandler()
         multiple_users = {}
@@ -332,9 +369,11 @@ class TestOperationHandler:
         )
 
         assert result is None
-        assert "invalid_id" in invalid_user_ids
+        assert len(invalid_user_ids) == 1
+        assert "invalid_id" in invalid_user_ids[0]
+        assert "Invalid format" in invalid_user_ids[0]
 
-    @patch("src.deletepy.cli.commands.block_user")
+    @patch("deletepy.cli.commands.block_user")
     def test_execute_user_operation_block(self, mock_block):
         """Test _execute_user_operation for block operation."""
         handler = OperationHandler()
@@ -347,7 +386,7 @@ class TestOperationHandler:
             "auth0|123", "test_token", "https://test.auth0.com"
         )
 
-    @patch("src.deletepy.cli.commands.delete_user")
+    @patch("deletepy.cli.commands.delete_user")
     def test_execute_user_operation_delete(self, mock_delete):
         """Test _execute_user_operation for delete operation."""
         handler = OperationHandler()
@@ -360,8 +399,8 @@ class TestOperationHandler:
             "auth0|123", "test_token", "https://test.auth0.com"
         )
 
-    @patch("src.deletepy.operations.user_ops.revoke_user_sessions")
-    @patch("src.deletepy.operations.user_ops.revoke_user_grants")
+    @patch("deletepy.operations.user_ops.revoke_user_sessions")
+    @patch("deletepy.operations.user_ops.revoke_user_grants")
     def test_execute_user_operation_revoke_grants(
         self, mock_revoke_grants, mock_revoke_sessions
     ):
@@ -385,7 +424,7 @@ class TestCLIErrorHandling:
 
     def test_doctor_command_failure(self):
         """Test doctor command when operation fails."""
-        with patch("src.deletepy.cli.main.OperationHandler") as mock_handler_class:
+        with patch("deletepy.cli.main.OperationHandler") as mock_handler_class:
             mock_handler = MagicMock()
             mock_handler.handle_doctor.return_value = False
             mock_handler_class.return_value = mock_handler
@@ -422,8 +461,8 @@ class TestCLIErrorHandling:
 class TestCLIIntegration:
     """Integration tests for CLI functionality."""
 
-    @patch("src.deletepy.core.config.check_env_file")
-    @patch("src.deletepy.core.auth.doctor")
+    @patch("deletepy.core.config.check_env_file")
+    @patch("deletepy.core.auth.doctor")
     def test_doctor_integration(self, mock_doctor, mock_check_env):
         """Test doctor command integration."""
         mock_doctor.return_value = {"success": True}
@@ -435,9 +474,9 @@ class TestCLIIntegration:
         mock_check_env.assert_called_once()
         mock_doctor.assert_called_once_with("dev", False)
 
-    @patch("src.deletepy.cli.commands.get_access_token")
-    @patch("src.deletepy.cli.commands.get_base_url")
-    @patch("src.deletepy.cli.commands.check_unblocked_users_with_checkpoints")
+    @patch("deletepy.cli.commands.get_access_token")
+    @patch("deletepy.cli.commands.get_base_url")
+    @patch("deletepy.cli.commands.check_unblocked_users_with_checkpoints")
     def test_check_unblocked_integration(
         self, mock_check_unblocked, mock_get_base_url, mock_get_token
     ):
