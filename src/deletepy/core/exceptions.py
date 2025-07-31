@@ -34,7 +34,6 @@ class AuthConfigError(Auth0ManagerError):
     """
 
 
-
 class UserOperationError(Auth0ManagerError):
     """User operation errors.
 

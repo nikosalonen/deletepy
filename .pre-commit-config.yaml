@@ -45,14 +45,14 @@ repos:
     rev: v1.7.1
     hooks:
       - id: mypy
-        additional_dependencies: [types-requests]
+        additional_dependencies: [types-requests, types-PyYAML]
         args: [--ignore-missing-imports]
 
   - repo: local
     hooks:
       - id: pytest
         name: pytest
-        entry: pytest
+        entry: ./venv/bin/python -m pytest
         language: system
         pass_filenames: false
         always_run: true

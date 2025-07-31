@@ -70,7 +70,9 @@ def validate_file_path(file_path: str, operation: str = "access") -> Path:
 
 
 @contextmanager
-def safe_file_read(file_path: str, encoding: str = "utf-8") -> Generator[TextIO]:
+def safe_file_read(
+    file_path: str, encoding: str = "utf-8"
+) -> Generator[TextIO, None, None]:
     """Context manager for safe file reading with comprehensive error handling.
 
     Args:
@@ -118,7 +120,7 @@ def _restore_backup(backup_path: Path | None, original_path: Path) -> None:
 @contextmanager
 def safe_file_write(
     file_path: str, encoding: str = "utf-8", mode: str = "w"
-) -> Generator[TextIO]:
+) -> Generator[TextIO, None, None]:
     """Context manager for safe file writing with comprehensive error handling.
 
     Args:
@@ -252,7 +254,7 @@ def read_user_ids(filepath: str) -> list[str]:
         return []
 
 
-def read_user_ids_generator(filepath: str) -> Generator[str]:
+def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
     """Read user IDs from a file as a generator.
 
     Args:

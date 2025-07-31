@@ -25,9 +25,11 @@ def sanitize_identifiers(identifiers: list[str]) -> list[str]:
     """
     redacted_keywords = ["client_secret", "auth0"]
     return [
-        identifier
-        if not any(keyword in identifier.lower() for keyword in redacted_keywords)
-        else "[REDACTED]"
+        (
+            identifier
+            if not any(keyword in identifier.lower() for keyword in redacted_keywords)
+            else "[REDACTED]"
+        )
         for identifier in identifiers
     ]
 

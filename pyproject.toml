@@ -29,6 +29,11 @@ dev = [
     "mypy==1.17.0",
     "pre-commit>=4.2.0",
     "types-requests>=2.32.0",
+    "black>=23.12.1",
+    "isort>=5.13.2",
+    "autoflake>=2.2.1",
+    "pyupgrade>=3.15.0",
+    "types-PyYAML>=6.0.12",
 ]
 
 [project.scripts]
@@ -55,6 +60,44 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 88
+multi_line_output = 3
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+skip = [".git", "build", "dist", ".venv", "venv"]
+
+[tool.autoflake]
+in-place = true
+remove-all-unused-imports = true
+remove-unused-variables = true
+expand-star-imports = true
+remove-duplicate-keys = true
+
+[tool.pyupgrade]
+py311-plus = true
 
   [tool.coverage.run]
   source = ["src"]
