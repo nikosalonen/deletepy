@@ -26,9 +26,9 @@ class TestEmailValidation:
 
         for email in valid_emails:
             result = InputValidator.validate_email_comprehensive(email)
-            assert result.is_valid, (
-                f"Email {email} should be valid: {result.error_message}"
-            )
+            assert (
+                result.is_valid
+            ), f"Email {email} should be valid: {result.error_message}"
 
     def test_invalid_emails(self):
         """Test invalid email addresses."""
@@ -108,9 +108,9 @@ class TestAuth0UserIdValidation:
 
         for user_id in valid_ids:
             result = InputValidator.validate_auth0_user_id_enhanced(user_id)
-            assert result.is_valid, (
-                f"User ID {user_id} should be valid: {result.error_message}"
-            )
+            assert (
+                result.is_valid
+            ), f"User ID {user_id} should be valid: {result.error_message}"
 
     def test_invalid_user_ids(self):
         """Test invalid Auth0 user IDs."""
@@ -199,9 +199,9 @@ class TestUrlEncodingValidation:
 
         for encoded in valid_encoded:
             result = InputValidator.validate_url_encoding_secure(encoded)
-            assert result.is_valid, (
-                f"Encoded string {encoded} should be valid: {result.error_message}"
-            )
+            assert (
+                result.is_valid
+            ), f"Encoded string {encoded} should be valid: {result.error_message}"
 
     def test_dangerous_url_encoding(self):
         """Test detection of dangerous URL encoding patterns."""
@@ -241,9 +241,9 @@ class TestFilePathValidation:
 
         for path in valid_paths:
             result = InputValidator.validate_file_path_secure(path)
-            assert result.is_valid, (
-                f"Path {path} should be valid: {result.error_message}"
-            )
+            assert (
+                result.is_valid
+            ), f"Path {path} should be valid: {result.error_message}"
 
     def test_path_traversal_attacks(self):
         """Test detection of path traversal attacks."""
@@ -330,9 +330,9 @@ class TestSecurityValidator:
             result = SecurityValidator.validate_checkpoint_path(
                 path, None
             )  # No base dir restriction
-            assert result.is_valid, (
-                f"Checkpoint path {path} should be valid: {result.error_message}"
-            )
+            assert (
+                result.is_valid
+            ), f"Checkpoint path {path} should be valid: {result.error_message}"
 
         # Invalid checkpoint paths
         invalid_paths = [

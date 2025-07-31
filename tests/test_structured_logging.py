@@ -7,15 +7,13 @@ import tempfile
 from io import StringIO
 from unittest.mock import patch
 
-import pytest
-
-from src.deletepy.utils.legacy_print import (
+from deletepy.utils.legacy_print import (
     print_error,
     print_info,
     print_success,
     print_warning,
 )
-from src.deletepy.utils.logging_utils import (
+from deletepy.utils.logging_utils import (
     ColoredFormatter,
     DetailedFormatter,
     StructuredFormatter,
@@ -196,22 +194,83 @@ class TestLoggingSetup:
 class TestLegacyPrintFunctions:
     """Test legacy print functions with structured logging."""
 
-    def test_print_functions_with_context(self):
+    def test_print_functions_with_context(self, caplog):
         """Test that print functions work and include context."""
-        # This is a basic test to ensure the functions work
-        # The actual context testing is complex due to logger hierarchy
+        # Set log level to capture all messages
+        caplog.set_level(logging.INFO)
 
-        # Test that functions don't raise exceptions
+        # Create a custom handler to capture log records
+        captured_records = []
+
+        class CapturingHandler(logging.Handler):
+            def emit(self, record):
+                captured_records.append(record)
+
+        # Configure the logger to use our capturing handler
+        logger = logging.getLogger("deletepy.src.deletepy.utils.legacy_print")
+        original_handlers = logger.handlers.copy()
+        logger.handlers = []
+        handler = CapturingHandler()
+        handler.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+
         try:
+            # Test print_info function
             print_info("Test info message", user_id="auth0|123", operation="test")
-            print_success("Test success", user_id="auth0|456")
-            print_warning("Test warning", operation="test_op")
-            print_error("Test error", user_id="auth0|789", error="test_error")
-        except Exception as e:
-            pytest.fail(f"Print functions raised exception: {e}")
 
-        # Test that the functions accept context parameters
-        assert True  # If we get here, the functions worked
+            # Verify the log record
+            assert len(captured_records) == 1
+            record = captured_records[0]
+            assert record.getMessage() == "Test info message"
+            assert record.levelname == "INFO"
+            assert record.user_id == "auth0|123"
+            assert record.operation == "test"
+
+            # Clear records for next test
+            captured_records.clear()
+
+            # Test print_success function
+            print_success("Test success", user_id="auth0|456")
+
+            # Verify the log record
+            assert len(captured_records) == 1
+            record = captured_records[0]
+            assert record.getMessage() == "✅ Test success"
+            assert record.levelname == "INFO"
+            assert record.user_id == "auth0|456"
+            assert record.status == "success"
+
+            # Clear records for next test
+            captured_records.clear()
+
+            # Test print_warning function
+            print_warning("Test warning", operation="test_op")
+
+            # Verify the log record
+            assert len(captured_records) == 1
+            record = captured_records[0]
+            assert record.getMessage() == "⚠️  Test warning"
+            assert record.levelname == "WARNING"
+            assert record.operation == "test_op"
+
+            # Clear records for next test
+            captured_records.clear()
+
+            # Test print_error function
+            print_error("Test error", user_id="auth0|789", error="test_error")
+
+            # Verify the log record
+            assert len(captured_records) == 1
+            record = captured_records[0]
+            assert record.getMessage() == "❌ Test error"
+            assert record.levelname == "ERROR"
+            assert record.user_id == "auth0|789"
+            assert record.error == "test_error"
+
+        finally:
+            # Restore original handlers
+            logger.handlers = original_handlers
 
     def test_get_logger(self):
         """Test get_logger function."""

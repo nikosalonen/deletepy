@@ -9,12 +9,12 @@ formatters:
     format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
     datefmt: "%Y-%m-%d %H:%M:%S"
     class: deletepy.utils.logging_utils.ColoredFormatter
-    
+
   detailed:
     format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
     datefmt: "%Y-%m-%d %H:%M:%S"
     class: deletepy.utils.logging_utils.DetailedFormatter
-    
+
   json:
     class: deletepy.utils.logging_utils.StructuredFormatter
 
@@ -24,7 +24,7 @@ handlers:
     level: INFO
     formatter: console
     stream: ext://sys.stderr
-    
+
   file:
     class: logging.FileHandler
     level: DEBUG
@@ -36,22 +36,26 @@ handlers:
 loggers:
   deletepy:
     level: INFO
-    handlers: [console]
+    handlers:
+      - console
     propagate: false
-    
+
   deletepy.operations:
     level: INFO
-    handlers: [console]
+    handlers:
+      - console
     propagate: false
-    
+
   deletepy.utils:
     level: WARNING
-    handlers: [console]
+    handlers:
+      - console
     propagate: false
 
 root:
   level: WARNING
-  handlers: [console]
+  handlers:
+    - console
 
 # Environment variable overrides:
 # DELETEPY_LOG_LEVEL: Override log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)

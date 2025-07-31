@@ -5,10 +5,7 @@ from typing import Any, cast
 
 import requests
 
-from ..core.config import (
-    API_RATE_LIMIT,
-    API_TIMEOUT,
-)
+from ..core.config import API_RATE_LIMIT, API_TIMEOUT
 
 
 def make_rate_limited_request(

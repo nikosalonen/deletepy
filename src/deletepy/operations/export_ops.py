@@ -23,11 +23,7 @@ from ..utils.display_utils import (
     show_progress,
     shutdown_requested,
 )
-from ..utils.legacy_print import (
-    print_info,
-    print_success,
-    print_warning,
-)
+from ..utils.legacy_print import print_info, print_success, print_warning
 from .user_ops import get_user_details, get_user_id_from_email
 
 

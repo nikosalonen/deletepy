@@ -9,10 +9,7 @@ from pathlib import Path
 from typing import Any, TextIO, cast
 
 from ..core.exceptions import FileOperationError
-from .display_utils import (
-    print_error,
-    print_warning,
-)
+from .display_utils import print_error, print_warning
 
 # Graceful shutdown handler
 shutdown_requested = False

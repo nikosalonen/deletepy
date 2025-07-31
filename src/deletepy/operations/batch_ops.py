@@ -16,16 +16,8 @@ from ..models.checkpoint import (
     OperationType,
 )
 from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import (
-    show_progress,
-    shutdown_requested,
-)
-from ..utils.legacy_print import (
-    print_error,
-    print_info,
-    print_success,
-    print_warning,
-)
+from ..utils.display_utils import show_progress, shutdown_requested
+from ..utils.legacy_print import print_error, print_info, print_success, print_warning
 from ..utils.validators import InputValidator
 from .user_ops import delete_user, unlink_user_identity
 
@@ -1338,9 +1330,12 @@ def _execute_with_checkpoints(
         processing_config=processing_config,
     )
 
-    checkpoint, checkpoint_manager, env, auto_delete = (
-        _setup_checkpoint_operation_from_config(exec_config)
-    )
+    (
+        checkpoint,
+        checkpoint_manager,
+        env,
+        auto_delete,
+    ) = _setup_checkpoint_operation_from_config(exec_config)
 
     process_params = _prepare_process_parameters(
         exec_config, checkpoint, checkpoint_manager, env, auto_delete

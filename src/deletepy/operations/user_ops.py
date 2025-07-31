@@ -14,16 +14,8 @@ from ..models.checkpoint import (
     OperationType,
 )
 from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import (
-    show_progress,
-    shutdown_requested,
-)
-from ..utils.legacy_print import (
-    print_error,
-    print_info,
-    print_success,
-    print_warning,
-)
+from ..utils.display_utils import show_progress, shutdown_requested
+from ..utils.legacy_print import print_error, print_info, print_success, print_warning
 from ..utils.request_utils import make_rate_limited_request
 from ..utils.validators import InputValidator
 
