@@ -206,7 +206,6 @@ class BaseUserService(ABC):
         Returns:
             Optional[User]: User details or None if not found
         """
-        pass
 
     @abstractmethod
     def delete_user(self, user_id: str) -> UserOperationResult:
@@ -218,7 +217,6 @@ class BaseUserService(ABC):
         Returns:
             UserOperationResult: Operation result
         """
-        pass
 
     @abstractmethod
     def block_user(self, user_id: str) -> UserOperationResult:
@@ -230,7 +228,6 @@ class BaseUserService(ABC):
         Returns:
             UserOperationResult: Operation result
         """
-        pass
 
 
 class BaseBatchProcessor(ABC):
@@ -249,7 +246,6 @@ class BaseBatchProcessor(ABC):
         Returns:
             BatchOperationResults: Batch operation results
         """
-        pass
 
     @abstractmethod
     def estimate_processing_time(self, user_count: int) -> float:
@@ -261,7 +257,6 @@ class BaseBatchProcessor(ABC):
         Returns:
             float: Estimated time in minutes
         """
-        pass
 
 
 class BaseExportService(ABC):
@@ -278,7 +273,6 @@ class BaseExportService(ABC):
         Returns:
             bool: True if successful
         """
-        pass
 
     @abstractmethod
     def export_last_login_data(self, emails: list[str], file_path: str) -> bool:
@@ -291,7 +285,6 @@ class BaseExportService(ABC):
         Returns:
             bool: True if successful
         """
-        pass
 
 
 class BaseValidator(ABC):
@@ -307,7 +300,6 @@ class BaseValidator(ABC):
         Returns:
             bool: True if valid
         """
-        pass
 
     @abstractmethod
     def validate_email(self, email: str) -> bool:
@@ -319,7 +311,6 @@ class BaseValidator(ABC):
         Returns:
             bool: True if valid
         """
-        pass
 
     @abstractmethod
     def validate_domain(self, domain: str) -> bool:
@@ -331,4 +322,3 @@ class BaseValidator(ABC):
         Returns:
             bool: True if valid
         """
-        pass

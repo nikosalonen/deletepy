@@ -5,10 +5,7 @@ from typing import Any, cast
 
 import requests
 
-from ..core.config import (
-    API_RATE_LIMIT,
-    API_TIMEOUT,
-)
+from ..core.config import API_RATE_LIMIT, API_TIMEOUT
 
 
 def make_rate_limited_request(
@@ -30,6 +27,9 @@ def make_rate_limited_request(
             method, url, headers=headers, timeout=API_TIMEOUT, **kwargs
         )
 
+        # Always apply rate limiting regardless of response status
+        time.sleep(API_RATE_LIMIT)
+
         # Handle rate limiting with immediate failure
         if response.status_code == 429:  # Too Many Requests
             print("Rate limit exceeded. Request failed.")
@@ -39,8 +39,6 @@ def make_rate_limited_request(
         if response.status_code >= 400:
             response.raise_for_status()
 
-        # Success - apply rate limiting
-        time.sleep(API_RATE_LIMIT)
         return response
 
     except requests.exceptions.RequestException as e:

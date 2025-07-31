@@ -20,8 +20,6 @@ from .core.config import (
     API_TIMEOUT,
     get_base_url,
     get_env_config,
-    get_estimated_processing_time,
-    get_optimal_batch_size,
     validate_rate_limit_config,
 )
 from .core.exceptions import (
@@ -47,14 +45,10 @@ from .models.checkpoint import (
 from .operations.batch_ops import (
     CheckpointOperationConfig,
     ExecuteCheckpointConfig,
-    _categorize_users,
-    _display_search_results,
-    _handle_auto_delete_operations,
     check_unblocked_users_with_checkpoints,
     find_users_by_social_media_ids_with_checkpoints,
 )
 from .operations.domain_ops import (
-    _display_domain_check_results,
     check_email_domains,
     extract_domains_from_emails,
     filter_emails_by_domain,
@@ -63,12 +57,6 @@ from .operations.domain_ops import (
 )
 from .operations.export_ops import (
     ExportWithCheckpointsConfig,
-    _build_csv_data_dict,
-    _fetch_user_data,
-    _generate_export_summary,
-    _process_email_batch,
-    _validate_and_setup_export,
-    _write_csv_batch,
     export_users_last_login_to_csv_with_checkpoints,
 )
 from .operations.preview_ops import (
@@ -123,6 +111,7 @@ from .utils import (
     write_identifiers_to_file,
 )
 from .utils.checkpoint_manager import CheckpointManager
+from .utils.request_utils import get_estimated_processing_time, get_optimal_batch_size
 
 __version__ = "1.0.0"
 

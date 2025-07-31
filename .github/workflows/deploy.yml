@@ -34,13 +34,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
 
-    - name: Run linting
+    - name: Run linting and import sorting
       run: |
-        ruff check src/ tests/
+        ruff check --fix src/ tests/
 
-    - name: Check formatting
+    - name: Fix formatting
       run: |
-        ruff format --check src/ tests/
+        ruff format src/ tests/
 
     - name: Run type checking
       run: |

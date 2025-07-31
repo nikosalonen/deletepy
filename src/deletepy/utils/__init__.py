@@ -42,9 +42,6 @@ from .file_utils import (
     setup_signal_handlers,
     validate_file_path,
 )
-from .file_utils import (
-    safe_file_write as safe_write,
-)
 from .legacy_print import (
     log_api_request,
     log_batch_operation,

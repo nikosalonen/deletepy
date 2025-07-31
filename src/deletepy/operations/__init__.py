@@ -2,9 +2,7 @@
 
 # Core user operations
 # Batch operations
-from .batch_ops import (
-    CheckpointOperationConfig,
-)
+from .batch_ops import CheckpointOperationConfig
 
 # Domain operations
 from .domain_ops import (
