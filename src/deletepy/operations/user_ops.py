@@ -563,9 +563,11 @@ def _load_or_create_checkpoint(
         checkpoint = _create_new_checkpoint(
             checkpoint_manager, operation, operation_type, env, user_ids
         )
-        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+        print_info(f"Created checkpoint: {checkpoint.checkpoint_id}",
+                   operation=operation, checkpoint_id=checkpoint.checkpoint_id)
     else:
-        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
+        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
+                      operation=operation, checkpoint_id=checkpoint.checkpoint_id)
 
     return checkpoint
 
@@ -601,7 +603,8 @@ def _try_load_existing_checkpoint(
 
     # Validate checkpoint is resumable
     if not checkpoint.is_resumable():
-        print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable")
+        print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable",
+                      operation="checkpoint_resume", checkpoint_id=resume_checkpoint_id)
         return None
 
     return checkpoint
@@ -658,9 +661,11 @@ def _handle_checkpoint_error(
         print_warning(f"\n{operation.title()} operation interrupted by user")
         checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
         checkpoint_manager.save_checkpoint(checkpoint)
-        print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
-        print_info("You can resume this operation later using:")
-        print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
+        print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}",
+                   operation=operation, checkpoint_id=checkpoint.checkpoint_id)
+        print_info("You can resume this operation later using:", operation=operation)
+        print_info(f"  deletepy resume {checkpoint.checkpoint_id}",
+                   operation=operation, checkpoint_id=checkpoint.checkpoint_id)
     elif error is not None:
         print_warning(f"\n{operation.title()} operation failed: {error}")
         checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
@@ -845,7 +850,7 @@ def _process_batch_loop(
     """
     for batch_start in range(0, len(remaining_user_ids), batch_size):
         if shutdown_requested():
-            print_warning("\nOperation interrupted")
+            print_warning("\nOperation interrupted", operation=operation)
             checkpoint_manager.save_checkpoint(checkpoint)
             return checkpoint.checkpoint_id
 
