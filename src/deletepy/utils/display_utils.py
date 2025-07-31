@@ -102,7 +102,10 @@ def confirm_action(message: str, default: bool = False) -> bool:
         bool: True if confirmed, False otherwise
     """
     default_str = "Y/n" if default else "y/N"
-    response = input(f"{message} ({default_str}): ").strip().lower()
+    from .validators import SecurityValidator
+
+    raw_response = input(f"{message} ({default_str}): ")
+    response = SecurityValidator.sanitize_user_input(raw_response).lower()
 
     if not response:
         return default
@@ -179,8 +182,15 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
             f"Total users must be an integer, got {type(total_users).__name__}"
         )
 
-    if not operation or not operation.strip():
-        raise ValueError("Operation cannot be empty or whitespace")
+    from .validators import SecurityValidator
+
+    if not operation:
+        raise ValueError("Operation cannot be empty")
+
+    # Sanitize the operation input
+    sanitized_operation = SecurityValidator.sanitize_user_input(operation)
+    if not sanitized_operation:
+        raise ValueError("Operation contains invalid characters")
 
     if total_users <= 0:
         raise ValueError(f"Total users must be a positive integer, got {total_users}")
@@ -215,7 +225,10 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
     )
     print(f"Consequence: {operation_details['consequence']}")
     print("This action cannot be undone.")
-    response = input("Are you sure you want to proceed? (yes/no): ").lower().strip()
+    from .validators import SecurityValidator
+
+    raw_response = input("Are you sure you want to proceed? (yes/no): ")
+    response = SecurityValidator.sanitize_user_input(raw_response).lower()
     return response == "yes"
 
 

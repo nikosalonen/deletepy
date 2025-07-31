@@ -75,7 +75,9 @@ def unlink_social_ids(input_file: Path, env: str, dry_run: bool) -> None:
 
 @cli.command()
 @click.argument(
-    "input_file", type=click.Path(exists=True, path_type=Path), default="ids.csv"
+    "input_file",
+    type=click.Path(exists=True, path_type=Path),
+    default="ids.csv",
 )
 @click.argument("env", type=click.Choice(["dev", "prod"]), required=False)
 @click.option(

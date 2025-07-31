@@ -238,37 +238,75 @@ def safe_file_delete(file_path: str) -> bool:
 
 
 def read_user_ids(filepath: str) -> list[str]:
-    """Read user IDs from a file.
+    """Read user IDs from a file with comprehensive validation.
 
     Args:
         filepath: Path to file containing user IDs
 
     Returns:
-        List of user IDs
+        List of validated user IDs
     """
+    from .validators import InputValidator, SecurityValidator
+
     try:
+        # First validate the file path for security
+        path_result = InputValidator.validate_file_path_secure(filepath)
+        if not path_result.is_valid:
+            print_error(f"Invalid file path {filepath}: {path_result.error_message}")
+            return []
+
+        # Show path warnings if any
+        if path_result.warnings:
+            for warning in path_result.warnings:
+                print_warning(f"File path warning: {warning}")
+
+        user_ids = []
         with safe_file_read(filepath) as file:
-            return [line.strip() for line in file if line.strip()]
+            for line in file:
+                # Sanitize input first
+                sanitized_line = SecurityValidator.sanitize_user_input(line)
+                if not sanitized_line:
+                    continue
+
+                # Basic validation - let the calling code do specific validation
+                # since this could be emails, user IDs, or other identifiers
+                user_ids.append(sanitized_line)
+
+        return user_ids
     except FileOperationError as e:
         print_error(f"Error reading user IDs from {filepath}: {e}")
         return []
 
 
 def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
-    """Read user IDs from a file as a generator.
+    """Read user IDs from a file as a generator with comprehensive validation.
 
     Args:
         filepath: Path to file containing user IDs
 
     Yields:
-        User IDs one at a time
+        Validated user IDs one at a time
     """
+    from .validators import InputValidator, SecurityValidator
+
     try:
+        # First validate the file path for security
+        path_result = InputValidator.validate_file_path_secure(filepath)
+        if not path_result.is_valid:
+            print_error(f"Invalid file path {filepath}: {path_result.error_message}")
+            return
+
+        # Show path warnings if any
+        if path_result.warnings:
+            for warning in path_result.warnings:
+                print_warning(f"File path warning: {warning}")
+
         with safe_file_read(filepath) as file:
             for line in file:
-                line = line.strip()
-                if line:
-                    yield line
+                # Sanitize input first
+                sanitized_line = SecurityValidator.sanitize_user_input(line)
+                if sanitized_line:
+                    yield sanitized_line
     except FileOperationError as e:
         print_error(f"Error reading user IDs from {filepath}: {e}")
         return

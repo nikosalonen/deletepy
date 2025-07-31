@@ -32,11 +32,21 @@ def validate_env_var(name: str, value: str | None) -> str:
     Raises:
         AuthConfigError: If the environment variable is missing or empty
     """
-    if not value or value.strip() == "":
+    from ..utils.validators import SecurityValidator
+
+    if not value:
         raise AuthConfigError(
             f"Environment variable {name} is required but not set or empty"
         )
-    return value.strip()
+
+    # Sanitize the environment variable value
+    sanitized_value = SecurityValidator.sanitize_user_input(value)
+    if not sanitized_value:
+        raise AuthConfigError(
+            f"Environment variable {name} contains invalid characters"
+        )
+
+    return sanitized_value
 
 
 def get_env_config(env: str = "dev") -> dict[str, Any]:
