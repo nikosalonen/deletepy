@@ -219,7 +219,18 @@ def get_logger(name: str) -> logging.Logger:
     Returns:
         logging.Logger: Logger instance
     """
-    return logging.getLogger(f"deletepy.{name}")
+    # Handle various cases where the name might already contain 'deletepy'
+    if name.startswith("deletepy."):
+        return logging.getLogger(name)
+    elif name.startswith("src.deletepy."):
+        # Remove 'src.' prefix and check if result already starts with 'deletepy.'
+        result = name[4:]  # Remove 'src.' prefix
+        if result.startswith("deletepy."):
+            return logging.getLogger(result)
+        else:
+            return logging.getLogger(f"deletepy.{result}")
+    else:
+        return logging.getLogger(f"deletepy.{name}")
 
 
 def configure_from_env() -> logging.Logger:
