@@ -86,8 +86,10 @@ def preview_user_operations(
 
         show_progress(idx, len(user_ids), f"Analyzing users for {operation}")
 
-        # Clean the user ID
-        user_id = user_id.strip()
+        # Clean and sanitize the user ID
+        from ..utils.validators import SecurityValidator
+
+        user_id = SecurityValidator.sanitize_user_input(user_id)
 
         # Resolve user identifier
         resolved_user_id = _resolve_user_identifier(user_id, token, base_url, result)

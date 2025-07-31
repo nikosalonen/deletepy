@@ -1566,7 +1566,12 @@ def _search_batch_social_ids(
                 user["social_id"] = social_id
             found_users.extend(users_found)
         else:
-            not_found_ids.append(social_id.strip())
+            # Sanitize social ID before adding to not found list
+            from ..utils.validators import SecurityValidator
+
+            sanitized_id = SecurityValidator.sanitize_user_input(social_id)
+            if sanitized_id:
+                not_found_ids.append(sanitized_id)
 
     print("\n")  # Clear progress line
     return found_users, not_found_ids

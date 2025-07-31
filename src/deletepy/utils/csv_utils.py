@@ -129,7 +129,7 @@ def resolve_encoded_username(username: str, env: str | None = None) -> str:
 
 
 def _validate_username_input(username: str) -> str:
-    """Validate and clean username input.
+    """Validate and clean username input with comprehensive validation.
 
     Args:
         username: Raw username input
@@ -137,9 +137,14 @@ def _validate_username_input(username: str) -> str:
     Returns:
         Cleaned username or empty string if invalid
     """
-    if not username or not username.strip():
+    from .validators import SecurityValidator
+
+    if not username:
         return ""
-    return username.strip()
+
+    # Sanitize the input first
+    sanitized = SecurityValidator.sanitize_user_input(username)
+    return sanitized if sanitized else ""
 
 
 def _needs_username_resolution(username: str) -> bool:
@@ -226,7 +231,7 @@ def _apply_username_fallback(username: str, env: str | None) -> str:
 def clean_identifier(
     value: str, env: str | None = None, preserve_encoded: bool = False
 ) -> str:
-    """Clean and normalize user identifiers.
+    """Clean and normalize user identifiers with comprehensive validation.
 
     Args:
         value: Raw identifier value
@@ -236,10 +241,15 @@ def clean_identifier(
     Returns:
         Cleaned identifier
     """
-    if not value or value.strip() == "":
+    from .validators import SecurityValidator
+
+    if not value:
         return ""
 
-    value = value.strip()
+    # Sanitize the input first
+    value = SecurityValidator.sanitize_user_input(value)
+    if not value:
+        return ""
 
     # Handle encoded usernames with Auth0 API resolution
     if "_at_" in value or "__" in value:
@@ -321,7 +331,8 @@ def _process_plain_text(infile: TextIO, env: str | None = None) -> list[str]:
     identifiers = []
 
     for line in infile:
-        cleaned = clean_identifier(line.strip(), env)
+        # Use clean_identifier which now includes comprehensive validation
+        cleaned = clean_identifier(line, env)
         if cleaned:
             identifiers.append(cleaned)
 
@@ -498,7 +509,14 @@ def _create_identifier_record(
 
     # If we have Auth0 API env and user_id column, store row data for enhanced processing
     if env and user_id_column and user_id_column in row:
-        user_id = row[user_id_column].strip() if row[user_id_column] else None
+        # Sanitize user_id from CSV row
+        from .validators import SecurityValidator
+
+        user_id = (
+            SecurityValidator.sanitize_user_input(row[user_id_column])
+            if row[user_id_column]
+            else None
+        )
         return CsvRowData(identifier=cleaned, user_id=user_id, row_data=dict(row))
     else:
         return cleaned
