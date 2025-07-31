@@ -93,53 +93,7 @@ def get_base_url(env: str = "dev") -> str:
     return cast(str, config["base_url"])
 
 
-def get_optimal_batch_size(total_emails: int) -> int:
-    """Calculate optimal batch size based on total number of emails.
 
-    Args:
-        total_emails: Total number of emails to process
-
-    Returns:
-        int: Optimal batch size
-    """
-    if total_emails <= 100:
-        return 10
-    elif total_emails <= 1000:
-        return 50
-    else:
-        return 100
-
-
-def get_estimated_processing_time(
-    total_emails: int, batch_size: int | None = None
-) -> float:
-    """Estimate processing time based on email count and batch size.
-
-    Args:
-        total_emails: Total number of emails to process
-        batch_size: Batch size for processing (calculated if None)
-
-    Returns:
-        float: Estimated processing time in seconds
-    """
-    if batch_size is None:
-        batch_size = get_optimal_batch_size(total_emails)
-
-    # Base time per email (including API calls, rate limiting, etc.)
-    base_time_per_email = 0.7  # seconds
-
-    # Additional overhead per batch
-    batch_overhead = 2.0  # seconds
-
-    # Calculate total batches
-    total_batches = (total_emails + batch_size - 1) // batch_size
-
-    # Calculate estimated time
-    estimated_time = (total_emails * base_time_per_email) + (
-        total_batches * batch_overhead
-    )
-
-    return estimated_time
 
 
 def validate_rate_limit_config() -> None:
