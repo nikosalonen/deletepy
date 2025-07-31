@@ -33,7 +33,6 @@ class AuthConfigError(Auth0ManagerError):
     such as missing credentials, invalid tokens, or connection failures.
     """
 
-    pass
 
 
 class UserOperationError(Auth0ManagerError):

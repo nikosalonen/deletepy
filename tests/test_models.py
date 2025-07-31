@@ -576,9 +576,7 @@ class TestCheckpointValidation:
         """Test that loading a checkpoint with invalid config fails."""
         from datetime import datetime
 
-        from src.deletepy.models.checkpoint import (
-            Checkpoint,
-        )
+        from src.deletepy.models.checkpoint import Checkpoint
 
         # Create checkpoint data with missing output_file for export operation
         checkpoint_data = {

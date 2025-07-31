@@ -39,12 +39,8 @@ from .file_utils import (
     safe_file_delete,
     safe_file_move,
     safe_file_read,
-    setup_signal_handlers,
-    validate_file_path,
 )
-from .file_utils import (
-    safe_file_write as safe_write,
-)
+from .file_utils import setup_signal_handlers, validate_file_path
 from .legacy_print import (
     log_api_request,
     log_batch_operation,

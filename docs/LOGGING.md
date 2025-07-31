@@ -51,12 +51,12 @@ formatters:
     format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
     datefmt: "%Y-%m-%d %H:%M:%S"
     class: deletepy.utils.logging_utils.ColoredFormatter
-    
+
   detailed:
     format: "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
     datefmt: "%Y-%m-%d %H:%M:%S"
     class: deletepy.utils.logging_utils.DetailedFormatter
-    
+
   json:
     class: deletepy.utils.logging_utils.StructuredFormatter
 
@@ -123,7 +123,7 @@ The structured logging system automatically includes relevant context informatio
 
 ### Basic Logging
 ```python
-from src.deletepy.utils.legacy_print import print_info, print_error
+from deletepy.utils.legacy_print import print_info, print_error
 
 # Simple message
 print_info("Operation started")
@@ -137,7 +137,7 @@ print_error("Operation failed", user_id="auth0|123456", error="User not found")
 
 ### Using Logger Directly
 ```python
-from src.deletepy.utils.logging_utils import get_logger
+from deletepy.utils.logging_utils import get_logger
 
 logger = get_logger(__name__)
 
@@ -152,7 +152,7 @@ logger.info("User operation completed", extra={
 
 ### Programmatic Configuration
 ```python
-from src.deletepy.utils.logging_utils import setup_logging
+from deletepy.utils.logging_utils import setup_logging
 
 # Configure logging programmatically
 logger = setup_logging(
@@ -191,7 +191,7 @@ All existing code continues to work without changes, but now benefits from struc
    ```python
    # Good
    print_error("Failed to delete user", user_id=user_id, error=str(e))
-   
+
    # Less helpful
    print_error("Something went wrong")
    ```

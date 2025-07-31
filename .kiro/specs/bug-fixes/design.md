@@ -33,11 +33,11 @@ The design maintains the existing architecture while addressing specific issues 
 class RateLimitManager:
     def __init__(self, rate_limit: float = 0.5):
         self.rate_limit = rate_limit
-    
+
     def get_optimal_batch_size(self, total_items: int) -> int:
         """Calculate optimal batch size based on dataset size."""
         # Consolidated logic here
-    
+
     def get_estimated_processing_time(self, total_items: int, batch_size: int = None) -> float:
         """Calculate estimated processing time."""
         # Consolidated logic here
@@ -63,7 +63,7 @@ class RateLimitManager:
 class StructuredLogger:
     def log_operation(self, level: str, message: str, **context):
         """Log with structured context."""
-        
+
     def log_error(self, error: Exception, operation: str, **context):
         """Log errors with full context."""
 
@@ -89,13 +89,13 @@ def handle_api_error(error: Exception, operation: str, user_id: str = None):
 class OptimizedCheckpointManager:
     def __init__(self, memory_threshold: int = 100_000):
         self.memory_threshold = memory_threshold
-    
+
     def load_checkpoint_streaming(self, checkpoint_id: str) -> Iterator[str]:
         """Stream checkpoint items for large datasets."""
-        
+
     def monitor_memory_usage(self) -> dict:
         """Monitor current memory usage."""
-        
+
     def should_use_streaming(self, item_count: int) -> bool:
         """Determine if streaming should be used."""
 ```
@@ -118,11 +118,11 @@ class InputValidator:
     @staticmethod
     def validate_email_comprehensive(email: str) -> ValidationResult:
         """Comprehensive email validation with security checks."""
-        
+
     @staticmethod
     def validate_auth0_user_id_enhanced(user_id: str) -> ValidationResult:
         """Enhanced Auth0 user ID validation."""
-        
+
     @staticmethod
     def validate_file_path_secure(file_path: str) -> ValidationResult:
         """Secure file path validation against attacks."""
@@ -153,7 +153,7 @@ class ConnectionManager:
     def __init__(self):
         self.session = requests.Session()
         self.adapter = HTTPAdapter(pool_connections=10, pool_maxsize=20)
-        
+
     def get_session(self) -> requests.Session:
         """Get configured session with connection pooling."""
 
@@ -161,7 +161,7 @@ class CacheManager:
     def __init__(self, ttl: int = 300):
         self.cache = {}
         self.ttl = ttl
-        
+
     def get_user_details(self, user_id: str, fetch_func: Callable) -> dict:
         """Cached user details lookup."""
 ```
@@ -238,8 +238,8 @@ class PerformanceMetrics:
 # All operations follow this pattern:
 try:
     result = perform_operation()
-    logger.log_operation("info", "Operation completed", 
-                        operation="operation_name", 
+    logger.log_operation("info", "Operation completed",
+                        operation="operation_name",
                         items_processed=count)
     return result
 except SpecificError as e:
@@ -256,10 +256,10 @@ except Exception as e:
 # Add specific exceptions for new scenarios:
 class ValidationError(Auth0ManagerError):
     """Input validation errors."""
-    
+
 class MemoryError(Auth0ManagerError):
     """Memory usage errors."""
-    
+
 class PerformanceError(Auth0ManagerError):
     """Performance-related errors."""
 ```
@@ -298,17 +298,17 @@ class PerformanceError(Auth0ManagerError):
 class TestMemoryOptimization:
     def test_streaming_activation_threshold(self):
         """Test that streaming activates at correct threshold."""
-        
+
     def test_memory_monitoring_accuracy(self):
         """Test memory usage monitoring."""
-        
+
     def test_large_dataset_processing(self):
         """Test processing of datasets > 100k items."""
 
 class TestInputValidation:
     def test_email_validation_security(self):
         """Test email validation against security issues."""
-        
+
     def test_path_traversal_prevention(self):
         """Test file path validation security."""
 ```

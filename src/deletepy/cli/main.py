@@ -116,7 +116,6 @@ def cleanup_csv(input_file: Path, env: str | None, output_type: str) -> None:
 @cli.group()
 def users() -> None:
     """User management operations."""
-    pass
 
 
 @users.command()
@@ -158,7 +157,6 @@ def revoke_grants_only(input_file: Path, env: str, dry_run: bool) -> None:
 @cli.group()
 def checkpoint() -> None:
     """Checkpoint management operations."""
-    pass
 
 
 @checkpoint.command()
