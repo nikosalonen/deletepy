@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test lint format type-check clean build
+.PHONY: help install install-dev test lint lint-fix format type-check clean build
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -16,7 +16,10 @@ test: ## Run tests
 test-coverage: ## Run tests with coverage
 	pytest --cov=src/deletepy --cov-report=html --cov-report=term
 
-lint: ## Run linting checks
+lint: ## Run linting checks (read-only)
+	ruff check src/ tests/
+
+lint-fix: ## Run linting checks and auto-fix issues
 	ruff check src/ tests/ --fix
 
 format: ## Format code

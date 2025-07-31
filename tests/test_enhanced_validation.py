@@ -3,8 +3,7 @@
 import tempfile
 
 import pytest
-
-from src.deletepy.utils.validators import (
+from deletepy.utils.validators import (
     InputValidator,
     SecurityValidator,
     ValidationResult,
