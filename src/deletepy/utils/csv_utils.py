@@ -12,6 +12,7 @@ from ..utils.display_utils import print_error, print_info, print_warning
 from ..utils.request_utils import make_rate_limited_request
 from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
 from .file_utils import safe_file_read, safe_file_write
+from .validators import SecurityValidator
 
 
 def sanitize_identifiers(identifiers: list[str]) -> list[str]:
@@ -137,8 +138,6 @@ def _validate_username_input(username: str) -> str:
     Returns:
         Cleaned username or empty string if invalid
     """
-    from .validators import SecurityValidator
-
     if not username:
         return ""
 
@@ -241,8 +240,6 @@ def clean_identifier(
     Returns:
         Cleaned identifier
     """
-    from .validators import SecurityValidator
-
     if not value:
         return ""
 
@@ -510,8 +507,6 @@ def _create_identifier_record(
     # If we have Auth0 API env and user_id column, store row data for enhanced processing
     if env and user_id_column and user_id_column in row:
         # Sanitize user_id from CSV row
-        from .validators import SecurityValidator
-
         user_id = (
             SecurityValidator.sanitize_user_input(row[user_id_column])
             if row[user_id_column]
