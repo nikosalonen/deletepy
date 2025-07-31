@@ -93,9 +93,6 @@ def get_base_url(env: str = "dev") -> str:
     return cast(str, config["base_url"])
 
 
-
-
-
 def validate_rate_limit_config() -> None:
     """Validate that rate limiting configuration is safe for Auth0 API.
 

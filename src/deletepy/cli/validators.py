@@ -2,8 +2,6 @@
 
 import argparse
 
-from ..utils.auth_utils import validate_auth0_user_id
-
 
 def validate_args() -> argparse.Namespace:
     """Parse and validate command line arguments.
@@ -209,13 +207,20 @@ def validate_user_id_list(user_ids: list[str]) -> list[str]:
     Raises:
         ValueError: If any user ID is invalid
     """
+    from ..utils.validators import InputValidator
+
     invalid_ids = []
+    error_details = []
+
     for user_id in user_ids:
-        if not validate_auth0_user_id(user_id):
+        result = InputValidator.validate_auth0_user_id_enhanced(user_id)
+        if not result.is_valid:
             invalid_ids.append(user_id)
+            error_details.append(f"{user_id}: {result.error_message}")
 
     if invalid_ids:
-        raise ValueError(f"Invalid user IDs found: {', '.join(invalid_ids)}")
+        detailed_errors = "\n  ".join(error_details)
+        raise ValueError(f"Invalid user IDs found:\n  {detailed_errors}")
 
     return user_ids
 
@@ -233,10 +238,24 @@ def validate_file_path_argument(file_path: str | None, operation: str) -> str | 
     Raises:
         ValueError: If file path is invalid for the operation
     """
+    from ..utils.validators import InputValidator
+
     if operation == "doctor":
         return None
 
     if not file_path:
         raise ValueError(f"File path is required for operation '{operation}'")
+
+    # Perform security validation on the file path
+    result = InputValidator.validate_file_path_secure(file_path)
+    if not result.is_valid:
+        raise ValueError(f"Invalid file path: {result.error_message}")
+
+    # Show warnings if any
+    if result.warnings:
+        from ..utils.display_utils import print_warning
+
+        for warning in result.warnings:
+            print_warning(f"File path warning: {warning}")
 
     return file_path

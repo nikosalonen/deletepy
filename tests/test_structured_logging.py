@@ -5,11 +5,16 @@ import logging
 import os
 import tempfile
 from io import StringIO
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
+from src.deletepy.utils.legacy_print import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
 from src.deletepy.utils.logging_utils import (
     ColoredFormatter,
     DetailedFormatter,
@@ -17,12 +22,6 @@ from src.deletepy.utils.logging_utils import (
     configure_from_env,
     get_logger,
     setup_logging,
-)
-from src.deletepy.utils.legacy_print import (
-    print_error,
-    print_info,
-    print_success,
-    print_warning,
 )
 
 
@@ -41,10 +40,10 @@ class TestStructuredFormatter:
             args=(),
             exc_info=None,
         )
-        
+
         result = formatter.format(record)
         log_data = json.loads(result)
-        
+
         assert log_data["level"] == "INFO"
         assert log_data["logger"] == "test.logger"
         assert log_data["message"] == "Test message"
@@ -63,15 +62,15 @@ class TestStructuredFormatter:
             args=(),
             exc_info=None,
         )
-        
+
         # Add context fields
         record.user_id = "auth0|123456"
         record.operation = "delete_user"
         record.duration = 1.234
-        
+
         result = formatter.format(record)
         log_data = json.loads(result)
-        
+
         assert log_data["user_id"] == "auth0|123456"
         assert log_data["operation"] == "delete_user"
         assert log_data["duration"] == 1.234
@@ -82,9 +81,7 @@ class TestDetailedFormatter:
 
     def test_basic_formatting(self):
         """Test basic formatting without context."""
-        formatter = DetailedFormatter(
-            fmt="%(levelname)s - %(message)s"
-        )
+        formatter = DetailedFormatter(fmt="%(levelname)s - %(message)s")
         record = logging.LogRecord(
             name="test.logger",
             level=logging.INFO,
@@ -94,15 +91,13 @@ class TestDetailedFormatter:
             args=(),
             exc_info=None,
         )
-        
+
         result = formatter.format(record)
         assert result == "INFO - Test message"
 
     def test_context_formatting(self):
         """Test formatting with context fields."""
-        formatter = DetailedFormatter(
-            fmt="%(levelname)s - %(message)s"
-        )
+        formatter = DetailedFormatter(fmt="%(levelname)s - %(message)s")
         record = logging.LogRecord(
             name="test.logger",
             level=logging.INFO,
@@ -112,12 +107,12 @@ class TestDetailedFormatter:
             args=(),
             exc_info=None,
         )
-        
+
         # Add context fields
         record.operation = "delete_user"
         record.user_id = "auth0|123456"
         record.duration = 1.234
-        
+
         result = formatter.format(record)
         assert "INFO - Test message [" in result
         assert "op=delete_user" in result
@@ -131,8 +126,7 @@ class TestColoredFormatter:
     def test_colors_disabled(self):
         """Test formatter with colors disabled."""
         formatter = ColoredFormatter(
-            fmt="%(levelname)s - %(message)s",
-            disable_colors=True
+            fmt="%(levelname)s - %(message)s", disable_colors=True
         )
         record = logging.LogRecord(
             name="test.logger",
@@ -143,7 +137,7 @@ class TestColoredFormatter:
             args=(),
             exc_info=None,
         )
-        
+
         result = formatter.format(record)
         assert result == "ERROR - Test message"
         assert "\033[" not in result  # No ANSI codes
@@ -173,11 +167,11 @@ class TestLoggingSetup:
         """Test setup with file output."""
         with tempfile.NamedTemporaryFile(delete=False) as tmp:
             tmp_path = tmp.name
-        
+
         try:
             logger = setup_logging(level="INFO", log_file=tmp_path)
             assert len(logger.handlers) == 2  # Console + file
-            
+
             # File handler should use structured format
             file_handler = logger.handlers[1]
             assert isinstance(file_handler.formatter, StructuredFormatter)
@@ -190,9 +184,9 @@ class TestLoggingSetup:
         env_vars = {
             "DELETEPY_LOG_LEVEL": "DEBUG",
             "DELETEPY_LOG_FORMAT": "detailed",
-            "DELETEPY_LOG_DISABLE_COLORS": "true"
+            "DELETEPY_LOG_DISABLE_COLORS": "true",
         }
-        
+
         with patch.dict(os.environ, env_vars):
             logger = configure_from_env()
             assert logger.level == logging.DEBUG
@@ -206,7 +200,7 @@ class TestLegacyPrintFunctions:
         """Test that print functions work and include context."""
         # This is a basic test to ensure the functions work
         # The actual context testing is complex due to logger hierarchy
-        
+
         # Test that functions don't raise exceptions
         try:
             print_info("Test info message", user_id="auth0|123", operation="test")
@@ -215,7 +209,7 @@ class TestLegacyPrintFunctions:
             print_error("Test error", user_id="auth0|789", error="test_error")
         except Exception as e:
             pytest.fail(f"Print functions raised exception: {e}")
-        
+
         # Test that the functions accept context parameters
         assert True  # If we get here, the functions worked
 
@@ -234,22 +228,25 @@ class TestLoggingIntegration:
         log_stream = StringIO()
         handler = logging.StreamHandler(log_stream)
         handler.setFormatter(StructuredFormatter())
-        
+
         logger = logging.getLogger("test.integration")
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
-        
+
         # Log a message with context
-        logger.info("Test message", extra={
-            "user_id": "auth0|123456",
-            "operation": "delete_user",
-            "duration": 1.234
-        })
-        
+        logger.info(
+            "Test message",
+            extra={
+                "user_id": "auth0|123456",
+                "operation": "delete_user",
+                "duration": 1.234,
+            },
+        )
+
         # Parse the output
         log_output = log_stream.getvalue().strip()
         log_data = json.loads(log_output)
-        
+
         assert log_data["message"] == "Test message"
         assert log_data["user_id"] == "auth0|123456"
         assert log_data["operation"] == "delete_user"
@@ -258,16 +255,13 @@ class TestLoggingIntegration:
 
     def test_environment_configuration(self):
         """Test that environment variables configure logging correctly."""
-        env_vars = {
-            "DELETEPY_LOG_LEVEL": "WARNING",
-            "DELETEPY_LOG_STRUCTURED": "true"
-        }
-        
+        env_vars = {"DELETEPY_LOG_LEVEL": "WARNING", "DELETEPY_LOG_STRUCTURED": "true"}
+
         with patch.dict(os.environ, env_vars):
             logger = configure_from_env()
-            
+
             # Should be at WARNING level
             assert logger.level == logging.WARNING
-            
+
             # Should use structured formatter
             assert isinstance(logger.handlers[0].formatter, StructuredFormatter)

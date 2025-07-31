@@ -61,8 +61,27 @@ class CheckpointManager:
 
         Returns:
             Path: File path for the checkpoint
+
+        Raises:
+            ValueError: If checkpoint_id is invalid or unsafe
         """
-        return self.checkpoint_dir / f"{checkpoint_id}.json"
+        from .validators import SecurityValidator
+
+        # Validate checkpoint ID for security
+        checkpoint_filename = f"{checkpoint_id}.json"
+        result = SecurityValidator.validate_checkpoint_path(
+            checkpoint_filename, str(self.checkpoint_dir)
+        )
+
+        if not result.is_valid:
+            raise ValueError(f"Invalid checkpoint ID: {result.error_message}")
+
+        # Show warnings if any
+        if result.warnings:
+            for warning in result.warnings:
+                print_warning(f"Checkpoint path warning: {warning}")
+
+        return self.checkpoint_dir / checkpoint_filename
 
     def save_checkpoint(self, checkpoint: Checkpoint) -> bool:
         """Save a checkpoint to disk.
