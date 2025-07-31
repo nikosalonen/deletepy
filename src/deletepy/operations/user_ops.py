@@ -110,6 +110,10 @@ def get_user_id_from_email(
     if users is None:
         return None
 
+    # Handle empty list consistently - return None when no users found
+    if not users:
+        return None
+
     # Extract user IDs with connection filtering
     user_ids = _extract_user_ids_from_response(users, connection, email)
 
@@ -129,6 +133,9 @@ def _fetch_users_by_email(
     Returns:
         Optional[List[Dict[str, Any]]]: List of user objects or None if request failed
     """
+    from ..utils.logging_utils import get_logger
+    
+    logger = get_logger(__name__)
     url = f"{base_url}/api/v2/users-by-email"
     headers = {
         "Authorization": f"Bearer {token}",
@@ -139,24 +146,60 @@ def _fetch_users_by_email(
 
     response = make_rate_limited_request("GET", url, headers, params=params)
     if response is None:
-        print_error(
+        logger.error(
             f"Error fetching user_id for email {email}: Request failed after retries",
-            email=email,
-            operation="get_user_id_from_email",
+            extra={
+                "email": email,
+                "operation": "get_user_id_from_email",
+                "api_endpoint": url,
+                "error_type": "request_failed"
+            }
         )
         return None
 
     try:
         users = response.json()
-        if users and isinstance(users, list):
-            return cast(list[dict[str, Any]], users)
-        return None
+        if isinstance(users, list):
+            if users:
+                logger.info(
+                    f"Found {len(users)} user(s) for email {email}",
+                    extra={
+                        "email": email,
+                        "operation": "get_user_id_from_email",
+                        "user_count": len(users)
+                    }
+                )
+                return cast(list[dict[str, Any]], users)
+            else:
+                logger.info(
+                    f"No users found for email {email}",
+                    extra={
+                        "email": email,
+                        "operation": "get_user_id_from_email",
+                        "user_count": 0
+                    }
+                )
+                return []  # Return empty list instead of None for consistency
+        else:
+            logger.warning(
+                f"Unexpected response format for email {email}: expected list, got {type(users)}",
+                extra={
+                    "email": email,
+                    "operation": "get_user_id_from_email",
+                    "response_type": str(type(users))
+                }
+            )
+            return []
     except ValueError as e:
-        print_error(
+        logger.error(
             f"Error parsing response for email {email}: {e}",
-            email=email,
-            error=str(e),
-            operation="get_user_id_from_email",
+            extra={
+                "email": email,
+                "error": str(e),
+                "operation": "get_user_id_from_email",
+                "error_type": "json_parse_error"
+            },
+            exc_info=True
         )
         return None
 
