@@ -909,7 +909,8 @@ def _load_existing_checkpoint(
         return None
 
     if not checkpoint.is_resumable():
-        print_warning(f"Checkpoint {checkpoint_id} is not resumable")
+        print_warning(f"Checkpoint {checkpoint_id} is not resumable",
+                      operation="checkpoint_resume", checkpoint_id=checkpoint_id)
         return None
 
     return checkpoint
@@ -946,7 +947,8 @@ def _create_new_checkpoint(
         operation_type=operation_type, config=config, items=items, batch_size=50
     )
 
-    print_info(f"Created checkpoint: {checkpoint.checkpoint_id}")
+    print_info(f"Created checkpoint: {checkpoint.checkpoint_id}",
+               operation="checkpoint_create", checkpoint_id=checkpoint.checkpoint_id)
     return checkpoint
 
 
@@ -981,7 +983,8 @@ def _setup_checkpoint_operation(
             setup_config.operation_name,
         )
     else:
-        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}")
+        print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
+                      operation="checkpoint_resume", checkpoint_id=checkpoint.checkpoint_id)
         # Use configuration from checkpoint
         setup_config.env = checkpoint.config.environment
         setup_config.auto_delete = checkpoint.config.auto_delete
