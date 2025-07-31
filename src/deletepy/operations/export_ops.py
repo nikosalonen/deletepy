@@ -274,8 +274,12 @@ def _write_csv_batch(
         return True
 
     except Exception as e:
-        print_warning(f"Error writing CSV batch {batch_number}: {e}", 
-                      operation="export_csv", batch_number=batch_number, error=str(e))
+        print_warning(
+            f"Error writing CSV batch {batch_number}: {e}",
+            operation="export_csv",
+            batch_number=batch_number,
+            error=str(e),
+        )
         return False
 
 
@@ -444,14 +448,20 @@ def _load_or_create_export_checkpoint(
         )
         if checkpoint:
             _apply_checkpoint_config(checkpoint, config)
-            print_success(f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
-                          operation="export_resume", checkpoint_id=checkpoint.checkpoint_id)
+            print_success(
+                f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
+                operation="export_resume",
+                checkpoint_id=checkpoint.checkpoint_id,
+            )
             return checkpoint
 
     # Create new checkpoint
     checkpoint = _create_new_export_checkpoint(emails, config, checkpoint_manager)
-    print_info(f"Created checkpoint: {checkpoint.checkpoint_id}",
-               operation="export_create_checkpoint", checkpoint_id=checkpoint.checkpoint_id)
+    print_info(
+        f"Created checkpoint: {checkpoint.checkpoint_id}",
+        operation="export_create_checkpoint",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
     return checkpoint
 
 
@@ -481,8 +491,11 @@ def _try_load_export_checkpoint(
         return None
 
     if not checkpoint.is_resumable():
-        print_warning(f"Checkpoint {resume_checkpoint_id} is not resumable",
-                      operation="export_resume", checkpoint_id=resume_checkpoint_id)
+        print_warning(
+            f"Checkpoint {resume_checkpoint_id} is not resumable",
+            operation="export_resume",
+            checkpoint_id=resume_checkpoint_id,
+        )
         return None
 
     return checkpoint
@@ -565,14 +578,24 @@ def _handle_export_interruption(
     Returns:
         str: Checkpoint ID
     """
-    print_warning("\nExport operation interrupted by user", operation="export_interrupt")
+    print_warning(
+        "\nExport operation interrupted by user", operation="export_interrupt"
+    )
     checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
     checkpoint_manager.save_checkpoint(checkpoint)
-    print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}",
-               operation="export_interrupt", checkpoint_id=checkpoint.checkpoint_id)
-    print_info("You can resume this operation later using:", operation="export_interrupt")
-    print_info(f"  deletepy resume {checkpoint.checkpoint_id}",
-               operation="export_interrupt", checkpoint_id=checkpoint.checkpoint_id)
+    print_info(
+        f"Checkpoint saved: {checkpoint.checkpoint_id}",
+        operation="export_interrupt",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
+    print_info(
+        "You can resume this operation later using:", operation="export_interrupt"
+    )
+    print_info(
+        f"  deletepy resume {checkpoint.checkpoint_id}",
+        operation="export_interrupt",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
     return checkpoint.checkpoint_id
 
 
@@ -589,8 +612,11 @@ def _handle_export_error(
     Returns:
         str: Checkpoint ID
     """
-    print_warning(f"\nExport operation failed: {error}", 
-                  operation="export_failed", error=str(error))
+    print_warning(
+        f"\nExport operation failed: {error}",
+        operation="export_failed",
+        error=str(error),
+    )
     checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
     checkpoint_manager.save_checkpoint(checkpoint)
     return checkpoint.checkpoint_id
@@ -693,8 +719,11 @@ def _process_export_with_checkpoints(
     # Generate final summary
     _generate_export_summary_from_checkpoint(checkpoint, output_file)
 
-    print_success(f"Export completed! Checkpoint: {checkpoint.checkpoint_id}",
-                  operation="export_complete", checkpoint_id=checkpoint.checkpoint_id)
+    print_success(
+        f"Export completed! Checkpoint: {checkpoint.checkpoint_id}",
+        operation="export_complete",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
     return None  # Operation completed successfully
 
 
@@ -711,33 +740,60 @@ def _generate_export_summary_from_checkpoint(
     config = checkpoint.config
 
     print_success("\nExport Summary:", operation="export_summary")
-    print_info(f"Total emails processed: {checkpoint.progress.current_item}",
-               operation="export_summary", total_processed=checkpoint.progress.current_item)
-    print_info(f"Successfully processed: {results.processed_count}",
-               operation="export_summary", processed_count=results.processed_count)
-    print_info(f"Not found: {results.not_found_count}",
-               operation="export_summary", not_found_count=results.not_found_count)
-    print_info(f"Multiple users: {results.multiple_users_count}",
-               operation="export_summary", multiple_users_count=results.multiple_users_count)
-    print_info(f"Errors: {results.error_count}",
-               operation="export_summary", error_count=results.error_count)
+    print_info(
+        f"Total emails processed: {checkpoint.progress.current_item}",
+        operation="export_summary",
+        total_processed=checkpoint.progress.current_item,
+    )
+    print_info(
+        f"Successfully processed: {results.processed_count}",
+        operation="export_summary",
+        processed_count=results.processed_count,
+    )
+    print_info(
+        f"Not found: {results.not_found_count}",
+        operation="export_summary",
+        not_found_count=results.not_found_count,
+    )
+    print_info(
+        f"Multiple users: {results.multiple_users_count}",
+        operation="export_summary",
+        multiple_users_count=results.multiple_users_count,
+    )
+    print_info(
+        f"Errors: {results.error_count}",
+        operation="export_summary",
+        error_count=results.error_count,
+    )
 
     if config.connection_filter:
-        print_info(f"Connection filter: {config.connection_filter}",
-                   operation="export_summary", connection_filter=config.connection_filter)
+        print_info(
+            f"Connection filter: {config.connection_filter}",
+            operation="export_summary",
+            connection_filter=config.connection_filter,
+        )
 
-    print_info(f"Output file: {output_file}",
-               operation="export_summary", output_file=output_file)
+    print_info(
+        f"Output file: {output_file}",
+        operation="export_summary",
+        output_file=output_file,
+    )
 
     # Calculate total CSV rows (might include multiple users per email)
     total_csv_rows = results.processed_count + results.not_found_count
-    print_info(f"Total CSV rows: {total_csv_rows}",
-               operation="export_summary", total_csv_rows=total_csv_rows)
+    print_info(
+        f"Total CSV rows: {total_csv_rows}",
+        operation="export_summary",
+        total_csv_rows=total_csv_rows,
+    )
 
     success_rate = checkpoint.get_success_rate()
     if success_rate > 0:
-        print_info(f"Success rate: {success_rate:.1f}%",
-                   operation="export_summary", success_rate=success_rate)
+        print_info(
+            f"Success rate: {success_rate:.1f}%",
+            operation="export_summary",
+            success_rate=success_rate,
+        )
 
 
 def find_resumable_export_checkpoint(

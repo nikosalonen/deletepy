@@ -1,7 +1,5 @@
 """Auth0-specific validation utilities."""
 
-import re
-
 # Auth0 user ID prefixes
 AUTH0_USER_ID_PREFIXES = (
     "auth0|",
@@ -45,14 +43,11 @@ def validate_auth0_user_id(user_id: str) -> bool:
     Returns:
         bool: True if valid Auth0 user ID format, False otherwise
     """
-    if not user_id or not isinstance(user_id, str):
-        return False
+    # Import here to avoid circular imports
+    from .validators import InputValidator
 
-    # Auth0 user IDs have connection|identifier format
-    # Connection can contain letters, numbers, hyphens
-    # Identifier is typically alphanumeric
-    pattern = r"^[a-zA-Z0-9\-]+\|[a-zA-Z0-9]+$"
-    return bool(re.match(pattern, user_id))
+    result = InputValidator.validate_auth0_user_id_enhanced(user_id)
+    return result.is_valid
 
 
 def parse_auth0_user_id(user_id: str) -> tuple[str, str]:

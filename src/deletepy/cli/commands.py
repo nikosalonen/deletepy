@@ -42,12 +42,6 @@ from ..utils.display_utils import (
     confirm_action,
     show_progress,
 )
-from ..utils.legacy_print import (
-    print_error,
-    print_info,
-    print_success,
-    print_warning,
-)
 from ..utils.file_utils import read_user_ids_generator
 
 

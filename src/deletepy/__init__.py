@@ -22,10 +22,6 @@ from .core.config import (
     get_env_config,
     validate_rate_limit_config,
 )
-from .utils.request_utils import (
-    get_estimated_processing_time,
-    get_optimal_batch_size,
-)
 from .core.exceptions import (
     APIError,
     Auth0ManagerError,
@@ -125,6 +121,10 @@ from .utils import (
     write_identifiers_to_file,
 )
 from .utils.checkpoint_manager import CheckpointManager
+from .utils.request_utils import (
+    get_estimated_processing_time,
+    get_optimal_batch_size,
+)
 
 __version__ = "1.0.0"
 

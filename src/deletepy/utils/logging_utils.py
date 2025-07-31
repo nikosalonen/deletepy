@@ -5,12 +5,13 @@ import logging
 import logging.config
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -29,9 +30,9 @@ class ColoredFormatter(logging.Formatter):
         "RESET": "\033[0m",  # Reset
     }
 
-    def __init__(self, *args, disable_colors: bool = False, **kwargs):
+    def __init__(self, *args: Any, disable_colors: bool = False, **kwargs: Any) -> None:
         """Initialize formatter with color configuration.
-        
+
         Args:
             disable_colors: Whether to disable colored output
         """
@@ -41,8 +42,11 @@ class ColoredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format log record with colors for terminal output."""
         # Add color to levelname if outputting to terminal and colors are enabled
-        if (not self.disable_colors and 
-            hasattr(sys.stderr, "isatty") and sys.stderr.isatty()):
+        if (
+            not self.disable_colors
+            and hasattr(sys.stderr, "isatty")
+            and sys.stderr.isatty()
+        ):
             color = self.COLORS.get(record.levelname, "")
             reset = self.COLORS["RESET"]
             record.levelname = f"{color}{record.levelname}{reset}"
@@ -56,7 +60,7 @@ class StructuredFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as structured JSON."""
         log_entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -93,7 +97,7 @@ class DetailedFormatter(logging.Formatter):
         """Format log record with detailed context."""
         # Base message
         base_msg = super().format(record)
-        
+
         # Add context information
         context_parts = []
         if hasattr(record, "operation"):
@@ -106,11 +110,11 @@ class DetailedFormatter(logging.Formatter):
             context_parts.append(f"status={record.status_code}")
         if hasattr(record, "duration"):
             context_parts.append(f"duration={record.duration:.3f}s")
-        
+
         if context_parts:
             context_str = " [" + ", ".join(context_parts) + "]"
             return base_msg + context_str
-        
+
         return base_msg
 
 
@@ -240,12 +244,12 @@ def configure_from_env() -> logging.Logger:
     disable_colors = os.getenv("DELETEPY_LOG_DISABLE_COLORS", "false").lower() == "true"
 
     return setup_logging(
-        level=level, 
-        log_file=log_file, 
-        structured=structured, 
+        level=level,
+        log_file=log_file,
+        structured=structured,
         operation=operation,
         log_format=log_format,
-        disable_colors=disable_colors
+        disable_colors=disable_colors,
     )
 
 
@@ -337,29 +341,31 @@ def init_default_logging() -> None:
 
 def configure_from_yaml(config_path: str | Path) -> logging.Logger:
     """Configure logging from YAML configuration file.
-    
+
     Args:
         config_path: Path to YAML configuration file
-        
+
     Returns:
         logging.Logger: Configured logger instance
-        
+
     Raises:
         ImportError: If PyYAML is not installed
         FileNotFoundError: If config file doesn't exist
         ValueError: If config file is invalid
     """
     if not YAML_AVAILABLE:
-        raise ImportError("PyYAML is required for YAML configuration. Install with: pip install pyyaml")
-    
+        raise ImportError(
+            "PyYAML is required for YAML configuration. Install with: pip install pyyaml"
+        )
+
     config_path = Path(config_path)
     if not config_path.exists():
         raise FileNotFoundError(f"Logging config file not found: {config_path}")
-    
+
     try:
-        with open(config_path, 'r', encoding='utf-8') as f:
+        with open(config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
-        
+
         logging.config.dictConfig(config)
         return logging.getLogger("deletepy")
     except Exception as e:
@@ -368,7 +374,7 @@ def configure_from_yaml(config_path: str | Path) -> logging.Logger:
 
 def configure_from_default_yaml() -> logging.Logger:
     """Configure logging from default YAML configuration.
-    
+
     Returns:
         logging.Logger: Configured logger instance, or falls back to environment config
     """
@@ -376,13 +382,13 @@ def configure_from_default_yaml() -> logging.Logger:
         # Try to find default config file
         config_dir = Path(__file__).parent.parent / "config"
         default_config = config_dir / "logging.yaml"
-        
+
         if default_config.exists() and YAML_AVAILABLE:
             return configure_from_yaml(default_config)
     except Exception:
         # Fall back to environment configuration if YAML config fails
         pass
-    
+
     return configure_from_env()
 
 
