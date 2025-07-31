@@ -120,6 +120,81 @@ def test_get_user_id_from_email_not_found(mock_requests, mock_response):
     assert result is None
 
 
+def test_fetch_users_by_email_empty_response(mock_requests, mock_response):
+    """Test _fetch_users_by_email handles empty response array consistently."""
+    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    
+    mock_response.json.return_value = []
+    mock_requests.request.return_value = mock_response
+
+    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+
+    assert result == []  # Should return empty list, not None
+    mock_requests.request.assert_called_once()
+
+
+def test_fetch_users_by_email_none_response(mock_requests, mock_response):
+    """Test _fetch_users_by_email handles None response from API."""
+    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    
+    mock_response.json.return_value = None
+    mock_requests.request.return_value = mock_response
+
+    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+
+    assert result == []  # Should return empty list for consistency
+
+
+def test_fetch_users_by_email_invalid_json_response(mock_requests, mock_response):
+    """Test _fetch_users_by_email handles invalid JSON response."""
+    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    
+    mock_response.json.side_effect = ValueError("Invalid JSON")
+    mock_requests.request.return_value = mock_response
+
+    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+
+    assert result is None  # Should return None for JSON parse errors
+
+
+def test_fetch_users_by_email_request_failure(mock_requests):
+    """Test _fetch_users_by_email handles request failure."""
+    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    
+    # Simulate request failure by raising an exception
+    mock_requests.request.side_effect = requests.exceptions.RequestException("Connection failed")
+
+    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+
+    assert result is None  # Should return None for request failures
+
+
+def test_fetch_users_by_email_non_list_response(mock_requests, mock_response):
+    """Test _fetch_users_by_email handles non-list response."""
+    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    
+    mock_response.json.return_value = {"error": "Invalid request"}
+    mock_requests.request.return_value = mock_response
+
+    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+
+    assert result == []  # Should return empty list for non-list responses
+
+
+def test_fetch_users_by_email_successful_response(mock_requests, mock_response):
+    """Test _fetch_users_by_email handles successful response with users."""
+    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    
+    expected_users = [{"user_id": "test_user_1"}, {"user_id": "test_user_2"}]
+    mock_response.json.return_value = expected_users
+    mock_requests.request.return_value = mock_response
+
+    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+
+    assert result == expected_users
+    mock_requests.request.assert_called_once()
+
+
 def test_revoke_user_sessions(mock_requests, mock_response):
     # Mock the get response for fetching sessions
     get_response = mock_response
