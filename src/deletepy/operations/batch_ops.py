@@ -1387,8 +1387,19 @@ def _process_social_search_with_checkpoints(
     env: str,
     auto_delete: bool,
     checkpoint_manager: CheckpointManager,
+    dry_run: bool = False,  # Processing config parameter
+    batch_timeout: int | None = None,  # Processing config parameter
+    connection_filter: str | None = None,  # Processing config parameter
+    include_inactive: bool = False,  # Processing config parameter
+    verify_results: bool = True,  # Processing config parameter
+    **custom_params: Any,  # Custom parameters from ProcessingConfig
 ) -> str | None:
     """Process social search operation with checkpointing support.
+
+    This function is part of a generic interface system where all process functions
+    receive the same set of parameters from ProcessingConfig via _execute_with_checkpoints.
+    Only the first six parameters are used by this specific operation; the remaining
+    parameters are kept for interface consistency but are not used in the function body.
 
     Args:
         checkpoint: Checkpoint to process
@@ -1397,6 +1408,12 @@ def _process_social_search_with_checkpoints(
         env: Environment
         auto_delete: Whether to auto-delete users
         checkpoint_manager: Checkpoint manager instance
+        dry_run: Processing config parameter (unused - kept for interface consistency)
+        batch_timeout: Processing config parameter (unused - kept for interface consistency)
+        connection_filter: Processing config parameter (unused - kept for interface consistency)
+        include_inactive: Processing config parameter (unused - kept for interface consistency)
+        verify_results: Processing config parameter (unused - kept for interface consistency)
+        **custom_params: Custom parameters from ProcessingConfig (unused - kept for interface consistency)
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
