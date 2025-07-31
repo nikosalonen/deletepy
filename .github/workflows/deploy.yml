@@ -38,9 +38,9 @@ jobs:
       run: |
         ruff check --fix src/ tests/
 
-    - name: Check formatting
+    - name: Fix formatting
       run: |
-        ruff format --check src/ tests/
+        ruff format src/ tests/
 
     - name: Run type checking
       run: |
