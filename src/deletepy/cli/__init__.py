@@ -1,8 +1,7 @@
 """CLI module for Auth0 user management."""
 
-from .csv_commands import handle_csv_command
+from .csv_commands import handle_csv_command, parse_csv_args, print_csv_usage
 from .csv_commands import main as csv_main
-from .csv_commands import parse_csv_args, print_csv_usage
 from .validators import (
     validate_args,
     validate_connection_type,
