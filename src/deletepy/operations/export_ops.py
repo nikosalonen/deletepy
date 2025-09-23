@@ -24,6 +24,7 @@ from ..utils.display_utils import (
     shutdown_requested,
 )
 from ..utils.legacy_print import print_info, print_success, print_warning
+from ..utils.validators import InputValidator
 from .user_ops import get_user_details, get_user_id_from_email
 
 
@@ -107,13 +108,16 @@ def _validate_and_setup_export(
 def _fetch_user_data(
     email: str, token: str, base_url: str, connection: str | None
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
-    """Fetch user data for a single email address.
+    """Fetch user data for a single identifier.
+
+    The "email" parameter may be either an actual email address or an Auth0
+    user ID (e.g., "auth0|...", "google-oauth2|...").
 
     Args:
-        email: Email address to fetch data for
+        email: Email address or Auth0 user ID to fetch data for
         token: Auth0 access token
         base_url: Auth0 API base URL
-        connection: Optional connection filter
+        connection: Optional connection filter (only used for email lookups)
 
     Returns:
         Tuple[List[Dict[str, Any]], Dict[str, int]]: (user_data_list, counters)
@@ -126,12 +130,22 @@ def _fetch_user_data(
     }
 
     try:
-        # Get user IDs for this email
-        user_ids = get_user_id_from_email(email, token, base_url, connection)
+        # If input looks like an Auth0 user ID, skip email lookup and fetch directly
+        looks_like_user_id = (
+            "|" in email
+            or InputValidator.validate_auth0_user_id_enhanced(email).is_valid
+        )
 
-        if user_ids is None:
-            counters["error_count"] += 1
-            return [], counters
+        user_ids: list[str] = []
+        if looks_like_user_id and "@" not in email:
+            user_ids = [email]
+        else:
+            # Resolve email to user IDs
+            resolved = get_user_id_from_email(email, token, base_url, connection)
+            if not resolved:
+                counters["not_found_count"] += 1
+                return [], counters
+            user_ids = resolved
 
         if not user_ids:
             counters["not_found_count"] += 1
@@ -335,9 +349,15 @@ def _build_csv_data_dict(
     Returns:
         Dict[str, Any]: Dictionary ready for CSV export
     """
+    # Determine best email to display: prefer actual email from details if the
+    # input identifier was a user_id (i.e., did not contain '@').
+    display_email = email
+    if user_details and "@" not in email:
+        display_email = user_details.get("email", "")
+
     if user_details is None:
         return {
-            "email": email,
+            "email": display_email if "@" in email else display_email,
             "user_id": user_id,
             "connection": "",
             "last_login": "",
@@ -367,7 +387,7 @@ def _build_csv_data_dict(
         connection = identities[0].get("connection", "")
 
     return {
-        "email": email,
+        "email": display_email if display_email else (email if "@" in email else ""),
         "user_id": user_id,
         "connection": connection,
         "last_login": last_login,

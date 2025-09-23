@@ -119,9 +119,18 @@ def print_section_header(title: str) -> None:
     Args:
         title: Section title
     """
-    print(f"\n{CYAN}{'=' * 60}{RESET}")
-    print(f"{CYAN}{title.center(60)}{RESET}")
-    print(f"{CYAN}{'=' * 60}{RESET}")
+    try:
+        # Prefer Rich styled rule if available
+        from rich.rule import Rule
+
+        from .rich_utils import get_console
+
+        console = get_console()
+        console.print(Rule(f"[info]{title}[/info]"))
+    except Exception:
+        print(f"\n{CYAN}{'=' * 60}{RESET}")
+        print(f"{CYAN}{title.center(60)}{RESET}")
+        print(f"{CYAN}{'=' * 60}{RESET}")
 
 
 def print_warning(message: str) -> None:

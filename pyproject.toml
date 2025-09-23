@@ -16,6 +16,7 @@ dependencies = [
     "requests>=2.32.4",
     "python-dotenv>=1.1.1",
     "click>=8.2.1",
+    "rich>=14.1.0",
 ]
 
 [project.urls]

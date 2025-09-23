@@ -10,6 +10,13 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from rich.logging import RichHandler
+
+    _RICH_AVAILABLE = True
+except Exception:
+    _RICH_AVAILABLE = False
+
+try:
     import yaml
 
     YAML_AVAILABLE = True
@@ -41,17 +48,21 @@ class ColoredFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format log record with colors for terminal output."""
-        # Add color to levelname if outputting to terminal and colors are enabled
-        if (
-            not self.disable_colors
-            and hasattr(sys.stderr, "isatty")
-            and sys.stderr.isatty()
-        ):
-            color = self.COLORS.get(record.levelname, "")
-            reset = self.COLORS["RESET"]
-            record.levelname = f"{color}{record.levelname}{reset}"
-
-        return super().format(record)
+        original_levelname = record.levelname
+        try:
+            # Add color to levelname if outputting to terminal and colors are enabled
+            if (
+                not self.disable_colors
+                and hasattr(sys.stderr, "isatty")
+                and sys.stderr.isatty()
+            ):
+                color = self.COLORS.get(record.levelname, "")
+                reset = self.COLORS["RESET"]
+                record.levelname = f"{color}{record.levelname}{reset}"
+            return super().format(record)
+        finally:
+            # Restore to avoid leaking ANSI codes into other handlers (e.g., JSON/file)
+            record.levelname = original_levelname
 
 
 class StructuredFormatter(logging.Formatter):
@@ -142,7 +153,7 @@ def setup_logging(
     log_file: str | None = None,
     structured: bool = False,
     operation: str | None = None,
-    log_format: str = "console",
+    log_format: str = "rich",
     disable_colors: bool = False,
 ) -> logging.Logger:
     """Configure structured logging for the application.
@@ -152,7 +163,7 @@ def setup_logging(
         log_file: Optional log file path for file output
         structured: Whether to use structured JSON logging
         operation: Current operation context for filtering
-        log_format: Log format (console, json, detailed)
+        log_format: Log format (rich [default], console, detailed, json)
         disable_colors: Whether to disable colored output
 
     Returns:
@@ -167,25 +178,42 @@ def setup_logging(
     root_logger.setLevel(log_level)
 
     # Console handler
-    console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setLevel(log_level)
-
-    # Choose formatter based on configuration
-    if structured or log_format == "json":
-        console_formatter: logging.Formatter = StructuredFormatter()
-    elif log_format == "detailed":
-        console_formatter = DetailedFormatter(
-            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+    if (
+        not structured
+        and log_format == "rich"
+        and _RICH_AVAILABLE
+        and not disable_colors
+    ):
+        # Prefer RichHandler for beautiful console logs when explicitly requested
+        console_handler: logging.Handler = RichHandler(
+            rich_tracebacks=True,
+            show_time=True,
+            show_path=False,
+            markup=False,
+            log_time_format="%Y-%m-%d %H:%M:%S",
         )
-    else:  # console format (default)
-        console_formatter = ColoredFormatter(
-            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-            disable_colors=disable_colors,
-        )
+        console_handler.setLevel(log_level)
+    else:
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setLevel(log_level)
 
-    console_handler.setFormatter(console_formatter)
+        # Choose formatter based on configuration
+        if structured or log_format == "json":
+            console_formatter: logging.Formatter = StructuredFormatter()
+        elif log_format == "detailed":
+            console_formatter = DetailedFormatter(
+                fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        else:  # console format (default)
+            console_formatter = ColoredFormatter(
+                fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+                disable_colors=disable_colors,
+            )
+
+        console_handler.setFormatter(console_formatter)
+
     root_logger.addHandler(console_handler)
 
     # File handler (if specified)
@@ -241,7 +269,7 @@ def configure_from_env() -> logging.Logger:
         DELETEPY_LOG_FILE: Log file path (optional)
         DELETEPY_LOG_STRUCTURED: Use structured logging (default: false)
         DELETEPY_LOG_OPERATION: Current operation context (optional)
-        DELETEPY_LOG_FORMAT: Log format (console, json, detailed) (default: console)
+        DELETEPY_LOG_FORMAT: Log format (rich, console, detailed, json) (default: rich)
         DELETEPY_LOG_DISABLE_COLORS: Disable colored output (default: false)
 
     Returns:
@@ -251,7 +279,7 @@ def configure_from_env() -> logging.Logger:
     log_file = os.getenv("DELETEPY_LOG_FILE")
     structured = os.getenv("DELETEPY_LOG_STRUCTURED", "false").lower() == "true"
     operation = os.getenv("DELETEPY_LOG_OPERATION")
-    log_format = os.getenv("DELETEPY_LOG_FORMAT", "console")
+    log_format = os.getenv("DELETEPY_LOG_FORMAT", "rich")
     disable_colors = os.getenv("DELETEPY_LOG_DISABLE_COLORS", "false").lower() == "true"
 
     return setup_logging(
