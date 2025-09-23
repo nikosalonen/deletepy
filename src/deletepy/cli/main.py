@@ -5,10 +5,10 @@ from pathlib import Path
 
 import click
 
-from ..core.exceptions import AuthConfigError
-from ..utils.display_utils import RED, RESET, YELLOW
-from ..utils.rich_utils import install_rich_tracebacks
-from .commands import OperationHandler
+from deletepy.cli.commands import OperationHandler
+from deletepy.core.exceptions import AuthConfigError
+from deletepy.utils.display_utils import RED, RESET, YELLOW
+from deletepy.utils.rich_utils import install_rich_tracebacks
 
 
 @click.group(invoke_without_command=True)
@@ -105,7 +105,7 @@ def unlink_social_ids(input_file: str, env: str, dry_run: bool) -> None:
 )
 def cleanup_csv(input_file: str, env: str | None, output_type: str) -> None:
     """Process CSV file and extract/convert user identifiers."""
-    from ..utils.csv_utils import (
+    from deletepy.utils.csv_utils import (
         extract_identifiers_from_csv,
         write_identifiers_to_file,
     )
