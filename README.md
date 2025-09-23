@@ -122,6 +122,22 @@ If you need to install or manage Python versions, we recommend using version man
 - [asdf](https://asdf-vm.com/) - Extendable version manager with Python plugin
 
 ## Installation
+### Logging
+
+DeletePy defaults to Rich-powered console logging when available. You can control logging via environment variables:
+
+```bash
+# Log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+export DELETEPY_LOG_LEVEL=INFO
+
+# Log format (rich [default], console, detailed, json)
+export DELETEPY_LOG_FORMAT=rich
+
+# Use structured JSON logging
+export DELETEPY_LOG_STRUCTURED=false
+```
+
+See `docs/LOGGING.md` for full details.
 
 ### Installation with uv (Recommended)
 

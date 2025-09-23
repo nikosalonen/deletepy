@@ -28,8 +28,9 @@ export DELETEPY_LOG_FILE=/path/to/logfile.log
 # Use structured JSON logging (true/false)
 export DELETEPY_LOG_STRUCTURED=true
 
-# Log format (console, detailed, json)
-export DELETEPY_LOG_FORMAT=detailed
+# Log format (rich [default], console, detailed, json)
+# Default is 'rich' if Rich is available; falls back to 'console' otherwise
+export DELETEPY_LOG_FORMAT=rich
 
 # Disable colored output (true/false)
 export DELETEPY_LOG_DISABLE_COLORS=false
@@ -76,11 +77,18 @@ loggers:
 
 ## Log Formats
 
-### Console Format (Default)
+### Rich Format (Default)
+Beautiful, interactive console output powered by Rich (auto-fallbacks to Console if Rich is unavailable):
+```
+2025-07-31 08:00:00 | INFO     | deletepy.operations.user_ops | Deleting user: auth0|123456
+2025-07-31 08:00:01 | INFO     | deletepy.operations.user_ops | ✅ Successfully deleted user auth0|123456
+```
+
+### Console Format
 Human-readable colored output for terminal use:
 ```
 2025-07-31 08:00:00 | INFO     | deletepy.operations.user_ops | Deleting user: auth0|123456
-2025-07-31 08:00:01 | SUCCESS  | deletepy.operations.user_ops | ✅ Successfully deleted user auth0|123456
+2025-07-31 08:00:01 | INFO     | deletepy.operations.user_ops | ✅ Successfully deleted user auth0|123456
 ```
 
 ### Detailed Format
