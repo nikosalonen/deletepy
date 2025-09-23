@@ -142,8 +142,8 @@ def _fetch_user_data(
         else:
             # Resolve email to user IDs
             resolved = get_user_id_from_email(email, token, base_url, connection)
-            if resolved is None:
-                counters["error_count"] += 1
+            if not resolved:
+                counters["not_found_count"] += 1
                 return [], counters
             user_ids = resolved
 
