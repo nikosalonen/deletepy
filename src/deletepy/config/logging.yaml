@@ -63,5 +63,5 @@ root:
 # DELETEPY_LOG_LEVEL: Override log level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 # DELETEPY_LOG_FILE: Enable file logging to specified path
 # DELETEPY_LOG_STRUCTURED: Use structured JSON logging (true/false)
-# DELETEPY_LOG_FORMAT: Log format (console, detailed, json)
+# DELETEPY_LOG_FORMAT: Log format (rich [default], console, detailed, json)
 # DELETEPY_LOG_DISABLE_COLORS: Disable colored output (true/false)

@@ -159,7 +159,7 @@ def setup_logging(
         log_file: Optional log file path for file output
         structured: Whether to use structured JSON logging
         operation: Current operation context for filtering
-        log_format: Log format (console, json, detailed)
+        log_format: Log format (rich [default], console, detailed, json)
         disable_colors: Whether to disable colored output
 
     Returns:
@@ -265,7 +265,7 @@ def configure_from_env() -> logging.Logger:
         DELETEPY_LOG_FILE: Log file path (optional)
         DELETEPY_LOG_STRUCTURED: Use structured logging (default: false)
         DELETEPY_LOG_OPERATION: Current operation context (optional)
-        DELETEPY_LOG_FORMAT: Log format (console, json, detailed) (default: console)
+        DELETEPY_LOG_FORMAT: Log format (rich, console, detailed, json) (default: rich)
         DELETEPY_LOG_DISABLE_COLORS: Disable colored output (default: false)
 
     Returns:
