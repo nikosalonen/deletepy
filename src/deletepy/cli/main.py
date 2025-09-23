@@ -53,11 +53,19 @@ def check_domains(input_file: str, env: str) -> None:
 
 
 @cli.command()
-@click.argument("input_file", type=click.Path(exists=True))
+@click.argument(
+    "input_file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
+)
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option("--connection", help="Filter by connection type")
 def export_last_login(input_file: str, env: str, connection: str | None) -> None:
     """Export user last_login data to CSV."""
+    if env == "prod":
+        click.confirm(
+            "You are about to export user data from production. Continue?",
+            abort=True,
+        )
     handler = OperationHandler()
     handler.handle_export_last_login(Path(input_file), env, connection)
 
