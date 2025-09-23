@@ -5,7 +5,7 @@
 
 version: 2
 updates:
-  - package-ecosystem: "pip" # Supports pyproject.toml, requirements.txt, setup.py, etc.
+  - package-ecosystem: "uv" # Supports pyproject.toml, requirements.txt, setup.py, etc.
     directory: "/" # Location of package manifests
     schedule:
       interval: "monthly"
