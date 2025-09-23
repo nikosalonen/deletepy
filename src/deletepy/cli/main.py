@@ -138,13 +138,21 @@ def users() -> None:
 
 
 @users.command()
-@click.argument("input_file", type=click.Path(exists=True))
+@click.argument(
+    "input_file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
+)
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
 def block(input_file: str, env: str, dry_run: bool) -> None:
     """Block the specified users."""
+    if env == "prod" and not dry_run:
+        click.confirm(
+            "You are about to block users in production. Continue?",
+            abort=True,
+        )
     handler = OperationHandler()
     handler.handle_user_operations(Path(input_file), env, "block", dry_run)
 
