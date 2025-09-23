@@ -7,6 +7,7 @@ import click
 
 from ..core.exceptions import AuthConfigError
 from ..utils.display_utils import RED, RESET, YELLOW
+from ..utils.rich_utils import install_rich_tracebacks
 from .commands import OperationHandler
 
 
@@ -34,49 +35,49 @@ def doctor(env: str, test_api: bool) -> None:
 
 
 @cli.command()
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def check_unblocked(input_file: Path, env: str) -> None:
+def check_unblocked(input_file: str, env: str) -> None:
     """Check if specified users are unblocked."""
     handler = OperationHandler()
-    handler.handle_check_unblocked(input_file, env)
+    handler.handle_check_unblocked(Path(input_file), env)
 
 
 @cli.command()
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
-def check_domains(input_file: Path, env: str) -> None:
+def check_domains(input_file: str, env: str) -> None:
     """Check email domains for the specified users."""
     handler = OperationHandler()
-    handler.handle_check_domains(input_file, env)
+    handler.handle_check_domains(Path(input_file), env)
 
 
 @cli.command()
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option("--connection", help="Filter by connection type")
-def export_last_login(input_file: Path, env: str, connection: str | None) -> None:
+def export_last_login(input_file: str, env: str, connection: str | None) -> None:
     """Export user last_login data to CSV."""
     handler = OperationHandler()
-    handler.handle_export_last_login(input_file, env, connection)
+    handler.handle_export_last_login(Path(input_file), env, connection)
 
 
 @cli.command()
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
-def unlink_social_ids(input_file: Path, env: str, dry_run: bool) -> None:
+def unlink_social_ids(input_file: str, env: str, dry_run: bool) -> None:
     """Unlink social identities from Auth0 users and delete detached accounts."""
     handler = OperationHandler()
-    handler.handle_unlink_social_ids(input_file, env, dry_run)
+    handler.handle_unlink_social_ids(Path(input_file), env, dry_run)
 
 
 @cli.command()
 @click.argument(
     "input_file",
-    type=click.Path(exists=True, path_type=Path),
+    type=click.Path(exists=True),
     default="ids.csv",
 )
 @click.argument("env", type=click.Choice(["dev", "prod"]), required=False)
@@ -86,7 +87,7 @@ def unlink_social_ids(input_file: Path, env: str, dry_run: bool) -> None:
     default="user_id",
     help="Type of output desired",
 )
-def cleanup_csv(input_file: Path, env: str | None, output_type: str) -> None:
+def cleanup_csv(input_file: str, env: str | None, output_type: str) -> None:
     """Process CSV file and extract/convert user identifiers."""
     from ..utils.csv_utils import (
         extract_identifiers_from_csv,
@@ -95,10 +96,10 @@ def cleanup_csv(input_file: Path, env: str | None, output_type: str) -> None:
 
     try:
         identifiers = extract_identifiers_from_csv(
-            filename=str(input_file), env=env, output_type=output_type
+            filename=str(Path(input_file)), env=env, output_type=output_type
         )
         if identifiers:
-            output_file = f"cleaned_{input_file.name}"
+            output_file = f"cleaned_{Path(input_file).name}"
             success = write_identifiers_to_file(identifiers, output_file)
             if success:
                 click.echo(
@@ -121,39 +122,39 @@ def users() -> None:
 
 
 @users.command()
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
-def block(input_file: Path, env: str, dry_run: bool) -> None:
+def block(input_file: str, env: str, dry_run: bool) -> None:
     """Block the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "block", dry_run)
+    handler.handle_user_operations(Path(input_file), env, "block", dry_run)
 
 
 @users.command()
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
-def delete(input_file: Path, env: str, dry_run: bool) -> None:
+def delete(input_file: str, env: str, dry_run: bool) -> None:
     """Delete the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "delete", dry_run)
+    handler.handle_user_operations(Path(input_file), env, "delete", dry_run)
 
 
 @users.command()
-@click.argument("input_file", type=click.Path(exists=True, path_type=Path))
+@click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
-def revoke_grants_only(input_file: Path, env: str, dry_run: bool) -> None:
+def revoke_grants_only(input_file: str, env: str, dry_run: bool) -> None:
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(input_file, env, "revoke-grants-only", dry_run)
+    handler.handle_user_operations(Path(input_file), env, "revoke-grants-only", dry_run)
 
 
 @cli.group()
@@ -196,13 +197,15 @@ def list(
 @click.argument("checkpoint_id", type=str)
 @click.option(
     "--input-file",
-    type=click.Path(exists=True, path_type=Path),
+    type=click.Path(exists=True),
     help="Override input file from checkpoint (optional)",
 )
-def resume(checkpoint_id: str, input_file: Path | None) -> None:
+def resume(checkpoint_id: str, input_file: str | None) -> None:
     """Resume an operation from a checkpoint."""
     handler = OperationHandler()
-    handler.handle_resume_checkpoint(checkpoint_id, input_file)
+    handler.handle_resume_checkpoint(
+        checkpoint_id, Path(input_file) if input_file else None
+    )
 
 
 @checkpoint.command()
@@ -250,6 +253,8 @@ def details(checkpoint_id: str) -> None:
 def main() -> None:
     """Main entry point for the CLI application."""
     try:
+        # Enable pretty tracebacks
+        install_rich_tracebacks()
         cli()
     except KeyboardInterrupt:
         click.echo(f"\n{YELLOW}Operation interrupted by user.{RESET}")

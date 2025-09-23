@@ -10,6 +10,13 @@ from pathlib import Path
 from typing import Any
 
 try:
+    from rich.logging import RichHandler
+
+    _RICH_AVAILABLE = True
+except Exception:
+    _RICH_AVAILABLE = False
+
+try:
     import yaml
 
     YAML_AVAILABLE = True
@@ -167,25 +174,41 @@ def setup_logging(
     root_logger.setLevel(log_level)
 
     # Console handler
-    console_handler = logging.StreamHandler(sys.stderr)
-    console_handler.setLevel(log_level)
-
-    # Choose formatter based on configuration
-    if structured or log_format == "json":
-        console_formatter: logging.Formatter = StructuredFormatter()
-    elif log_format == "detailed":
-        console_formatter = DetailedFormatter(
-            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+    if (
+        not structured
+        and log_format == "rich"
+        and _RICH_AVAILABLE
+        and not disable_colors
+    ):
+        # Prefer RichHandler for beautiful console logs when explicitly requested
+        console_handler: logging.Handler = RichHandler(
+            rich_tracebacks=True,
+            show_time=True,
+            markup=False,
+            log_time_format="%Y-%m-%d %H:%M:%S",
         )
-    else:  # console format (default)
-        console_formatter = ColoredFormatter(
-            fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-            disable_colors=disable_colors,
-        )
+        console_handler.setLevel(log_level)
+    else:
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setLevel(log_level)
 
-    console_handler.setFormatter(console_formatter)
+        # Choose formatter based on configuration
+        if structured or log_format == "json":
+            console_formatter: logging.Formatter = StructuredFormatter()
+        elif log_format == "detailed":
+            console_formatter = DetailedFormatter(
+                fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+            )
+        else:  # console format (default)
+            console_formatter = ColoredFormatter(
+                fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+                datefmt="%Y-%m-%d %H:%M:%S",
+                disable_colors=disable_colors,
+            )
+
+        console_handler.setFormatter(console_formatter)
+
     root_logger.addHandler(console_handler)
 
     # File handler (if specified)
