@@ -20,10 +20,12 @@ formatters:
 
 handlers:
   console:
-    class: logging.StreamHandler
+    class: rich.logging.RichHandler
     level: INFO
     formatter: console
-    stream: ext://sys.stderr
+    rich_tracebacks: true
+    show_time: true
+    show_path: false
 
   file:
     class: logging.FileHandler

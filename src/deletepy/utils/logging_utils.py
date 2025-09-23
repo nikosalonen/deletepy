@@ -149,7 +149,7 @@ def setup_logging(
     log_file: str | None = None,
     structured: bool = False,
     operation: str | None = None,
-    log_format: str = "console",
+    log_format: str = "rich",
     disable_colors: bool = False,
 ) -> logging.Logger:
     """Configure structured logging for the application.
@@ -184,6 +184,7 @@ def setup_logging(
         console_handler: logging.Handler = RichHandler(
             rich_tracebacks=True,
             show_time=True,
+            show_path=False,
             markup=False,
             log_time_format="%Y-%m-%d %H:%M:%S",
         )
@@ -274,7 +275,7 @@ def configure_from_env() -> logging.Logger:
     log_file = os.getenv("DELETEPY_LOG_FILE")
     structured = os.getenv("DELETEPY_LOG_STRUCTURED", "false").lower() == "true"
     operation = os.getenv("DELETEPY_LOG_OPERATION")
-    log_format = os.getenv("DELETEPY_LOG_FORMAT", "console")
+    log_format = os.getenv("DELETEPY_LOG_FORMAT", "rich")
     disable_colors = os.getenv("DELETEPY_LOG_DISABLE_COLORS", "false").lower() == "true"
 
     return setup_logging(
