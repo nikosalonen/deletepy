@@ -148,11 +148,6 @@ def users() -> None:
 )
 def block(input_file: str, env: str, dry_run: bool) -> None:
     """Block the specified users."""
-    if env == "prod" and not dry_run:
-        click.confirm(
-            "You are about to block users in production. Continue?",
-            abort=True,
-        )
     handler = OperationHandler()
     handler.handle_user_operations(Path(input_file), env, "block", dry_run)
 
@@ -168,11 +163,6 @@ def block(input_file: str, env: str, dry_run: bool) -> None:
 )
 def delete(input_file: str, env: str, dry_run: bool) -> None:
     """Delete the specified users."""
-    if env == "prod" and not dry_run:
-        click.confirm(
-            "You are about to delete users in production. Continue?",
-            abort=True,
-        )
     handler = OperationHandler()
     handler.handle_user_operations(Path(input_file), env, "delete", dry_run)
 
@@ -188,11 +178,6 @@ def delete(input_file: str, env: str, dry_run: bool) -> None:
 )
 def revoke_grants_only(input_file: str, env: str, dry_run: bool) -> None:
     """Revoke grants and sessions for the specified users."""
-    if env == "prod" and not dry_run:
-        click.confirm(
-            "You are about to revoke grants and sessions in production. Continue?",
-            abort=True,
-        )
     handler = OperationHandler()
     handler.handle_user_operations(Path(input_file), env, "revoke-grants-only", dry_run)
 
