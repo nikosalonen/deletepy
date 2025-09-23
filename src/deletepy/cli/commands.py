@@ -6,6 +6,14 @@ from pathlib import Path
 from typing import Any, cast
 
 import click
+from rich.progress import (
+    BarColumn,
+    MofNCompleteColumn,
+    Progress,
+    TextColumn,
+    TimeElapsedColumn,
+    TimeRemainingColumn,
+)
 
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
@@ -39,9 +47,9 @@ from ..utils.display_utils import (
     RESET,
     YELLOW,
     confirm_action,
-    show_progress,
 )
 from ..utils.file_utils import read_user_ids_generator
+from ..utils.rich_utils import get_console
 
 
 class OperationHandler:
@@ -99,14 +107,24 @@ class OperationHandler:
         """
         click.echo(f"\n{CYAN}Fetching user emails...{RESET}")
         emails = []
-        total_users = len(user_ids)
-
-        for idx, user_id in enumerate(user_ids, 1):
-            show_progress(idx, total_users, "Fetching emails")
-            email = get_user_email(user_id, token, base_url)
-            if email:
-                emails.append(email)
-        click.echo("\n")  # Clear progress line
+        console = get_console()
+        task_description = "Fetching emails"
+        with Progress(
+            TextColumn("{task.description}", style="info"),
+            BarColumn(),
+            MofNCompleteColumn(),
+            TextColumn("|"),
+            TimeElapsedColumn(),
+            TextColumn("remaining"),
+            TimeRemainingColumn(),
+            console=console,
+        ) as progress:
+            task_id = progress.add_task(task_description, total=len(user_ids))
+            for user_id in user_ids:
+                email = get_user_email(user_id, token, base_url)
+                if email:
+                    emails.append(email)
+                progress.advance(task_id)
         return emails
 
     def _calculate_export_parameters(self, num_emails: int) -> tuple[int, float]:

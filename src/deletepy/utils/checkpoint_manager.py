@@ -6,6 +6,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from rich.table import Table
+from rich.text import Text
+
 from ..models.checkpoint import (
     BatchProgress,
     Checkpoint,
@@ -17,14 +20,13 @@ from ..models.checkpoint import (
 from ..utils.display_utils import (
     CYAN,
     GREEN,
-    RED,
     RESET,
-    YELLOW,
     print_error,
     print_info,
     print_success,
     print_warning,
 )
+from ..utils.rich_utils import get_console
 
 
 class CheckpointManager:
@@ -525,32 +527,36 @@ class CheckpointManager:
             print_info("No checkpoints found.")
             return
 
-        print(f"\n{GREEN}Available Checkpoints:{RESET}")
-        print(
-            f"{'ID':<20} {'Type':<18} {'Status':<12} {'Progress':<10} {'Created':<20} {'Environment':<6}"
-        )
-        print("-" * 95)
+        console = get_console()
+        table = Table(title="Available Checkpoints", show_lines=False)
+        table.add_column("ID", style="muted")
+        table.add_column("Type", style="info")
+        table.add_column("Status")
+        table.add_column("Progress", justify="right")
+        table.add_column("Created", style="muted")
+        table.add_column("Env", style="muted")
 
         for checkpoint in checkpoints:
-            status_color = {
-                CheckpointStatus.ACTIVE: YELLOW,
-                CheckpointStatus.COMPLETED: GREEN,
-                CheckpointStatus.FAILED: RED,
-                CheckpointStatus.CANCELLED: CYAN,
-            }.get(checkpoint.status, RESET)
+            status_style = {
+                CheckpointStatus.ACTIVE: "warning",
+                CheckpointStatus.COMPLETED: "success",
+                CheckpointStatus.FAILED: "error",
+                CheckpointStatus.CANCELLED: "info",
+            }.get(checkpoint.status, "muted")
 
             progress_pct = checkpoint.get_completion_percentage()
+            status_text = Text(checkpoint.status.value, style=status_style)
 
-            print(
-                f"{checkpoint.checkpoint_id:<20} "
-                f"{checkpoint.operation_type.value:<18} "
-                f"{status_color}{checkpoint.status.value:<12}{RESET} "
-                f"{progress_pct:>6.1f}%   "
-                f"{checkpoint.created_at.strftime('%Y-%m-%d %H:%M'):<20} "
-                f"{checkpoint.config.environment:<6}"
+            table.add_row(
+                checkpoint.checkpoint_id,
+                checkpoint.operation_type.value,
+                status_text,
+                f"{progress_pct:0.1f}%",
+                checkpoint.created_at.strftime("%Y-%m-%d %H:%M"),
+                checkpoint.config.environment,
             )
 
-        print("")
+        console.print(table)
 
     def display_checkpoint_details(self, checkpoint: Checkpoint) -> None:
         """Display detailed information about a checkpoint.
