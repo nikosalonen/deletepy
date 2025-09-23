@@ -71,13 +71,21 @@ def export_last_login(input_file: str, env: str, connection: str | None) -> None
 
 
 @cli.command()
-@click.argument("input_file", type=click.Path(exists=True))
+@click.argument(
+    "input_file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
+)
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
 def unlink_social_ids(input_file: str, env: str, dry_run: bool) -> None:
     """Unlink social identities from Auth0 users and delete detached accounts."""
+    if env == "prod" and not dry_run:
+        click.confirm(
+            "You are about to unlink social identities and delete detached accounts in production. Continue?",
+            abort=True,
+        )
     handler = OperationHandler()
     handler.handle_unlink_social_ids(Path(input_file), env, dry_run)
 
