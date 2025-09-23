@@ -45,9 +45,9 @@ repos:
   - repo: local
     hooks:
       - id: pytest
-        name: pytest
-        entry: ./venv/bin/python -m pytest
+        name: pytest (uv)
+        entry: uv
         language: system
         pass_filenames: false
         always_run: true
-        args: [--tb=short]
+        args: [run, pytest, --tb=short]

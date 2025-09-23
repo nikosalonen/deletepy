@@ -7,12 +7,14 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 ## Features
 
 ### Core User Operations
+
 - **Delete users** - Permanently remove users from Auth0 with all associated data
 - **Block users** - Prevent users from logging in while preserving their data
 - **Revoke sessions** - Force logout from all active sessions (Enterprise plan required)
 - **Revoke application grants** - Invalidate all authorized applications and refresh tokens
 
 ### Advanced Operations
+
 - **Identity unlinking** (`unlink-social-ids`) - Smart social identity management:
   - Unlinks social identities from multi-identity users
   - Deletes users with only the matching social identity
@@ -24,6 +26,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Credential testing** (`doctor`) - Validate Auth0 API credentials and permissions
 
 ### Dry-Run Preview
+
 - **Safe preview mode** (`--dry-run`) - Preview what would happen without executing operations
 - **Comprehensive analysis** - Shows success rates, potential issues, and user categorization
 - **User state detection** - Identifies already blocked users, invalid IDs, and API errors
@@ -33,6 +36,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Error resilience** - Preview continues even if some API calls fail, showing partial results
 
 ### Input & Safety Features
+
 - **Multiple input formats** - Support for Auth0 user IDs, email addresses, or social media IDs
 - **CSV preprocessing** - Convert multi-column CSV files to single-column input using cleanup utilities
 - **Email resolution** - Automatically resolve emails to Auth0 user IDs with multi-user detection
@@ -45,6 +49,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Robust error handling** - Comprehensive exception handling with detailed error reporting
 
 ### Checkpoint System
+
 - **Automatic checkpointing** - All operations create recovery points automatically
 - **Interruption recovery** - Resume operations from exactly where they left off
 - **Progress preservation** - Never lose work on large datasets or long-running operations
@@ -84,6 +89,7 @@ deletepy/
 ```
 
 ### Key Benefits
+
 - **Modular design** - Clear separation of concerns for easier maintenance
 - **Type safety** - Comprehensive type hints throughout the codebase
 - **Modern CLI** - Click-based command-line interface with better UX
@@ -101,22 +107,47 @@ deletepy/
 If you need to install or manage Python versions, we recommend using version managers:
 
 **For macOS:**
+
 - [pyenv](https://github.com/pyenv/pyenv) - Simple Python version management
 - [Homebrew](https://brew.sh/) - Package manager that can install Python versions
 
 **For Windows:**
+
 - [pyenv-win](https://github.com/pyenv-win/pyenv-win) - Python version management for Windows (install via `winget install pyenv-win` or download from GitHub)
 - [Python.org](https://www.python.org/downloads/) - Official Python installer
 
 **For Linux:**
+
 - [pyenv](https://github.com/pyenv/pyenv) - Simple Python version management
 - [asdf](https://asdf-vm.com/) - Extendable version manager with Python plugin
 
 ## Installation
 
+### Installation with uv (Recommended)
+
+```bash
+# Create or update the virtual environment from the lockfile
+uv sync --group dev
+
+# (Optional) Activate the environment if you prefer not to use `uv run`
+source .venv/bin/activate
+
+# Verify setup
+deletepy doctor dev
+```
+
+Alternative via Makefile targets:
+
+```bash
+make uv-install        # sync default groups
+make uv-install-dev    # sync with dev group
+make uv-upgrade        # upgrade lockfile + sync dev
+```
+
 ### Modern Installation (Recommended)
 
 1. Clone the repository and create virtual environment:
+
    ```bash
    git clone https://github.com/nikosalonen/deletepy
    cd deletepy
@@ -125,6 +156,7 @@ If you need to install or manage Python versions, we recommend using version man
    ```
 
 2. Install in development mode:
+
    ```bash
    pip install -e .
    ```
@@ -132,17 +164,20 @@ If you need to install or manage Python versions, we recommend using version man
 ### Traditional Installation
 
 1. Create and activate virtual environment:
+
    ```bash
    python3 -m venv venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 
 2. Install dependencies:
+
    ```bash
    pip install -e .
    ```
 
    Or with development dependencies:
+
    ```bash
    pip install -e ".[dev]"
    ```
@@ -150,6 +185,7 @@ If you need to install or manage Python versions, we recommend using version man
 ### Environment Configuration
 
 Create a `.env` file with your Auth0 credentials:
+
 ```bash
 # Production credentials
 CLIENT_ID=your_prod_client_id_here
@@ -209,6 +245,7 @@ deletepy unlink-social-ids social_ids.txt dev
 ```
 
 **Benefits:**
+
 - ✅ **Interruption Safe** - Safely handle Ctrl+C, network failures, or system restarts
 - ✅ **Progress Preservation** - Never lose work on large operations
 - ✅ **Automatic Resume** - Operations can be resumed from exactly where they left off
@@ -218,6 +255,7 @@ deletepy unlink-social-ids social_ids.txt dev
 ### Managing Checkpoints
 
 #### List Checkpoints
+
 ```bash
 # List all checkpoints
 deletepy checkpoint list
@@ -243,6 +281,7 @@ deletepy checkpoint list --status active --env prod --details
 ```
 
 #### Resume Operations
+
 ```bash
 # Resume from a specific checkpoint
 deletepy checkpoint resume checkpoint_20241217_142830_export_last_login_dev
@@ -252,6 +291,7 @@ deletepy checkpoint resume checkpoint_id --input-file new_users.txt
 ```
 
 **Resume Examples:**
+
 ```bash
 # Export operation was interrupted
 $ deletepy export-last-login emails.txt dev
@@ -266,12 +306,14 @@ Resuming from email 1,501/5,000...
 ```
 
 #### Checkpoint Details
+
 ```bash
 # Show detailed information about a specific checkpoint
 deletepy checkpoint details checkpoint_20241217_142830_export_last_login_dev
 ```
 
 **Sample Output:**
+
 ```
 📋 Checkpoint Details
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -306,6 +348,7 @@ deletepy checkpoint details checkpoint_20241217_142830_export_last_login_dev
 ### Checkpoint Cleanup
 
 #### Clean Completed Checkpoints
+
 ```bash
 # Clean all completed checkpoints (regardless of age)
 deletepy checkpoint clean --completed
@@ -315,12 +358,14 @@ deletepy checkpoint clean --completed --dry-run
 ```
 
 #### Clean Failed Checkpoints
+
 ```bash
 # Clean only failed checkpoints
 deletepy checkpoint clean --failed
 ```
 
 #### Clean Old Checkpoints
+
 ```bash
 # Clean checkpoints older than 30 days (default)
 deletepy checkpoint clean
@@ -333,6 +378,7 @@ deletepy checkpoint clean --days-old 14 --dry-run
 ```
 
 #### Clean All Checkpoints (Use with Caution)
+
 ```bash
 # Clean ALL checkpoints - use with extreme caution
 deletepy checkpoint clean --all
@@ -342,6 +388,7 @@ deletepy checkpoint clean --all --dry-run
 ```
 
 #### Delete Specific Checkpoint
+
 ```bash
 # Delete a specific checkpoint with confirmation
 deletepy checkpoint delete checkpoint_20241217_142830_export_last_login_dev
@@ -374,16 +421,19 @@ Checkpoints are automatically created for these operations:
 ### Advanced Features
 
 #### Production Safety with Checkpoints
+
 - Checkpoints preserve environment information to prevent cross-environment resume
 - Production checkpoints require the same safety confirmations when resumed
 - Failed production operations can be safely resumed after fixing underlying issues
 
 #### Error Recovery
+
 - Failed operations create checkpoints with error details for debugging
 - Resume operations can handle partial failures and continue processing
 - Graceful handling of network issues and API errors
 
 #### Performance Optimization
+
 - Batch processing state is preserved across interruptions
 - Optimal batch sizes are maintained when resuming
 - Rate limiting state is reset appropriately on resume
@@ -409,6 +459,7 @@ deletepy cleanup-csv ids.csv prod --output-type=username
 ```
 
 **Enhanced Features:**
+
 - **Output type control** - Specify identifier type: `user_id`, `email`, or `username`
 - **Smart column detection** - Automatically finds the best column
 - **Auth0 API integration** - Resolves encoded usernames when environment is specified
@@ -417,18 +468,21 @@ deletepy cleanup-csv ids.csv prod --output-type=username
 ### Input File Formats
 
 1. **User Management Files** - Auth0 user IDs or email addresses:
+
    ```
    auth0|123456789
    user@example.com
    ```
 
 2. **Social ID Files** - Social media IDs for identity management:
+
    ```
    10157490928027692
    115346286307134396784
    ```
 
 3. **Email Files** - Email addresses for domain checking or export:
+
    ```
    user1@example.com
    user2@company.org
@@ -448,6 +502,7 @@ DeletePy provides sophisticated social identity management:
 - **Production Safety**: Explicit confirmation required with operation counts
 
 Example workflow:
+
 1. Provide a file with social media IDs (Facebook, Google, LinkedIn, etc.)
 2. DeletePy searches Auth0 for users with those identities
 3. Categorizes users based on their identity configuration
@@ -490,6 +545,7 @@ deletepy users revoke-grants-only users.txt dev --dry-run
 ```
 
 **Preview Information Includes:**
+
 - **Success Analysis**: Number of users that would be processed successfully
 - **Success Rate**: Percentage of successful operations
 - **User Categorization**:
@@ -510,6 +566,7 @@ deletepy unlink-social-ids social_ids.txt dev --dry-run
 ```
 
 **Social Preview Shows:**
+
 - **Users to Delete**: Users where the social ID is their only/main identity
 - **Identities to Unlink**: Users with multiple identities where only the social identity will be removed
 - **Protected Users**: Users with Auth0 as main identity (will be skipped)
@@ -580,18 +637,21 @@ mypy src/
 ## Technical Notes
 
 ### Rate Limiting & Performance
+
 - Advanced rate limiting with exponential backoff prevents API throttling
 - Memory-efficient generator-based processing for large datasets
 - Automatic batch size optimization for export operations
 - Graceful handling of interruption signals
 
 ### Error Handling
+
 - Comprehensive exception hierarchy for structured error handling
 - Detailed error reporting with color-coded output
 - Automatic cleanup of temporary files
 - Multiple user detection for email addresses with connection details
 
 ### Session & Grant Management
+
 - **Session revocation** logs users out of all Auth0 SSO/browser sessions
 - **Grant revocation** invalidates all refresh tokens and prevents new access tokens
 - **Access tokens** already issued remain valid until they expire

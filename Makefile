@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test lint lint-fix format type-check clean build
+.PHONY: help install install-dev test lint lint-fix format type-check clean build uv-upgrade uv-install uv-install-dev
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -52,3 +52,13 @@ install-pre-commit: ## Install pre-commit hooks
 
 update-pre-commit: ## Update pre-commit hooks
 	pre-commit autoupdate
+
+uv-upgrade: ## Upgrade dependencies using uv (lock + sync dev)
+	uv lock --upgrade
+	uv sync --group dev
+
+uv-install: ## Create/refresh .venv using uv (default deps from lockfile)
+	uv sync
+
+uv-install-dev: ## Create/refresh .venv with dev group using uv
+	uv sync --group dev
