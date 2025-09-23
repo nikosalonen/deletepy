@@ -48,17 +48,21 @@ class ColoredFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format log record with colors for terminal output."""
-        # Add color to levelname if outputting to terminal and colors are enabled
-        if (
-            not self.disable_colors
-            and hasattr(sys.stderr, "isatty")
-            and sys.stderr.isatty()
-        ):
-            color = self.COLORS.get(record.levelname, "")
-            reset = self.COLORS["RESET"]
-            record.levelname = f"{color}{record.levelname}{reset}"
-
-        return super().format(record)
+        original_levelname = record.levelname
+        try:
+            # Add color to levelname if outputting to terminal and colors are enabled
+            if (
+                not self.disable_colors
+                and hasattr(sys.stderr, "isatty")
+                and sys.stderr.isatty()
+            ):
+                color = self.COLORS.get(record.levelname, "")
+                reset = self.COLORS["RESET"]
+                record.levelname = f"{color}{record.levelname}{reset}"
+            return super().format(record)
+        finally:
+            # Restore to avoid leaking ANSI codes into other handlers (e.g., JSON/file)
+            record.levelname = original_levelname
 
 
 class StructuredFormatter(logging.Formatter):
