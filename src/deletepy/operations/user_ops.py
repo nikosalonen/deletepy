@@ -702,11 +702,6 @@ def _handle_checkpoint_error(
         print_warning(f"\n{operation.title()} operation interrupted by user")
         checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
         checkpoint_manager.save_checkpoint(checkpoint)
-        print_info(
-            f"Checkpoint saved: {checkpoint.checkpoint_id}",
-            operation=operation,
-            checkpoint_id=checkpoint.checkpoint_id,
-        )
         print_info("You can resume this operation later using:", operation=operation)
         print_info(
             f"  deletepy resume {checkpoint.checkpoint_id}",

@@ -400,7 +400,7 @@ def _print_user_list(header: str, user_list: list[dict[str, Any]], action: str) 
         user_list: List of user records to print
         action: Action type for logging context
     """
-    print_warning(header, count=len(user_list))
+    print_info(header, count=len(user_list))
     for user in user_list:
         print_info(
             f"  {user['user_id']} ({user['email']}) - {user['reason']}",
@@ -465,8 +465,8 @@ def _confirm_production_operations(env: str, total_operations: int) -> bool:
         bool: True if confirmed, False if cancelled
     """
     if env == "prod":
-        print_error(
-            f"\nWARNING: This will perform {total_operations} operations in PRODUCTION!",
+        print_warning(
+            f"\nThis will perform {total_operations} operations in PRODUCTION!",
             total_operations=total_operations,
             environment="prod",
         )
@@ -496,7 +496,7 @@ def _handle_user_deletions(
     if not users_to_delete:
         return {"deleted_count": 0, "failed_deletions": 0}
 
-    print_warning(
+    print_info(
         f"\nDeleting {len(users_to_delete)} users...",
         count=len(users_to_delete),
         operation="delete_users",
@@ -1048,7 +1048,6 @@ def _handle_checkpoint_interruption(
     print_warning(f"\n{operation_name} interrupted by user")
     checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
     checkpoint_manager.save_checkpoint(checkpoint)
-    print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
     print_info("You can resume this operation later using:")
     print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
     return checkpoint.checkpoint_id
