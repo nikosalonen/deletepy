@@ -105,7 +105,12 @@ class CheckpointManager:
 
             checkpoint.save_to_file(checkpoint_path)
 
-            print_info(f"Checkpoint saved: {checkpoint.checkpoint_id}")
+            # Checkpoint saves are automatic - only log at DEBUG level
+            # User will see explicit checkpoint messages at start/end of operations
+            from .logging_utils import get_logger
+
+            logger = get_logger(__name__)
+            logger.debug(f"Checkpoint saved: {checkpoint.checkpoint_id}")
             return True
 
         except Exception as e:

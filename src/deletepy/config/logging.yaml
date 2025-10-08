@@ -49,6 +49,13 @@ loggers:
     propagate: false
 
   deletepy.utils:
+    level: INFO
+    handlers:
+      - console
+    propagate: false
+
+  # Quiet down noisy checkpoint auto-saves
+  deletepy.utils.checkpoint_manager:
     level: WARNING
     handlers:
       - console

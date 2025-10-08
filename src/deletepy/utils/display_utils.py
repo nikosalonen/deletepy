@@ -17,11 +17,18 @@ _shutdown_requested = False
 
 def setup_shutdown_handler() -> None:
     """Setup signal handlers for graceful shutdown."""
+    from .logging_utils import get_logger
+
+    logger = get_logger(__name__)
 
     def signal_handler(signum: int, frame: FrameType | None) -> None:
         global _shutdown_requested
         _shutdown_requested = True
-        print(f"\n{YELLOW}Shutdown requested. Finishing current operation...{RESET}")
+        # Use logging instead of raw print for better tracking
+        logger.warning(
+            "⚠️  Shutdown requested. Finishing current operation...",
+            extra={"signal": signal.Signals(signum).name, "operation": "shutdown"},
+        )
 
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)

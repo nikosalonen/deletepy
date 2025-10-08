@@ -431,5 +431,91 @@ def configure_from_default_yaml() -> logging.Logger:
     return configure_from_env()
 
 
+def log_operation_start(logger: logging.Logger, operation: str, **context: Any) -> None:
+    """Log the start of an operation with context.
+
+    Args:
+        logger: Logger instance
+        operation: Operation name
+        **context: Additional context (user_id, environment, etc.)
+    """
+    logger.info(
+        f"Starting {operation}",
+        extra={"operation": operation, "status": "started", **context},
+    )
+
+
+def log_operation_complete(
+    logger: logging.Logger, operation: str, **context: Any
+) -> None:
+    """Log successful completion of an operation with context.
+
+    Args:
+        logger: Logger instance
+        operation: Operation name
+        **context: Additional context (user_id, items_processed, etc.)
+    """
+    logger.info(
+        f"✅ {operation} completed",
+        extra={"operation": operation, "status": "completed", **context},
+    )
+
+
+def log_operation_failed(
+    logger: logging.Logger,
+    operation: str,
+    error: Exception | str,
+    **context: Any,
+) -> None:
+    """Log failed operation with error details.
+
+    Args:
+        logger: Logger instance
+        operation: Operation name
+        error: Exception or error message
+        **context: Additional context
+    """
+    error_msg = str(error)
+    logger.error(
+        f"❌ {operation} failed: {error_msg}",
+        extra={
+            "operation": operation,
+            "status": "failed",
+            "error": error_msg,
+            **context,
+        },
+        exc_info=isinstance(error, Exception),
+    )
+
+
+def log_batch_progress(
+    logger: logging.Logger,
+    current: int,
+    total: int,
+    operation: str,
+    **context: Any,
+) -> None:
+    """Log batch processing progress.
+
+    Args:
+        logger: Logger instance
+        current: Current batch number
+        total: Total number of batches
+        operation: Operation name
+        **context: Additional context
+    """
+    percentage = (current / total * 100) if total > 0 else 0
+    logger.debug(
+        f"Processing batch {current}/{total} ({percentage:.1f}%)",
+        extra={
+            "operation": operation,
+            "batch_current": current,
+            "batch_total": total,
+            "percentage": percentage,
+            **context,
+        },
+    )
+
+
 # Initialize logging when module is imported
 init_default_logging()
