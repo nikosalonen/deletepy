@@ -27,7 +27,7 @@ def get_access_token(env: str = "dev") -> str:
         AuthConfigError: If required environment variables are missing
         requests.exceptions.RequestException: If the token request fails
     """
-    load_dotenv()
+    load_dotenv(override=True)
     config = get_env_config(env)
 
     client_id = config["client_id"]
