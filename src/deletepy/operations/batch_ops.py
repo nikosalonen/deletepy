@@ -853,9 +853,9 @@ def _find_users_with_primary_social_id(
     Returns:
         List[Dict[str, Any]]: List of users found with this social ID as primary identity
     """
-    from ..operations.user_ops import _get_sdk_ops_from_base_url
+    from ..core.sdk_operations import get_sdk_ops_from_base_url
 
-    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+    user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
     found_users = []
 
@@ -1579,9 +1579,9 @@ def _search_single_social_id(
     Returns:
         List[Dict[str, Any]]: List of users found with this social ID
     """
-    from ..operations.user_ops import _get_sdk_ops_from_base_url
+    from ..core.sdk_operations import get_sdk_ops_from_base_url
 
-    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+    user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
     found_users = []
 

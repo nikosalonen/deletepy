@@ -285,3 +285,41 @@ def get_sdk_operations(
     grant_ops = SDKGrantOperations(client)
 
     return user_ops, grant_ops
+
+
+# Cache for SDK operations to avoid re-initialization
+_sdk_ops_cache: dict[str, tuple[SDKUserOperations, SDKGrantOperations]] = {}
+
+
+def get_sdk_ops_from_base_url(
+    base_url: str,
+) -> tuple[SDKUserOperations, SDKGrantOperations]:
+    """Get SDK operations from base URL by inferring environment.
+
+    This is a compatibility helper for functions that receive base_url instead of env.
+
+    Args:
+        base_url: Auth0 base URL (e.g., https://domain.auth0.com)
+
+    Returns:
+        Tuple of (user_ops, grant_ops)
+    """
+    # Check cache first
+    if base_url in _sdk_ops_cache:
+        return _sdk_ops_cache[base_url]
+
+    # Infer environment from base_url (dev URLs typically have 'dev' in domain)
+    env = "dev" if "dev" in base_url.lower() else "prod"
+
+    # Get client manager
+    manager = Auth0ClientManager(env)
+    client = manager.get_client()
+
+    # Create operation wrappers
+    user_ops = SDKUserOperations(client)
+    grant_ops = SDKGrantOperations(client)
+
+    # Cache for reuse
+    _sdk_ops_cache[base_url] = (user_ops, grant_ops)
+
+    return user_ops, grant_ops

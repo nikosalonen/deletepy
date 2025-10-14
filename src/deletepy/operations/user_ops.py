@@ -6,10 +6,9 @@ from urllib.parse import quote
 
 import requests
 
-from deletepy.core.auth0_client import Auth0ClientManager
 from deletepy.core.config import API_RATE_LIMIT, API_TIMEOUT
 from deletepy.core.exceptions import UserOperationError
-from deletepy.core.sdk_operations import SDKGrantOperations, SDKUserOperations
+from deletepy.core.sdk_operations import get_sdk_ops_from_base_url
 from deletepy.models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
@@ -25,43 +24,6 @@ from deletepy.utils.legacy_print import (
     print_warning,
 )
 from deletepy.utils.validators import InputValidator
-
-# Cache for SDK operations to avoid re-initialization
-_sdk_ops_cache: dict[str, tuple[SDKUserOperations, SDKGrantOperations]] = {}
-
-
-def _get_sdk_ops_from_base_url(
-    base_url: str,
-) -> tuple[SDKUserOperations, SDKGrantOperations]:
-    """Get SDK operations from base URL by inferring environment.
-
-    This is a compatibility helper for functions that receive base_url instead of env.
-
-    Args:
-        base_url: Auth0 base URL (e.g., https://domain.auth0.com)
-
-    Returns:
-        Tuple of (user_ops, grant_ops)
-    """
-    # Check cache first
-    if base_url in _sdk_ops_cache:
-        return _sdk_ops_cache[base_url]
-
-    # Infer environment from base_url (dev URLs typically have 'dev' in domain)
-    env = "dev" if "dev" in base_url.lower() else "prod"
-
-    # Get client manager
-    manager = Auth0ClientManager(env)
-    client = manager.get_client()
-
-    # Create operation wrappers
-    user_ops = SDKUserOperations(client)
-    grant_ops = SDKGrantOperations(client)
-
-    # Cache for reuse
-    _sdk_ops_cache[base_url] = (user_ops, grant_ops)
-
-    return user_ops, grant_ops
 
 
 def secure_url_encode(value: str, context: str = "URL parameter") -> str:
@@ -113,7 +75,7 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
     revoke_user_sessions(user_id, token, base_url)
 
     # Use SDK operations
-    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+    user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
     try:
         user_ops.delete_user(user_id)
@@ -145,7 +107,7 @@ def block_user(user_id: str, token: str, base_url: str) -> None:
     revoke_user_grants(user_id, token, base_url)
 
     # Use SDK operations
-    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+    user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
     try:
         success = user_ops.block_user(user_id)
@@ -216,7 +178,7 @@ def _fetch_users_by_email(
     logger = get_logger(__name__)
 
     # Use SDK operations
-    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+    user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
     try:
         users = user_ops.search_users_by_email(email)
@@ -322,7 +284,7 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
     Returns:
         Optional[str]: User's email address if found, None otherwise
     """
-    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+    user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
     try:
         user_data = user_ops.get_user(user_id)
@@ -350,7 +312,7 @@ def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] 
     Returns:
         Optional[Dict[str, Any]]: User details if found, None otherwise
     """
-    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+    user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
     try:
         user_data = user_ops.get_user(user_id)
@@ -509,7 +471,7 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
     Raises:
         Exception: Re-raises any exceptions to ensure calling functions know about failures
     """
-    _, grant_ops = _get_sdk_ops_from_base_url(base_url)
+    _, grant_ops = get_sdk_ops_from_base_url(base_url)
 
     try:
         success = grant_ops.delete_grants_by_user(user_id)
@@ -554,7 +516,7 @@ def unlink_user_identity(
     Returns:
         bool: True if successful, False otherwise
     """
-    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+    user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
     try:
         success = user_ops.delete_user_identity(user_id, provider, user_identity_id)

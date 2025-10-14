@@ -8,6 +8,12 @@ from deletepy.core.config import (
     validate_env_var,
 )
 from deletepy.core.exceptions import AuthConfigError
+from deletepy.core.sdk_operations import (
+    SDKGrantOperations,
+    SDKUserOperations,
+    get_sdk_operations,
+    get_sdk_ops_from_base_url,
+)
 
 __all__ = [
     "get_access_token",
@@ -17,4 +23,8 @@ __all__ = [
     "get_base_url",
     "check_env_file",
     "validate_env_var",
+    "get_sdk_operations",
+    "get_sdk_ops_from_base_url",
+    "SDKUserOperations",
+    "SDKGrantOperations",
 ]

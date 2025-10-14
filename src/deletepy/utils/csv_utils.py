@@ -803,14 +803,14 @@ def _search_user_by_field(
     Returns:
         User details dictionary or None if not found
     """
-    from ..operations.user_ops import _get_sdk_ops_from_base_url
+    from ..core.sdk_operations import get_sdk_ops_from_base_url
 
     if is_auth0_user_id(identifier):
         # Direct user ID lookup
         return get_user_details(identifier, token, base_url)
     else:
         # Use search API for username lookups via SDK
-        user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+        user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
         # Username search
         users = user_ops.search_users(query=f'username:"{identifier}"', per_page=1)
