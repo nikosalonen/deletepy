@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv>=1.1.1",
     "click>=8.2.1",
     "rich>=14.1.0",
+    "auth0-python>=4.13.0",
 ]
 
 [project.urls]
@@ -122,6 +123,8 @@ module = [
     "email_domain_checker",
     "production_confirmation",
     "rate_limit_config",
+    "auth0",
+    "auth0.*",
 ]
 ignore_missing_imports = true
 
