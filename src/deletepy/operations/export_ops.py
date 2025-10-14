@@ -836,3 +836,528 @@ def find_resumable_export_checkpoint(
             return checkpoint
 
     return None
+
+
+@dataclass
+class FetchEmailsConfig:
+    """Configuration for fetch emails operations with checkpoint support."""
+
+    # Auth0/API configuration
+    token: str
+    base_url: str
+    env: str = "dev"
+
+    # Export configuration
+    output_file: str = "user_emails.csv"
+    batch_size: int | None = None
+
+    # Checkpoint configuration
+    resume_checkpoint_id: str | None = None
+    checkpoint_manager: CheckpointManager | None = None
+
+
+def fetch_emails_with_checkpoints(
+    user_ids: list[str],
+    config: FetchEmailsConfig,
+) -> str | None:
+    """Fetch email addresses for given user IDs and export to CSV with checkpointing.
+
+    Args:
+        user_ids: List of Auth0 user IDs to process
+        config: Configuration for the fetch operation
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
+
+    Raises:
+        PermissionError: If the output file path is not writable
+        FileNotFoundError: If the output directory does not exist
+    """
+    # Initialize checkpoint manager if not provided
+    checkpoint_manager = config.checkpoint_manager
+    if checkpoint_manager is None:
+        checkpoint_manager = CheckpointManager()
+
+    # Load or create checkpoint
+    checkpoint = _load_or_create_fetch_checkpoint(user_ids, config, checkpoint_manager)
+
+    # Save initial checkpoint
+    checkpoint_manager.save_checkpoint(checkpoint)
+
+    try:
+        return _process_fetch_emails_with_checkpoints(
+            checkpoint=checkpoint,
+            token=config.token,
+            base_url=config.base_url,
+            checkpoint_manager=checkpoint_manager,
+        )
+    except KeyboardInterrupt:
+        return _handle_fetch_interruption(checkpoint, checkpoint_manager)
+    except Exception as e:
+        return _handle_fetch_error(checkpoint, checkpoint_manager, e)
+
+
+def _load_or_create_fetch_checkpoint(
+    user_ids: list[str],
+    config: FetchEmailsConfig,
+    checkpoint_manager: CheckpointManager,
+) -> Checkpoint:
+    """Load existing checkpoint or create a new one for fetch emails operation.
+
+    Args:
+        user_ids: List of user IDs to process
+        config: Configuration for the fetch operation
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Checkpoint: Loaded or newly created checkpoint
+    """
+    # Check if we're resuming from a checkpoint
+    checkpoint = None
+    if config.resume_checkpoint_id:
+        checkpoint = _try_load_fetch_checkpoint(
+            config.resume_checkpoint_id, checkpoint_manager
+        )
+        if checkpoint:
+            _apply_fetch_checkpoint_config(checkpoint, config)
+            print_success(
+                f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
+                operation="fetch_emails_resume",
+                checkpoint_id=checkpoint.checkpoint_id,
+            )
+            return checkpoint
+
+    # Create new checkpoint
+    checkpoint = _create_new_fetch_checkpoint(user_ids, config, checkpoint_manager)
+    print_info(
+        f"Created checkpoint: {checkpoint.checkpoint_id}",
+        operation="fetch_emails_create_checkpoint",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
+    return checkpoint
+
+
+def _try_load_fetch_checkpoint(
+    resume_checkpoint_id: str, checkpoint_manager: CheckpointManager
+) -> Checkpoint | None:
+    """Try to load an existing fetch emails checkpoint.
+
+    Args:
+        resume_checkpoint_id: Checkpoint ID to resume from
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Optional[Checkpoint]: Loaded checkpoint if valid, None otherwise
+    """
+    checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
+    if not checkpoint:
+        print_warning(
+            f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
+        )
+        return None
+
+    if checkpoint.status != CheckpointStatus.ACTIVE:
+        print_warning(
+            f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
+        )
+        return None
+
+    if not checkpoint.is_resumable():
+        print_warning(
+            f"Checkpoint {resume_checkpoint_id} is not resumable",
+            operation="fetch_emails_resume",
+            checkpoint_id=resume_checkpoint_id,
+        )
+        return None
+
+    return checkpoint
+
+
+def _apply_fetch_checkpoint_config(
+    checkpoint: Checkpoint, config: FetchEmailsConfig
+) -> None:
+    """Apply checkpoint configuration to the config object.
+
+    Args:
+        checkpoint: Checkpoint with configuration
+        config: Configuration object to update
+    """
+    # Use configuration from checkpoint
+    config.output_file = checkpoint.config.output_file or config.output_file
+
+
+def _create_new_fetch_checkpoint(
+    user_ids: list[str],
+    config: FetchEmailsConfig,
+    checkpoint_manager: CheckpointManager,
+) -> Checkpoint:
+    """Create a new checkpoint for fetch emails operation.
+
+    Args:
+        user_ids: List of user IDs to process
+        config: Configuration for the fetch operation
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Checkpoint: Newly created checkpoint
+
+    Raises:
+        ValueError: If configuration is invalid for fetch operation
+    """
+    # Ensure output_file is set with a default if not provided
+    output_file = config.output_file
+    if not output_file:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = f"user_emails_{timestamp}.csv"
+        config.output_file = output_file
+
+    # Validate and setup fetch parameters
+    batch_size = config.batch_size
+    if batch_size is None:
+        total_users = len(user_ids)
+        if total_users <= 100:
+            batch_size = 10
+        elif total_users <= 1000:
+            batch_size = 50
+        else:
+            batch_size = 100
+
+    # Create operation config with validated output_file
+    operation_config = OperationConfig(
+        environment=config.env,
+        input_file=None,  # user_ids are passed directly
+        output_file=output_file,
+        batch_size=batch_size,
+    )
+
+    # Create new checkpoint
+    return checkpoint_manager.create_checkpoint(
+        operation_type=OperationType.FETCH_EMAILS,
+        config=operation_config,
+        items=user_ids,
+        batch_size=batch_size,
+    )
+
+
+def _handle_fetch_interruption(
+    checkpoint: Checkpoint, checkpoint_manager: CheckpointManager
+) -> str:
+    """Handle fetch emails operation interruption.
+
+    Args:
+        checkpoint: Checkpoint to handle
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        str: Checkpoint ID
+    """
+    print_warning(
+        "\nFetch emails operation interrupted by user",
+        operation="fetch_emails_interrupt",
+    )
+    checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
+    checkpoint_manager.save_checkpoint(checkpoint)
+    print_info(
+        f"Checkpoint saved: {checkpoint.checkpoint_id}",
+        operation="fetch_emails_interrupt",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
+    print_info(
+        "You can resume this operation later using:", operation="fetch_emails_interrupt"
+    )
+    print_info(
+        f"  deletepy checkpoint resume {checkpoint.checkpoint_id}",
+        operation="fetch_emails_interrupt",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
+    return checkpoint.checkpoint_id
+
+
+def _handle_fetch_error(
+    checkpoint: Checkpoint, checkpoint_manager: CheckpointManager, error: Exception
+) -> str:
+    """Handle fetch emails operation error.
+
+    Args:
+        checkpoint: Checkpoint to handle
+        checkpoint_manager: Checkpoint manager instance
+        error: Exception that occurred
+
+    Returns:
+        str: Checkpoint ID
+    """
+    print_warning(
+        f"\nFetch emails operation failed: {error}",
+        operation="fetch_emails_failed",
+        error=str(error),
+    )
+    checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
+    checkpoint_manager.save_checkpoint(checkpoint)
+    return checkpoint.checkpoint_id
+
+
+def _process_fetch_emails_with_checkpoints(
+    checkpoint: Checkpoint,
+    token: str,
+    base_url: str,
+    checkpoint_manager: CheckpointManager,
+) -> str | None:
+    """Process fetch emails operation with checkpointing support.
+
+    Args:
+        checkpoint: Checkpoint to process
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        checkpoint_manager: Checkpoint manager instance
+
+    Returns:
+        Optional[str]: Checkpoint ID if operation was interrupted, None if completed
+    """
+
+    batch_size = checkpoint.progress.batch_size
+    output_file = checkpoint.config.output_file
+
+    # Validate output_file is not None
+    if output_file is None:
+        raise ValueError(
+            "output_file should be validated during checkpoint creation/loading"
+        )
+
+    print_info(f"Processing {len(checkpoint.remaining_items)} remaining user IDs...")
+
+    # Determine starting batch number and write mode
+    current_batch_num = checkpoint.progress.current_batch + 1
+    write_headers = current_batch_num == 1 or not Path(output_file).exists()
+
+    # Process remaining user IDs in batches
+    remaining_user_ids = checkpoint.remaining_items.copy()
+
+    for batch_start in range(0, len(remaining_user_ids), batch_size):
+        if shutdown_requested():
+            print_warning(
+                "\nOperation interrupted", operation="fetch_emails_batch_interrupt"
+            )
+            checkpoint_manager.save_checkpoint(checkpoint)
+            return checkpoint.checkpoint_id
+
+        batch_end = min(batch_start + batch_size, len(remaining_user_ids))
+        batch_user_ids = remaining_user_ids[batch_start:batch_end]
+
+        total_batches = checkpoint.progress.total_batches
+
+        print_info(
+            f"\nProcessing batch {current_batch_num}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)"
+        )
+
+        # Process this batch
+        batch_csv_data, batch_counters = _process_user_id_batch(
+            batch_user_ids, token, base_url, batch_start, current_batch_num
+        )
+
+        print("\n")  # Clear progress line
+
+        # Write batch to CSV
+        mode = "w" if write_headers else "a"
+        success = _write_fetch_csv_batch(
+            batch_csv_data, output_file, current_batch_num, mode, write_headers
+        )
+
+        if not success:
+            error_msg = f"Failed to write CSV batch {current_batch_num}"
+            checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
+            checkpoint_manager.save_checkpoint(checkpoint)
+            return checkpoint.checkpoint_id
+
+        # Update checkpoint progress
+        results_update = {
+            "processed_count": batch_counters.get("processed_count", 0),
+            "error_count": batch_counters.get("error_count", 0),
+        }
+
+        checkpoint_manager.update_checkpoint_progress(
+            checkpoint=checkpoint,
+            processed_items=batch_user_ids,
+            results_update=results_update,
+        )
+
+        # Save checkpoint after each batch
+        checkpoint_manager.save_checkpoint(checkpoint)
+
+        write_headers = False  # Only write headers for first batch
+        current_batch_num += 1
+
+    # Mark checkpoint as completed
+    checkpoint.status = CheckpointStatus.COMPLETED
+    checkpoint_manager.save_checkpoint(checkpoint)
+
+    # Generate final summary
+    _generate_fetch_summary_from_checkpoint(checkpoint, output_file)
+
+    print_success(
+        f"Fetch emails completed! Checkpoint: {checkpoint.checkpoint_id}",
+        operation="fetch_emails_complete",
+        checkpoint_id=checkpoint.checkpoint_id,
+    )
+    return None  # Operation completed successfully
+
+
+def _process_user_id_batch(
+    batch_user_ids: list[str],
+    token: str,
+    base_url: str,
+    batch_start: int,
+    batch_number: int,
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    """Process a batch of user IDs to fetch emails.
+
+    Args:
+        batch_user_ids: List of user IDs to process
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        batch_start: Starting index of this batch
+        batch_number: Batch number for display
+
+    Returns:
+        Tuple[List[Dict[str, Any]], Dict[str, int]]: (csv_data, batch_counters)
+    """
+    from .user_ops import get_user_email
+
+    csv_data = []
+    batch_counters = {
+        "processed_count": 0,
+        "error_count": 0,
+    }
+
+    for idx, user_id in enumerate(batch_user_ids, 1):
+        if shutdown_requested():
+            break
+
+        show_progress(idx, len(batch_user_ids), f"Batch {batch_number}")
+
+        try:
+            email = get_user_email(user_id, token, base_url)
+
+            if email:
+                csv_row = {
+                    "user_id": user_id,
+                    "email": email,
+                    "status": "Found",
+                }
+                batch_counters["processed_count"] += 1
+            else:
+                csv_row = {
+                    "user_id": user_id,
+                    "email": "",
+                    "status": "Not Found",
+                }
+                batch_counters["error_count"] += 1
+
+            csv_data.append(csv_row)
+
+        except Exception as e:
+            print(f"{RED}Error processing user {CYAN}{user_id}{RED}: {e}{RESET}")
+            csv_row = {
+                "user_id": user_id,
+                "email": "",
+                "status": f"Error: {str(e)}",
+            }
+            csv_data.append(csv_row)
+            batch_counters["error_count"] += 1
+
+    return csv_data, batch_counters
+
+
+def _write_fetch_csv_batch(
+    csv_data: list[dict[str, Any]],
+    output_file: str,
+    batch_number: int,
+    mode: str | None = None,
+    write_headers: bool | None = None,
+) -> bool:
+    """Write CSV data to file for fetch emails operation.
+
+    Args:
+        csv_data: List of dictionaries containing CSV data
+        output_file: Output CSV file path
+        batch_number: Batch number for backup naming
+        mode: Write mode ('w' for write, 'a' for append). If None, auto-determined.
+        write_headers: Whether to write headers. If None, auto-determined.
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    if not csv_data:
+        return True
+
+    try:
+        # Auto-determine mode and write_headers if not provided
+        if write_headers is None:
+            write_headers = batch_number == 1 or not os.path.exists(output_file)
+
+        if mode is None:
+            mode = "w" if write_headers else "a"
+
+        with open(output_file, mode, newline="", encoding="utf-8") as csvfile:
+            fieldnames = ["user_id", "email", "status"]
+
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            if write_headers:
+                writer.writeheader()
+
+            for row in csv_data:
+                writer.writerow(row)
+
+        return True
+
+    except Exception as e:
+        print_warning(
+            f"Error writing CSV batch {batch_number}: {e}",
+            operation="fetch_emails_csv",
+            batch_number=batch_number,
+            error=str(e),
+        )
+        return False
+
+
+def _generate_fetch_summary_from_checkpoint(
+    checkpoint: Checkpoint, output_file: str
+) -> None:
+    """Generate and display fetch emails summary from checkpoint data.
+
+    Args:
+        checkpoint: Checkpoint containing fetch results
+        output_file: Output file path
+    """
+    results = checkpoint.results
+
+    print_success("\nFetch Emails Summary:", operation="fetch_emails_summary")
+    print_info(
+        f"Total user IDs processed: {checkpoint.progress.current_item}",
+        operation="fetch_emails_summary",
+        total_processed=checkpoint.progress.current_item,
+    )
+    print_info(
+        f"Emails found: {results.processed_count}",
+        operation="fetch_emails_summary",
+        processed_count=results.processed_count,
+    )
+    print_info(
+        f"Errors/Not found: {results.error_count}",
+        operation="fetch_emails_summary",
+        error_count=results.error_count,
+    )
+
+    print_info(
+        f"Output file: {output_file}",
+        operation="fetch_emails_summary",
+        output_file=output_file,
+    )
+
+    success_rate = checkpoint.get_success_rate()
+    if success_rate > 0:
+        print_info(
+            f"Success rate: {success_rate:.1f}%",
+            operation="fetch_emails_summary",
+            success_rate=success_rate,
+        )
