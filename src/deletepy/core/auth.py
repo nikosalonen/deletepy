@@ -10,6 +10,9 @@ from .exceptions import AuthConfigError
 # API timeout in seconds for authentication requests
 API_TIMEOUT = 30
 
+# Auth0 token request timeout in seconds
+AUTH0_TOKEN_TIMEOUT = 5
+
 # Module logger
 logger = get_logger(__name__)
 
