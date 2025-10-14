@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from src.deletepy.operations.user_ops import (
+from deletepy.operations.user_ops import (
     block_user,
     delete_user,
     get_user_details,
@@ -16,11 +16,9 @@ def test_delete_user(mock_auth0_client):
     """Test user deletion via SDK."""
     with (
         patch(
-            "src.deletepy.operations.user_ops.revoke_user_sessions"
+            "deletepy.operations.user_ops.revoke_user_sessions"
         ) as mock_revoke_sessions,
-        patch(
-            "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
-        ) as mock_get_ops,
+        patch("deletepy.operations.user_ops.get_sdk_ops_from_base_url") as mock_get_ops,
     ):
         # Mock SDK operations
         mock_user_ops = MagicMock()
@@ -43,14 +41,10 @@ def test_block_user():
     """Test user blocking via SDK."""
     with (
         patch(
-            "src.deletepy.operations.user_ops.revoke_user_sessions"
+            "deletepy.operations.user_ops.revoke_user_sessions"
         ) as mock_revoke_sessions,
-        patch(
-            "src.deletepy.operations.user_ops.revoke_user_grants"
-        ) as mock_revoke_grants,
-        patch(
-            "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
-        ) as mock_get_ops,
+        patch("deletepy.operations.user_ops.revoke_user_grants") as mock_revoke_grants,
+        patch("deletepy.operations.user_ops.get_sdk_ops_from_base_url") as mock_get_ops,
     ):
         # Mock SDK operations
         mock_user_ops = MagicMock()
@@ -75,7 +69,7 @@ def test_block_user():
 def test_get_user_id_from_email():
     """Test getting user ID from email via SDK."""
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.search_users_by_email = MagicMock(
@@ -95,7 +89,7 @@ def test_get_user_id_from_email():
 def test_get_user_id_from_email_multiple_users():
     """Test getting multiple user IDs from email via SDK."""
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.search_users_by_email = MagicMock(
@@ -117,7 +111,7 @@ def test_get_user_id_from_email_multiple_users():
 def test_get_user_id_from_email_not_found():
     """Test getting user ID when not found via SDK."""
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.search_users_by_email = MagicMock(return_value=[])
@@ -133,10 +127,10 @@ def test_get_user_id_from_email_not_found():
 
 def test_fetch_users_by_email_empty_response():
     """Test _fetch_users_by_email handles empty response array consistently."""
-    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    from deletepy.operations.user_ops import _fetch_users_by_email
 
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.search_users_by_email = MagicMock(return_value=[])
@@ -152,10 +146,10 @@ def test_fetch_users_by_email_empty_response():
 
 def test_fetch_users_by_email_none_response():
     """Test _fetch_users_by_email handles None response from API."""
-    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    from deletepy.operations.user_ops import _fetch_users_by_email
 
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.search_users_by_email = MagicMock(return_value=None)
@@ -171,10 +165,10 @@ def test_fetch_users_by_email_none_response():
 
 def test_fetch_users_by_email_invalid_json_response():
     """Test _fetch_users_by_email handles SDK exceptions."""
-    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    from deletepy.operations.user_ops import _fetch_users_by_email
 
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.search_users_by_email = MagicMock(
@@ -192,10 +186,10 @@ def test_fetch_users_by_email_invalid_json_response():
 
 def test_fetch_users_by_email_request_failure():
     """Test _fetch_users_by_email handles request failure."""
-    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    from deletepy.operations.user_ops import _fetch_users_by_email
 
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.search_users_by_email = MagicMock(
@@ -213,10 +207,10 @@ def test_fetch_users_by_email_request_failure():
 
 def test_fetch_users_by_email_non_list_response():
     """Test _fetch_users_by_email handles non-list response."""
-    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    from deletepy.operations.user_ops import _fetch_users_by_email
 
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         # SDK returns empty list for no results
@@ -233,12 +227,12 @@ def test_fetch_users_by_email_non_list_response():
 
 def test_fetch_users_by_email_successful_response():
     """Test _fetch_users_by_email handles successful response with users."""
-    from src.deletepy.operations.user_ops import _fetch_users_by_email
+    from deletepy.operations.user_ops import _fetch_users_by_email
 
     expected_users = [{"user_id": "test_user_1"}, {"user_id": "test_user_2"}]
 
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.search_users_by_email = MagicMock(return_value=expected_users)
@@ -313,7 +307,7 @@ def test_revoke_user_sessions(mock_requests, mock_response):
 def test_revoke_user_grants():
     """Test revoking user grants via SDK."""
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_grant_ops = MagicMock()
@@ -330,7 +324,7 @@ def test_revoke_user_grants():
 def test_get_user_email():
     """Test getting user email via SDK."""
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.get_user = MagicMock(return_value={"email": "test@example.com"})
@@ -346,7 +340,7 @@ def test_get_user_email():
 def test_get_user_details():
     """Test getting user details via SDK."""
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.get_user = MagicMock(
@@ -370,7 +364,7 @@ def test_get_user_details():
 def test_unlink_user_identity_success():
     """Test unlinking user identity via SDK."""
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.delete_user_identity = MagicMock(return_value=True)
@@ -390,7 +384,7 @@ def test_unlink_user_identity_success():
 def test_unlink_user_identity_failure():
     """Test unlinking user identity failure via SDK."""
     with patch(
-        "src.deletepy.operations.user_ops.get_sdk_ops_from_base_url"
+        "deletepy.operations.user_ops.get_sdk_ops_from_base_url"
     ) as mock_get_ops:
         mock_user_ops = MagicMock()
         mock_user_ops.delete_user_identity = MagicMock(return_value=False)

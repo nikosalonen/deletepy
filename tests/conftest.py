@@ -76,18 +76,18 @@ def mock_requests(request):
     # Map test files to their corresponding module paths
     # Some test files need multiple modules patched
     module_mapping = {
-        "auth": ["src.deletepy.core.auth"],
+        "auth": ["deletepy.core.auth"],
         "user_operations": [
-            "src.deletepy.operations.user_ops",
-            "src.deletepy.operations.batch_ops",
-            "src.deletepy.utils.request_utils",
+            "deletepy.operations.user_ops",
+            "deletepy.operations.batch_ops",
+            "deletepy.utils.request_utils",
         ],
-        "utils": ["src.deletepy.utils.file_utils"],
-        "cleanup_csv": ["src.deletepy.utils.csv_utils"],
-        "email_domain_checker": ["src.deletepy.operations.domain_ops"],
+        "utils": ["deletepy.utils.file_utils"],
+        "cleanup_csv": ["deletepy.utils.csv_utils"],
+        "email_domain_checker": ["deletepy.operations.domain_ops"],
     }
 
-    module_paths = module_mapping.get(test_name, [f"src.deletepy.{test_name}"])
+    module_paths = module_mapping.get(test_name, [f"deletepy.{test_name}"])
 
     # If only one module, patch it directly
     if len(module_paths) == 1:

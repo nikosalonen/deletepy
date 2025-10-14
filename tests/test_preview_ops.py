@@ -2,7 +2,7 @@
 
 from unittest.mock import patch
 
-from src.deletepy.operations.preview_ops import (
+from deletepy.operations.preview_ops import (
     PreviewResult,
     _get_user_connection,
     _resolve_user_identifier,
@@ -50,11 +50,11 @@ class TestPreviewResult:
 class TestPreviewUserOperations:
     """Test preview_user_operations function."""
 
-    @patch("src.deletepy.operations.preview_ops.get_user_details")
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("deletepy.operations.preview_ops.get_user_details")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.time.sleep")
+    @patch("deletepy.operations.preview_ops.show_progress")
+    @patch("deletepy.operations.preview_ops.print")
     def test_preview_with_valid_user_ids(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
     ):
@@ -79,11 +79,11 @@ class TestPreviewUserOperations:
         assert result.skip_count == 0
         assert len(result.valid_users) == 2
 
-    @patch("src.deletepy.operations.preview_ops.get_user_details")
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("deletepy.operations.preview_ops.get_user_details")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.time.sleep")
+    @patch("deletepy.operations.preview_ops.show_progress")
+    @patch("deletepy.operations.preview_ops.print")
     def test_preview_with_emails(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
     ):
@@ -107,11 +107,11 @@ class TestPreviewUserOperations:
         assert len(result.valid_users) == 1
         assert result.valid_users[0]["email"] == "test@example.com"
 
-    @patch("src.deletepy.operations.preview_ops.get_user_details")
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("deletepy.operations.preview_ops.get_user_details")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.time.sleep")
+    @patch("deletepy.operations.preview_ops.show_progress")
+    @patch("deletepy.operations.preview_ops.print")
     def test_preview_with_invalid_user_ids(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
     ):
@@ -126,11 +126,11 @@ class TestPreviewUserOperations:
         assert result.skip_count == 2
         assert len(result.invalid_user_ids) == 2
 
-    @patch("src.deletepy.operations.preview_ops.get_user_details")
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("deletepy.operations.preview_ops.get_user_details")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.time.sleep")
+    @patch("deletepy.operations.preview_ops.show_progress")
+    @patch("deletepy.operations.preview_ops.print")
     def test_preview_with_not_found_emails(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
     ):
@@ -147,11 +147,11 @@ class TestPreviewUserOperations:
         assert len(result.not_found_users) == 1
         assert "notfound@example.com" in result.not_found_users
 
-    @patch("src.deletepy.operations.preview_ops.get_user_details")
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("deletepy.operations.preview_ops.get_user_details")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.time.sleep")
+    @patch("deletepy.operations.preview_ops.show_progress")
+    @patch("deletepy.operations.preview_ops.print")
     def test_preview_with_multiple_users(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
     ):
@@ -168,11 +168,11 @@ class TestPreviewUserOperations:
         assert len(result.multiple_users) == 1
         assert "shared@example.com" in result.multiple_users
 
-    @patch("src.deletepy.operations.preview_ops.get_user_details")
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("deletepy.operations.preview_ops.get_user_details")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.time.sleep")
+    @patch("deletepy.operations.preview_ops.show_progress")
+    @patch("deletepy.operations.preview_ops.print")
     def test_preview_block_operation_with_blocked_user(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
     ):
@@ -259,7 +259,7 @@ class TestHelperFunctions:
         assert resolved is None
         assert len(result.invalid_user_ids) == 1
 
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
     def test_resolve_user_identifier_email_found(self, mock_get_email):
         """Test resolving email to user ID."""
         mock_get_email.return_value = ["auth0|123456789"]
@@ -272,7 +272,7 @@ class TestHelperFunctions:
         assert resolved == "auth0|123456789"
         assert len(result.not_found_users) == 0
 
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
     def test_resolve_user_identifier_email_not_found(self, mock_get_email):
         """Test resolving email that doesn't exist."""
         mock_get_email.return_value = []
@@ -315,11 +315,11 @@ class TestHelperFunctions:
 class TestIntegration:
     """Integration tests for preview operations."""
 
-    @patch("src.deletepy.operations.preview_ops.get_user_details")
-    @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("deletepy.operations.preview_ops.get_user_details")
+    @patch("deletepy.operations.preview_ops.get_user_id_from_email")
+    @patch("deletepy.operations.preview_ops.time.sleep")
+    @patch("deletepy.operations.preview_ops.show_progress")
+    @patch("deletepy.operations.preview_ops.print")
     def test_mixed_input_types(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
     ):

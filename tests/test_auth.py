@@ -1,8 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from src.deletepy.core.auth import AuthConfigError, doctor, get_access_token
+from deletepy.core.auth import AuthConfigError, doctor, get_access_token
 
 
 @pytest.fixture
