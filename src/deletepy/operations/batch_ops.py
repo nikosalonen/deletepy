@@ -837,58 +837,43 @@ def _find_users_with_primary_social_id(
     token: str,
     base_url: str,
 ) -> list[dict[str, Any]]:
-    """Find users with a specific social media ID as their primary identity.
+    """Find users with a specific social media ID as their primary identity using SDK.
 
     Args:
         social_id: The social media ID to search for
         connection: The connection name for the social ID
-        token: Auth0 access token
+        token: Auth0 access token (kept for backward compatibility, not used)
         base_url: Auth0 API base URL
 
     Returns:
         List[Dict[str, Any]]: List of users found with this social ID as primary identity
     """
-    url = f"{base_url}/api/v2/users"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    from ..operations.user_ops import _get_sdk_ops_from_base_url
 
-    # Search for users with this social ID as their primary identity
-    params = {
-        "q": f'identities.user_id:"{social_id}" AND identities.connection:"{connection}"',
-        "search_engine": "v3",
-        "include_totals": "true",
-        "page": "0",
-        "per_page": "100",
-    }
+    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
 
     found_users = []
 
     try:
-        response = requests.get(
-            url, headers=headers, params=params, timeout=API_TIMEOUT
+        # Search for users with this social ID as their primary identity
+        query = (
+            f'identities.user_id:"{social_id}" AND identities.connection:"{connection}"'
         )
-        response.raise_for_status()
-        data = response.json()
+        users = user_ops.search_users(query=query, per_page=100)
 
-        if "users" in data:
-            for user in data["users"]:
-                # Only include users where this social ID is their primary/main identity
-                if _has_social_id_as_primary_identity(user, social_id, connection):
-                    # This user has the social ID as their primary identity
-                    found_users.append(user)
-                    print_info(
-                        f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
-                        user_id=user.get("user_id", "unknown"),
-                        social_id=social_id,
-                        operation="find_detached_social_user",
-                    )
+        for user in users:
+            # Only include users where this social ID is their primary/main identity
+            if _has_social_id_as_primary_identity(user, social_id, connection):
+                # This user has the social ID as their primary identity
+                found_users.append(user)
+                print_info(
+                    f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
+                    user_id=user.get("user_id", "unknown"),
+                    social_id=social_id,
+                    operation="find_detached_social_user",
+                )
 
-        time.sleep(API_RATE_LIMIT)
-
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print_error(
             f"Error searching for social ID {social_id}: {e}",
             social_id=social_id,
@@ -1579,53 +1564,36 @@ def _search_batch_social_ids(
 def _search_single_social_id(
     social_id: str, token: str, base_url: str
 ) -> list[dict[str, Any]]:
-    """Search for users with a specific social media ID.
+    """Search for users with a specific social media ID using SDK.
 
     Args:
         social_id: The social media ID to search for
-        token: Auth0 access token
+        token: Auth0 access token (kept for backward compatibility, not used)
         base_url: Auth0 API base URL
 
     Returns:
         List[Dict[str, Any]]: List of users found with this social ID
     """
-    url = f"{base_url}/api/v2/users"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    from ..operations.user_ops import _get_sdk_ops_from_base_url
 
-    # Search for users with this social ID in their identities
-    params = {
-        "q": f'identities.user_id:"{social_id}"',
-        "search_engine": "v3",
-        "include_totals": "true",
-        "page": "0",
-        "per_page": "100",
-    }
+    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
 
     found_users = []
 
     try:
-        response = requests.get(
-            url, headers=headers, params=params, timeout=API_TIMEOUT
-        )
-        response.raise_for_status()
-        data = response.json()
+        # Search for users with this social ID in their identities
+        query = f'identities.user_id:"{social_id}"'
+        users = user_ops.search_users(query=query, per_page=100)
 
-        if "users" in data:
-            for user in data["users"]:
-                # Verify this user actually has the social ID
-                if "identities" in user and isinstance(user["identities"], list):
-                    for identity in user["identities"]:
-                        if identity.get("user_id") == social_id:
-                            found_users.append(user)
-                            break
+        for user in users:
+            # Verify this user actually has the social ID
+            if "identities" in user and isinstance(user["identities"], list):
+                for identity in user["identities"]:
+                    if identity.get("user_id") == social_id:
+                        found_users.append(user)
+                        break
 
-        time.sleep(API_RATE_LIMIT)
-
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print_error(
             f"Error searching for social ID {social_id}: {e}",
             social_id=social_id,
