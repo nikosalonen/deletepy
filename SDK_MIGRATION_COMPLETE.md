@@ -37,11 +37,13 @@ Successfully migrated DeletePy from direct HTTP requests to the official **Auth0
 ## Critical Bugs Fixed
 
 ### Bug 1: Silent Failures ✅
+
 **Issue**: Operations reported success even when grant revocation failed.
 
 **Root Cause**: `revoke_user_grants()` caught exceptions but didn't re-raise them, so `block_user()` continued and reported false success.
 
 **Fix**:
+
 - `SDKGrantOperations.delete_grants_by_user()` now raises exceptions
 - `revoke_user_grants()` re-raises all exceptions
 - Proper error propagation throughout call chain
@@ -49,9 +51,11 @@ Successfully migrated DeletePy from direct HTTP requests to the official **Auth0
 **Impact**: Operations now correctly fail and skip users when errors occur.
 
 ### Bug 2: Wrong SDK Methods ✅
+
 **Issue**: Used non-existent SDK methods causing AttributeError and TypeError.
 
 **Fixed Methods**:
+
 - `grants.list(user_id=x)` → `grants.all(extra_params={"user_id": x})`
 - `users.unlink_user_identity()` → `users.unlink_user_account()`
 
@@ -60,6 +64,7 @@ Successfully migrated DeletePy from direct HTTP requests to the official **Auth0
 ## SDK Methods Used
 
 ### Users Resource
+
 - ✅ `users.get(id)` - Get user details
 - ✅ `users.delete(id)` - Delete user
 - ✅ `users.update(id, body)` - Update user (including block)
@@ -67,9 +72,11 @@ Successfully migrated DeletePy from direct HTTP requests to the official **Auth0
 - ✅ `users.unlink_user_account(id, provider, user_id)` - Unlink identity
 
 ### UsersByEmail Resource
+
 - ✅ `users_by_email.search_users_by_email(email)` - Search by email
 
 ### Grants Resource
+
 - ✅ `grants.all(extra_params={"user_id": x})` - List user grants
 - ✅ `grants.delete(id)` - Delete grant
 
@@ -107,7 +114,7 @@ Successfully migrated DeletePy from direct HTTP requests to the official **Auth0
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
 │              Auth0 Python SDK                                │
-│  (auth0-python >= 4.7.1)                                    │
+│  (auth0-python >= 4.13.0)                                    │
 │  • Official Auth0 Management API client                     │
 │  • Built-in rate limiting & retry logic                     │
 │  • Typed request/response models                            │
@@ -129,6 +136,7 @@ Successfully migrated DeletePy from direct HTTP requests to the official **Auth0
 ✅ **All 202 tests passing**
 
 Test suites updated:
+
 - `test_auth.py` - 10 tests
 - `test_user_operations.py` - 17 tests
 - All other tests remain unchanged
@@ -136,6 +144,7 @@ Test suites updated:
 ## Hybrid Approach
 
 While most operations use the SDK, some endpoints still use direct HTTP requests:
+
 - **Session Management**: `/api/v2/users/{id}/sessions` (SDK doesn't cover this yet)
 - **Legacy Operations**: Some edge cases where SDK coverage is incomplete
 
@@ -160,6 +169,7 @@ python -m pytest tests/ -v
 ## Next Steps
 
 The migration is **complete and production-ready**. All operations work correctly with:
+
 - ✅ Proper error handling
 - ✅ Accurate success/failure reporting
 - ✅ SDK best practices

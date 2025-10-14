@@ -50,7 +50,7 @@ The application uses a generator pattern for memory-efficient file processing an
 
 ### SDK Integration
 
-DeletePy now uses the official **auth0-python SDK** (>= 4.7.1) for Auth0 Management API interactions:
+DeletePy now uses the official **auth0-python SDK** (>= 4.13.0) for Auth0 Management API interactions:
 
 - **SDK Wrapper Layer** (`src/deletepy/core/auth0_client.py`): Manages Auth0 Management API client initialization, token caching, and connection pooling
 - **SDK Operations** (`src/deletepy/core/sdk_operations.py`): Wraps SDK methods with consistent error handling and logging

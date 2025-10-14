@@ -99,7 +99,7 @@ deletepy/
 ## Prerequisites
 
 - **Python 3.11+** - The tool requires Python 3.11 or higher
-- **auth0-python SDK >= 4.7.1** - Official Auth0 Python SDK (automatically installed)
+- **auth0-python SDK >= 4.13.0** - Official Auth0 Python SDK (automatically installed)
 - Auth0 account with appropriate API permissions
 - Auth0 Management API access
 
@@ -123,6 +123,7 @@ If you need to install or manage Python versions, we recommend using version man
 - [asdf](https://asdf-vm.com/) - Extendable version manager with Python plugin
 
 ## Installation
+
 ### Logging
 
 DeletePy defaults to Rich-powered console logging when available. You can control logging via environment variables:
