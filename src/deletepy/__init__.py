@@ -2,7 +2,7 @@
 
 # Core functionality
 # CLI
-from .cli import (
+from deletepy.cli import (
     csv_main,
     handle_csv_command,
     parse_csv_args,
@@ -14,15 +14,15 @@ from .cli import (
     validate_operation,
     validate_user_id_list,
 )
-from .core.auth import doctor, get_access_token
-from .core.config import (
+from deletepy.core.auth import doctor, get_access_token
+from deletepy.core.config import (
     API_RATE_LIMIT,
     API_TIMEOUT,
     get_base_url,
     get_env_config,
     validate_rate_limit_config,
 )
-from .core.exceptions import (
+from deletepy.core.exceptions import (
     APIError,
     Auth0ManagerError,
     AuthConfigError,
@@ -32,7 +32,7 @@ from .core.exceptions import (
 )
 
 # Models
-from .models.checkpoint import (
+from deletepy.models.checkpoint import (
     BatchProgress,
     Checkpoint,
     CheckpointStatus,
@@ -42,29 +42,29 @@ from .models.checkpoint import (
 )
 
 # Operations
-from .operations.batch_ops import (
+from deletepy.operations.batch_ops import (
     CheckpointOperationConfig,
     ExecuteCheckpointConfig,
     check_unblocked_users_with_checkpoints,
     find_users_by_social_media_ids_with_checkpoints,
 )
-from .operations.domain_ops import (
+from deletepy.operations.domain_ops import (
     check_email_domains,
     extract_domains_from_emails,
     filter_emails_by_domain,
     get_domain_statistics,
     validate_domain_format,
 )
-from .operations.export_ops import (
+from deletepy.operations.export_ops import (
     ExportWithCheckpointsConfig,
     export_users_last_login_to_csv_with_checkpoints,
 )
-from .operations.preview_ops import (
+from deletepy.operations.preview_ops import (
     PreviewResult,
     preview_social_unlink_operations,
     preview_user_operations,
 )
-from .operations.user_ops import (
+from deletepy.operations.user_ops import (
     batch_user_operations_with_checkpoints,
     block_user,
     delete_user,
@@ -77,7 +77,7 @@ from .operations.user_ops import (
 )
 
 # Utilities
-from .utils import (
+from deletepy.utils import (
     AUTH0_USER_ID_PREFIXES,
     check_shutdown_requested,
     clean_identifier,
@@ -110,8 +110,11 @@ from .utils import (
     validate_file_path,
     write_identifiers_to_file,
 )
-from .utils.checkpoint_manager import CheckpointManager
-from .utils.request_utils import get_estimated_processing_time, get_optimal_batch_size
+from deletepy.utils.checkpoint_manager import CheckpointManager
+from deletepy.utils.request_utils import (
+    get_estimated_processing_time,
+    get_optimal_batch_size,
+)
 
 __version__ = "1.0.0"
 

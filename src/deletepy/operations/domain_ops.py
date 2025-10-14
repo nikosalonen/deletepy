@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from ..utils.display_utils import (
+from deletepy.utils.display_utils import (
     CYAN,
     GREEN,
     RED,
@@ -11,7 +11,7 @@ from ..utils.display_utils import (
     show_progress,
     shutdown_requested,
 )
-from ..utils.validators import InputValidator
+from deletepy.utils.validators import InputValidator
 
 
 def check_email_domains(

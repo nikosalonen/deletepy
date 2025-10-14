@@ -2,10 +2,10 @@
 
 # Core user operations
 # Batch operations
-from .batch_ops import CheckpointOperationConfig
+from deletepy.operations.batch_ops import CheckpointOperationConfig
 
 # Domain operations
-from .domain_ops import (
+from deletepy.operations.domain_ops import (
     check_email_domains,
     extract_domains_from_emails,
     filter_emails_by_domain,
@@ -15,12 +15,12 @@ from .domain_ops import (
 
 # Export operations
 # Preview operations
-from .preview_ops import (
+from deletepy.operations.preview_ops import (
     PreviewResult,
     preview_social_unlink_operations,
     preview_user_operations,
 )
-from .user_ops import (
+from deletepy.operations.user_ops import (
     block_user,
     delete_user,
     get_user_details,

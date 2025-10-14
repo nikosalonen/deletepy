@@ -9,10 +9,10 @@ from typing import Any, cast
 
 from auth0.management import Auth0
 
-from ..utils.logging_utils import get_logger
-from .auth0_client import Auth0ClientManager
-from .config import API_RATE_LIMIT
-from .exceptions import UserOperationError, wrap_sdk_exception
+from deletepy.core.auth0_client import Auth0ClientManager
+from deletepy.core.config import API_RATE_LIMIT
+from deletepy.core.exceptions import UserOperationError, wrap_sdk_exception
+from deletepy.utils.logging_utils import get_logger
 
 # Module logger
 logger = get_logger(__name__)

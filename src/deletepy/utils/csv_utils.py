@@ -4,14 +4,14 @@ import csv
 import re
 from typing import Any, NamedTuple, TextIO, cast
 
-from ..core.auth import get_access_token
-from ..core.config import get_base_url
-from ..core.exceptions import FileOperationError
-from ..operations.user_ops import get_user_details
-from ..utils.display_utils import print_error, print_info, print_warning
-from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
-from .file_utils import safe_file_read, safe_file_write
-from .validators import SecurityValidator
+from deletepy.core.auth import get_access_token
+from deletepy.core.config import get_base_url
+from deletepy.core.exceptions import FileOperationError
+from deletepy.operations.user_ops import get_user_details
+from deletepy.utils.auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
+from deletepy.utils.display_utils import print_error, print_info, print_warning
+from deletepy.utils.file_utils import safe_file_read, safe_file_write
+from deletepy.utils.validators import SecurityValidator
 
 
 def sanitize_identifiers(identifiers: list[str]) -> list[str]:

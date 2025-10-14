@@ -15,32 +15,32 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from ..core.auth import get_access_token
-from ..core.config import get_base_url
-from ..models.checkpoint import Checkpoint, CheckpointStatus, OperationType
-from ..operations.batch_ops import (
+from deletepy.core.auth import get_access_token
+from deletepy.core.config import get_base_url
+from deletepy.models.checkpoint import Checkpoint, CheckpointStatus, OperationType
+from deletepy.operations.batch_ops import (
     CheckpointOperationConfig,
     check_unblocked_users_with_checkpoints,
     find_users_by_social_media_ids_with_checkpoints,
 )
-from ..operations.domain_ops import check_email_domains
-from ..operations.export_ops import (
+from deletepy.operations.domain_ops import check_email_domains
+from deletepy.operations.export_ops import (
     ExportWithCheckpointsConfig,
     export_users_last_login_to_csv_with_checkpoints,
 )
-from ..operations.preview_ops import (
+from deletepy.operations.preview_ops import (
     preview_social_unlink_operations,
     preview_user_operations,
 )
-from ..operations.user_ops import (
+from deletepy.operations.user_ops import (
     batch_user_operations_with_checkpoints,
     block_user,
     delete_user,
     get_user_email,
     get_user_id_from_email,
 )
-from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import (
+from deletepy.utils.checkpoint_manager import CheckpointManager
+from deletepy.utils.display_utils import (
     CYAN,
     GREEN,
     RED,
@@ -48,8 +48,8 @@ from ..utils.display_utils import (
     YELLOW,
     confirm_action,
 )
-from ..utils.file_utils import read_user_ids_generator
-from ..utils.rich_utils import get_console
+from deletepy.utils.file_utils import read_user_ids_generator
+from deletepy.utils.rich_utils import get_console
 
 
 class OperationHandler:

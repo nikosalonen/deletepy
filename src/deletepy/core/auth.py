@@ -2,10 +2,10 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from ..utils.logging_utils import get_logger
-from .auth0_client import Auth0ClientManager, get_management_token
-from .config import get_env_config
-from .exceptions import AuthConfigError
+from deletepy.core.auth0_client import Auth0ClientManager, get_management_token
+from deletepy.core.config import get_env_config
+from deletepy.core.exceptions import AuthConfigError
+from deletepy.utils.logging_utils import get_logger
 
 # API timeout in seconds for authentication requests
 API_TIMEOUT = 30

@@ -5,9 +5,9 @@ from auth0.authentication import GetToken
 from auth0.management import Auth0
 from auth0.rest import RestClientOptions
 
-from ..utils.logging_utils import get_logger
-from .config import get_env_config
-from .exceptions import AuthConfigError
+from deletepy.core.config import get_env_config
+from deletepy.core.exceptions import AuthConfigError
+from deletepy.utils.logging_utils import get_logger
 
 # Auth0 token request timeout in seconds
 AUTH0_TOKEN_TIMEOUT = 5

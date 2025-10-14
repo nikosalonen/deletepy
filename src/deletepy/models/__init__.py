@@ -1,6 +1,6 @@
 """Data models for Auth0 user management."""
 
-from .checkpoint import (
+from deletepy.models.checkpoint import (
     BatchProgress,
     Checkpoint,
     CheckpointStatus,
@@ -8,8 +8,13 @@ from .checkpoint import (
     OperationType,
     ProcessingResults,
 )
-from .config import APIConfig, AppConfig, Auth0Config, ExportConfig
-from .user import BatchOperationResults, User, UserIdentity, UserOperationResult
+from deletepy.models.config import APIConfig, AppConfig, Auth0Config, ExportConfig
+from deletepy.models.user import (
+    BatchOperationResults,
+    User,
+    UserIdentity,
+    UserOperationResult,
+)
 
 __all__ = [
     # User models

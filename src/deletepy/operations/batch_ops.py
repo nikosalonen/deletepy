@@ -8,18 +8,23 @@ from urllib.parse import quote
 
 import requests
 
-from ..core.config import API_RATE_LIMIT, API_TIMEOUT
-from ..models.checkpoint import (
+from deletepy.core.config import API_RATE_LIMIT, API_TIMEOUT
+from deletepy.models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
     OperationConfig,
     OperationType,
 )
-from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import show_progress, shutdown_requested
-from ..utils.legacy_print import print_error, print_info, print_success, print_warning
-from ..utils.validators import InputValidator
-from .user_ops import delete_user, unlink_user_identity
+from deletepy.operations.user_ops import delete_user, unlink_user_identity
+from deletepy.utils.checkpoint_manager import CheckpointManager
+from deletepy.utils.display_utils import show_progress, shutdown_requested
+from deletepy.utils.legacy_print import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
+from deletepy.utils.validators import InputValidator
 
 
 def secure_url_encode(value: str, context: str = "URL parameter") -> str:

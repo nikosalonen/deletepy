@@ -9,7 +9,7 @@ from typing import Any
 from rich.table import Table
 from rich.text import Text
 
-from ..models.checkpoint import (
+from deletepy.models.checkpoint import (
     BatchProgress,
     Checkpoint,
     CheckpointStatus,
@@ -17,7 +17,7 @@ from ..models.checkpoint import (
     OperationType,
     ProcessingResults,
 )
-from ..utils.display_utils import (
+from deletepy.utils.display_utils import (
     CYAN,
     GREEN,
     RESET,
@@ -26,7 +26,7 @@ from ..utils.display_utils import (
     print_success,
     print_warning,
 )
-from ..utils.rich_utils import get_console
+from deletepy.utils.rich_utils import get_console
 
 
 class CheckpointManager:

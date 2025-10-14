@@ -5,9 +5,10 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from ..core.config import API_RATE_LIMIT
-from ..utils.auth_utils import validate_auth0_user_id
-from ..utils.display_utils import (
+from deletepy.core.config import API_RATE_LIMIT
+from deletepy.operations.user_ops import get_user_details, get_user_id_from_email
+from deletepy.utils.auth_utils import validate_auth0_user_id
+from deletepy.utils.display_utils import (
     CYAN,
     GREEN,
     RED,
@@ -16,7 +17,6 @@ from ..utils.display_utils import (
     show_progress,
     shutdown_requested,
 )
-from .user_ops import get_user_details, get_user_id_from_email
 
 
 @dataclass

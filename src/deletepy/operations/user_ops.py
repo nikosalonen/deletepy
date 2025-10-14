@@ -6,20 +6,25 @@ from urllib.parse import quote
 
 import requests
 
-from ..core.auth0_client import Auth0ClientManager
-from ..core.config import API_RATE_LIMIT, API_TIMEOUT
-from ..core.exceptions import UserOperationError
-from ..core.sdk_operations import SDKGrantOperations, SDKUserOperations
-from ..models.checkpoint import (
+from deletepy.core.auth0_client import Auth0ClientManager
+from deletepy.core.config import API_RATE_LIMIT, API_TIMEOUT
+from deletepy.core.exceptions import UserOperationError
+from deletepy.core.sdk_operations import SDKGrantOperations, SDKUserOperations
+from deletepy.models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
     OperationConfig,
     OperationType,
 )
-from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import show_progress, shutdown_requested
-from ..utils.legacy_print import print_error, print_info, print_success, print_warning
-from ..utils.validators import InputValidator
+from deletepy.utils.checkpoint_manager import CheckpointManager
+from deletepy.utils.display_utils import show_progress, shutdown_requested
+from deletepy.utils.legacy_print import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
+)
+from deletepy.utils.validators import InputValidator
 
 # Cache for SDK operations to avoid re-initialization
 _sdk_ops_cache: dict[str, tuple[SDKUserOperations, SDKGrantOperations]] = {}

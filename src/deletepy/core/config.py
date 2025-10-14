@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import dotenv
 
-from .exceptions import AuthConfigError
+from deletepy.core.exceptions import AuthConfigError
 
 # Global constants for API configuration
 API_RATE_LIMIT = 0.5  # seconds between requests
