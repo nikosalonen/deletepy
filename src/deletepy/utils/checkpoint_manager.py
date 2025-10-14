@@ -67,7 +67,7 @@ class CheckpointManager:
         Raises:
             ValueError: If checkpoint_id is invalid or unsafe
         """
-        from .validators import SecurityValidator
+        from deletepy.utils.validators import SecurityValidator
 
         # Validate checkpoint ID for security
         checkpoint_filename = f"{checkpoint_id}.json"
@@ -107,7 +107,7 @@ class CheckpointManager:
 
             # Checkpoint saves are automatic - only log at DEBUG level
             # User will see explicit checkpoint messages at start/end of operations
-            from .logging_utils import get_logger
+            from deletepy.utils.logging_utils import get_logger
 
             logger = get_logger(__name__)
             logger.debug(f"Checkpoint saved: {checkpoint.checkpoint_id}")

@@ -87,7 +87,7 @@ def preview_user_operations(
         show_progress(idx, len(user_ids), f"Analyzing users for {operation}")
 
         # Clean and sanitize the user ID
-        from ..utils.validators import SecurityValidator
+        from deletepy.utils.validators import SecurityValidator
 
         user_id = SecurityValidator.sanitize_user_input(user_id)
 
@@ -327,7 +327,10 @@ def preview_social_unlink_operations(
     Returns:
         dict: Preview results for social unlink operations
     """
-    from .batch_ops import _categorize_users, _search_batch_social_ids
+    from deletepy.operations.batch_ops import (
+        _categorize_users,
+        _search_batch_social_ids,
+    )
 
     print(f"\n{YELLOW}🔍 DRY RUN PREVIEW - SOCIAL UNLINK OPERATION{RESET}")
     print(f"Analyzing {len(social_ids)} social IDs...")

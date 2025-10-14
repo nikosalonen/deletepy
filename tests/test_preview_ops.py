@@ -197,9 +197,9 @@ class TestPreviewUserOperations:
 class TestSocialUnlinkPreview:
     """Test preview_social_unlink_operations function."""
 
-    @patch("src.deletepy.operations.batch_ops._search_batch_social_ids")
-    @patch("src.deletepy.operations.batch_ops._categorize_users")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("deletepy.operations.batch_ops._search_batch_social_ids")
+    @patch("deletepy.operations.batch_ops._categorize_users")
+    @patch("deletepy.operations.preview_ops.print")
     def test_social_unlink_preview(self, mock_print, mock_categorize, mock_search):
         """Test social unlink preview."""
         # Setup mocks

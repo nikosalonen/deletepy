@@ -853,7 +853,7 @@ def _find_users_with_primary_social_id(
     Returns:
         List[Dict[str, Any]]: List of users found with this social ID as primary identity
     """
-    from ..core.sdk_operations import get_sdk_ops_from_base_url
+    from deletepy.core.sdk_operations import get_sdk_ops_from_base_url
 
     user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
@@ -1556,7 +1556,7 @@ def _search_batch_social_ids(
             found_users.extend(users_found)
         else:
             # Sanitize social ID before adding to not found list
-            from ..utils.validators import SecurityValidator
+            from deletepy.utils.validators import SecurityValidator
 
             sanitized_id = SecurityValidator.sanitize_user_input(social_id)
             if sanitized_id:
@@ -1579,7 +1579,7 @@ def _search_single_social_id(
     Returns:
         List[Dict[str, Any]]: List of users found with this social ID
     """
-    from ..core.sdk_operations import get_sdk_ops_from_base_url
+    from deletepy.core.sdk_operations import get_sdk_ops_from_base_url
 
     user_ops, _ = get_sdk_ops_from_base_url(base_url)
 

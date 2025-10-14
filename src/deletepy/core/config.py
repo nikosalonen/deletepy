@@ -32,7 +32,7 @@ def validate_env_var(name: str, value: str | None) -> str:
     Raises:
         AuthConfigError: If the environment variable is missing or empty
     """
-    from ..utils.validators import SecurityValidator
+    from deletepy.utils.validators import SecurityValidator
 
     if not value:
         raise AuthConfigError(

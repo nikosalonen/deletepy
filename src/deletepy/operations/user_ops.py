@@ -173,7 +173,7 @@ def _fetch_users_by_email(
     Returns:
         Optional[List[Dict[str, Any]]]: List of user objects or None if request failed
     """
-    from ..utils.logging_utils import get_logger
+    from deletepy.utils.logging_utils import get_logger
 
     logger = get_logger(__name__)
 
@@ -1000,8 +1000,8 @@ def _process_users_in_batch(
     Returns:
         dict: Updated results dictionary
     """
-    from ..utils.display_utils import shutdown_requested
-    from ..utils.legacy_print import print_error
+    from deletepy.utils.display_utils import shutdown_requested
+    from deletepy.utils.legacy_print import print_error
 
     for idx, user_id in enumerate(user_ids, 1):
         if shutdown_requested():
@@ -1010,7 +1010,7 @@ def _process_users_in_batch(
         show_progress(idx, len(user_ids), f"Processing {operation}")
 
         # Sanitize user input first
-        from ..utils.validators import SecurityValidator
+        from deletepy.utils.validators import SecurityValidator
 
         user_id = SecurityValidator.sanitize_user_input(user_id)
 
@@ -1077,7 +1077,7 @@ def _resolve_user_identifier_for_batch(
     Returns:
         Optional[str]: Valid user ID if found, None if should skip
     """
-    from ..utils.auth_utils import validate_auth0_user_id
+    from deletepy.utils.auth_utils import validate_auth0_user_id
 
     # If input is an email, resolve to user_id
     if "@" in user_id and user_id.count("@") == 1 and len(user_id.split("@")[1]) > 0:
@@ -1134,7 +1134,7 @@ def _display_multiple_users_details(
         base_url: Auth0 API base URL
         fetch_details: Whether to fetch user details via API calls
     """
-    from ..utils.display_utils import CYAN, RESET
+    from deletepy.utils.display_utils import CYAN, RESET
 
     if not multiple_users:
         return
@@ -1180,7 +1180,7 @@ def _print_user_operation_summary(
         token: Auth0 access token
         base_url: Auth0 API base URL
     """
-    from ..utils.display_utils import CYAN, RESET
+    from deletepy.utils.display_utils import CYAN, RESET
 
     print_info("\nOperation Summary:")
     print_info(f"Total users processed: {processed_count}")
