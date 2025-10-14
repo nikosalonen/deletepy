@@ -4,15 +4,14 @@ import csv
 import re
 from typing import Any, NamedTuple, TextIO, cast
 
-from ..core.auth import get_access_token
-from ..core.config import get_base_url
-from ..core.exceptions import FileOperationError
-from ..operations.user_ops import get_user_details
-from ..utils.display_utils import print_error, print_info, print_warning
-from ..utils.request_utils import make_rate_limited_request
-from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
-from .file_utils import safe_file_read, safe_file_write
-from .validators import SecurityValidator
+from deletepy.core.auth import get_access_token
+from deletepy.core.config import get_base_url
+from deletepy.core.exceptions import FileOperationError
+from deletepy.operations.user_ops import get_user_details
+from deletepy.utils.auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
+from deletepy.utils.display_utils import print_error, print_info, print_warning
+from deletepy.utils.file_utils import safe_file_read, safe_file_write
+from deletepy.utils.validators import SecurityValidator
 
 
 def sanitize_identifiers(identifiers: list[str]) -> list[str]:
@@ -794,42 +793,44 @@ def write_identifiers_to_file(
 def _search_user_by_field(
     identifier: str, token: str, base_url: str
 ) -> dict[str, Any] | None:
-    """Search for a user in Auth0 by identifier.
+    """Search for a user in Auth0 by identifier using SDK.
 
     Args:
         identifier: User identifier (email, username, user_id)
-        token: Auth0 access token
+        token: Auth0 access token (kept for backward compatibility, not used)
         base_url: Auth0 API base URL
 
     Returns:
         User details dictionary or None if not found
     """
+    from deletepy.core.sdk_operations import get_sdk_ops_from_base_url
+
     if is_auth0_user_id(identifier):
         # Direct user ID lookup
         return get_user_details(identifier, token, base_url)
     else:
-        # Use search API for username lookups
-        url = f"{base_url}/api/v2/users"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        }
+        # Use search API for username/email lookups via SDK
+        user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
-        # Username search
-        params = {"q": f'username:"{identifier}"', "search_engine": "v3"}
+        # Determine search field based on whether identifier contains "@"
+        if "@" in identifier:
+            query = f'email:"{identifier}"'
+        else:
+            query = f'username:"{identifier}"'
 
-        response = make_rate_limited_request("GET", url, headers, params=params)
-        if response is None:
-            return None
+        # Try primary search
+        users = user_ops.search_users(query=query, per_page=1)
 
-        try:
-            users = response.json()
-            if users and isinstance(users, list) and len(users) > 0:
-                # Return the first match
-                return cast(dict[str, Any], users[0])
-        except ValueError:
-            return None
+        if users and len(users) > 0:
+            # Return the first match
+            return users[0]
+
+        # Fallback: try OR query if primary search returned no results
+        fallback_query = f'(email:"{identifier}" OR username:"{identifier}")'
+        users = user_ops.search_users(query=fallback_query, per_page=1)
+
+        if users and len(users) > 0:
+            return users[0]
 
         return None
 

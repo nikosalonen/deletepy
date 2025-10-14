@@ -1,6 +1,6 @@
 """Tests for request utilities including rate limiting functions."""
 
-from src.deletepy.utils.request_utils import (
+from deletepy.utils.request_utils import (
     get_estimated_processing_time,
     get_optimal_batch_size,
 )
@@ -132,7 +132,7 @@ class TestRateLimitingFunctions:
 
     def test_api_rate_limit_integration(self):
         """Test that functions properly use the API_RATE_LIMIT constant."""
-        from src.deletepy.utils.request_utils import API_RATE_LIMIT
+        from deletepy.utils.request_utils import API_RATE_LIMIT
 
         # Verify that the rate limit is being used in calculations
         total_emails = 100

@@ -15,32 +15,32 @@ from rich.progress import (
     TimeRemainingColumn,
 )
 
-from ..core.auth import get_access_token
-from ..core.config import get_base_url
-from ..models.checkpoint import Checkpoint, CheckpointStatus, OperationType
-from ..operations.batch_ops import (
+from deletepy.core.auth import get_access_token
+from deletepy.core.config import get_base_url
+from deletepy.models.checkpoint import Checkpoint, CheckpointStatus, OperationType
+from deletepy.operations.batch_ops import (
     CheckpointOperationConfig,
     check_unblocked_users_with_checkpoints,
     find_users_by_social_media_ids_with_checkpoints,
 )
-from ..operations.domain_ops import check_email_domains
-from ..operations.export_ops import (
+from deletepy.operations.domain_ops import check_email_domains
+from deletepy.operations.export_ops import (
     ExportWithCheckpointsConfig,
     export_users_last_login_to_csv_with_checkpoints,
 )
-from ..operations.preview_ops import (
+from deletepy.operations.preview_ops import (
     preview_social_unlink_operations,
     preview_user_operations,
 )
-from ..operations.user_ops import (
+from deletepy.operations.user_ops import (
     batch_user_operations_with_checkpoints,
     block_user,
     delete_user,
     get_user_email,
     get_user_id_from_email,
 )
-from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import (
+from deletepy.utils.checkpoint_manager import CheckpointManager
+from deletepy.utils.display_utils import (
     CYAN,
     GREEN,
     RED,
@@ -48,8 +48,8 @@ from ..utils.display_utils import (
     YELLOW,
     confirm_action,
 )
-from ..utils.file_utils import read_user_ids_generator
-from ..utils.rich_utils import get_console
+from deletepy.utils.file_utils import read_user_ids_generator
+from deletepy.utils.rich_utils import get_console
 
 
 class OperationHandler:
@@ -136,7 +136,7 @@ class OperationHandler:
         Returns:
             tuple: (batch_size, estimated_time_minutes)
         """
-        from ..utils.request_utils import (
+        from deletepy.utils.request_utils import (
             get_estimated_processing_time,
             get_optimal_batch_size,
         )
@@ -197,7 +197,7 @@ class OperationHandler:
         Returns:
             bool: True if confirmed, False otherwise
         """
-        from ..utils.display_utils import confirm_production_operation
+        from deletepy.utils.display_utils import confirm_production_operation
 
         return confirm_production_operation(operation, total_users)
 
@@ -232,7 +232,7 @@ class OperationHandler:
             operation: Operation to perform
             state: Processing state to update
         """
-        from ..utils.validators import SecurityValidator
+        from deletepy.utils.validators import SecurityValidator
 
         # Sanitize user input first
         user_id = SecurityValidator.sanitize_user_input(user_id)
@@ -298,7 +298,7 @@ class OperationHandler:
         Returns:
             Optional[str]: Valid user ID if found, None if should skip
         """
-        from ..utils.validators import InputValidator
+        from deletepy.utils.validators import InputValidator
 
         # If input looks like an email, validate and resolve to user_id
         if "@" in user_id:
@@ -312,7 +312,7 @@ class OperationHandler:
 
             # Show warnings if any
             if email_result.warnings:
-                from ..utils.display_utils import print_warning
+                from deletepy.utils.display_utils import print_warning
 
                 for warning in email_result.warnings:
                     print_warning(f"Email validation warning for {user_id}: {warning}")
@@ -337,7 +337,7 @@ class OperationHandler:
 
             # Show warnings if any
             if user_id_result.warnings:
-                from ..utils.display_utils import print_warning
+                from deletepy.utils.display_utils import print_warning
 
                 for warning in user_id_result.warnings:
                     print_warning(
@@ -362,7 +362,10 @@ class OperationHandler:
         elif operation == "delete":
             delete_user(user_id, token, base_url)
         elif operation == "revoke-grants-only":
-            from ..operations.user_ops import revoke_user_grants, revoke_user_sessions
+            from deletepy.operations.user_ops import (
+                revoke_user_grants,
+                revoke_user_sessions,
+            )
 
             revoke_user_sessions(user_id, token, base_url)
             revoke_user_grants(user_id, token, base_url)
@@ -378,8 +381,8 @@ class OperationHandler:
             bool: True if successful, False otherwise
         """
         try:
-            from ..core.auth import doctor as auth_doctor
-            from ..core.config import check_env_file
+            from deletepy.core.auth import doctor as auth_doctor
+            from deletepy.core.config import check_env_file
 
             check_env_file()
             result = auth_doctor(env, test_api)
@@ -452,7 +455,7 @@ class OperationHandler:
             base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
 
             # For export operation, treat input as emails directly with validation
-            from ..utils.validators import InputValidator, SecurityValidator
+            from deletepy.utils.validators import InputValidator, SecurityValidator
 
             emails = []
             for line in user_ids:
@@ -567,7 +570,7 @@ class OperationHandler:
             base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
 
             # For social media ID search, treat input as social media IDs with validation
-            from ..utils.validators import SecurityValidator
+            from deletepy.utils.validators import SecurityValidator
 
             social_ids = []
             for line in user_ids:

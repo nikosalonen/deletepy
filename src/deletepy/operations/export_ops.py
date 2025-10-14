@@ -7,14 +7,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..models.checkpoint import (
+from deletepy.models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
     OperationConfig,
     OperationType,
 )
-from ..utils.checkpoint_manager import CheckpointManager
-from ..utils.display_utils import (
+from deletepy.operations.user_ops import get_user_details, get_user_id_from_email
+from deletepy.utils.checkpoint_manager import CheckpointManager
+from deletepy.utils.display_utils import (
     CYAN,
     GREEN,
     RED,
@@ -23,9 +24,8 @@ from ..utils.display_utils import (
     show_progress,
     shutdown_requested,
 )
-from ..utils.legacy_print import print_info, print_success, print_warning
-from ..utils.validators import InputValidator
-from .user_ops import get_user_details, get_user_id_from_email
+from deletepy.utils.legacy_print import print_info, print_success, print_warning
+from deletepy.utils.validators import InputValidator
 
 
 @dataclass

@@ -3,9 +3,8 @@
 from datetime import datetime
 
 import pytest
-
-from src.deletepy.models.config import APIConfig, AppConfig, Auth0Config, ExportConfig
-from src.deletepy.models.user import (
+from deletepy.models.config import APIConfig, AppConfig, Auth0Config, ExportConfig
+from deletepy.models.user import (
     BatchOperationResults,
     User,
     UserIdentity,
@@ -488,7 +487,7 @@ class TestOperationConfigValidation:
 
     def test_validate_export_operation_with_output_file(self):
         """Test that export operations pass validation when output_file is provided."""
-        from src.deletepy.models.checkpoint import OperationConfig, OperationType
+        from deletepy.models.checkpoint import OperationConfig, OperationType
 
         config = OperationConfig(environment="dev", output_file="test_export.csv")
 
@@ -497,7 +496,7 @@ class TestOperationConfigValidation:
 
     def test_validate_export_operation_without_output_file(self):
         """Test that export operations fail validation when output_file is missing."""
-        from src.deletepy.models.checkpoint import OperationConfig, OperationType
+        from deletepy.models.checkpoint import OperationConfig, OperationType
 
         config = OperationConfig(environment="dev", output_file=None)
 
@@ -508,7 +507,7 @@ class TestOperationConfigValidation:
 
     def test_validate_export_operation_with_empty_output_file(self):
         """Test that export operations fail validation when output_file is empty."""
-        from src.deletepy.models.checkpoint import OperationConfig, OperationType
+        from deletepy.models.checkpoint import OperationConfig, OperationType
 
         config = OperationConfig(environment="dev", output_file="")
 
@@ -519,7 +518,7 @@ class TestOperationConfigValidation:
 
     def test_validate_non_export_operations_without_output_file(self):
         """Test that non-export operations don't require output_file."""
-        from src.deletepy.models.checkpoint import OperationConfig, OperationType
+        from deletepy.models.checkpoint import OperationConfig, OperationType
 
         config = OperationConfig(environment="dev", output_file=None)
 
@@ -536,8 +535,8 @@ class TestCheckpointValidation:
 
     def test_checkpoint_creation_with_valid_export_config(self):
         """Test that creating a checkpoint with valid export config succeeds."""
-        from src.deletepy.models.checkpoint import OperationConfig, OperationType
-        from src.deletepy.utils.checkpoint_manager import CheckpointManager
+        from deletepy.models.checkpoint import OperationConfig, OperationType
+        from deletepy.utils.checkpoint_manager import CheckpointManager
 
         config = OperationConfig(environment="dev", output_file="test_export.csv")
 
@@ -553,8 +552,8 @@ class TestCheckpointValidation:
 
     def test_checkpoint_creation_with_invalid_export_config(self):
         """Test that creating a checkpoint with invalid export config fails."""
-        from src.deletepy.models.checkpoint import OperationConfig, OperationType
-        from src.deletepy.utils.checkpoint_manager import CheckpointManager
+        from deletepy.models.checkpoint import OperationConfig, OperationType
+        from deletepy.utils.checkpoint_manager import CheckpointManager
 
         config = OperationConfig(
             environment="dev",
@@ -576,7 +575,7 @@ class TestCheckpointValidation:
         """Test that loading a checkpoint with invalid config fails."""
         from datetime import datetime
 
-        from src.deletepy.models.checkpoint import Checkpoint
+        from deletepy.models.checkpoint import Checkpoint
 
         # Create checkpoint data with missing output_file for export operation
         checkpoint_data = {

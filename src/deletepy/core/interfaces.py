@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 from typing import Any, Protocol
 
-from ..models.user import BatchOperationResults, User, UserOperationResult
+from deletepy.models.user import BatchOperationResults, User, UserOperationResult
 
 
 class Auth0ClientProtocol(Protocol):

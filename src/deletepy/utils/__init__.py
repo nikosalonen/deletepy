@@ -1,7 +1,7 @@
 """Utilities module for Auth0 user management."""
 
-from ..core.exceptions import FileOperationError
-from .auth_utils import (
+from deletepy.core.exceptions import FileOperationError
+from deletepy.utils.auth_utils import (
     AUTH0_USER_ID_PREFIXES,
     get_connection_type,
     is_auth0_user_id,
@@ -10,15 +10,15 @@ from .auth_utils import (
     parse_auth0_user_id,
     validate_auth0_user_id,
 )
-from .checkpoint_manager import CheckpointManager
-from .csv_utils import (
+from deletepy.utils.checkpoint_manager import CheckpointManager
+from deletepy.utils.csv_utils import (
     clean_identifier,
     extract_identifiers_from_csv,
     find_best_column,
     resolve_encoded_username,
     write_identifiers_to_file,
 )
-from .display_utils import (
+from deletepy.utils.display_utils import (
     confirm_action,
     print_error,
     print_info,
@@ -30,7 +30,7 @@ from .display_utils import (
     show_progress,
     shutdown_requested,
 )
-from .file_utils import (
+from deletepy.utils.file_utils import (
     check_shutdown_requested,
     handle_shutdown,
     read_user_ids,
@@ -42,14 +42,14 @@ from .file_utils import (
     setup_signal_handlers,
     validate_file_path,
 )
-from .legacy_print import (
+from deletepy.utils.legacy_print import (
     log_api_request,
     log_batch_operation,
     log_file_operation,
     log_progress,
     log_user_operation,
 )
-from .logging_utils import get_logger, log_operation, setup_logging
+from deletepy.utils.logging_utils import get_logger, log_operation, setup_logging
 
 # FileOperationError is imported from core.exceptions above
 

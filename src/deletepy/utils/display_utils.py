@@ -17,7 +17,7 @@ _shutdown_requested = False
 
 def setup_shutdown_handler() -> None:
     """Setup signal handlers for graceful shutdown."""
-    from .logging_utils import get_logger
+    from deletepy.utils.logging_utils import get_logger
 
     logger = get_logger(__name__)
 
@@ -109,7 +109,7 @@ def confirm_action(message: str, default: bool = False) -> bool:
         bool: True if confirmed, False otherwise
     """
     default_str = "Y/n" if default else "y/N"
-    from .validators import SecurityValidator
+    from deletepy.utils.validators import SecurityValidator
 
     raw_response = input(f"{message} ({default_str}): ")
     response = SecurityValidator.sanitize_user_input(raw_response).lower()
@@ -130,7 +130,7 @@ def print_section_header(title: str) -> None:
         # Prefer Rich styled rule if available
         from rich.rule import Rule
 
-        from .rich_utils import get_console
+        from deletepy.utils.rich_utils import get_console
 
         console = get_console()
         console.print(Rule(f"[info]{title}[/info]"))
@@ -198,7 +198,7 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
             f"Total users must be an integer, got {type(total_users).__name__}"
         )
 
-    from .validators import SecurityValidator
+    from deletepy.utils.validators import SecurityValidator
 
     if not operation:
         raise ValueError("Operation cannot be empty")
@@ -241,7 +241,7 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
     )
     print(f"Consequence: {operation_details['consequence']}")
     print("This action cannot be undone.")
-    from .validators import SecurityValidator
+    from deletepy.utils.validators import SecurityValidator
 
     raw_response = input("Are you sure you want to proceed? (yes/no): ")
     response = SecurityValidator.sanitize_user_input(raw_response).lower()

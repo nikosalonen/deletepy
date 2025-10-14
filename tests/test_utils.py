@@ -3,9 +3,8 @@ import tempfile
 from unittest.mock import patch
 
 import pytest
-
-from src.deletepy.cli.validators import validate_args
-from src.deletepy.utils.file_utils import read_user_ids, read_user_ids_generator
+from deletepy.cli.validators import validate_args
+from deletepy.utils.file_utils import read_user_ids, read_user_ids_generator
 
 
 def test_read_user_ids():

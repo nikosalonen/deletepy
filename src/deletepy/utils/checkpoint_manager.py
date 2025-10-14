@@ -9,7 +9,7 @@ from typing import Any
 from rich.table import Table
 from rich.text import Text
 
-from ..models.checkpoint import (
+from deletepy.models.checkpoint import (
     BatchProgress,
     Checkpoint,
     CheckpointStatus,
@@ -17,7 +17,7 @@ from ..models.checkpoint import (
     OperationType,
     ProcessingResults,
 )
-from ..utils.display_utils import (
+from deletepy.utils.display_utils import (
     CYAN,
     GREEN,
     RESET,
@@ -26,7 +26,7 @@ from ..utils.display_utils import (
     print_success,
     print_warning,
 )
-from ..utils.rich_utils import get_console
+from deletepy.utils.rich_utils import get_console
 
 
 class CheckpointManager:
@@ -67,7 +67,7 @@ class CheckpointManager:
         Raises:
             ValueError: If checkpoint_id is invalid or unsafe
         """
-        from .validators import SecurityValidator
+        from deletepy.utils.validators import SecurityValidator
 
         # Validate checkpoint ID for security
         checkpoint_filename = f"{checkpoint_id}.json"
@@ -107,7 +107,7 @@ class CheckpointManager:
 
             # Checkpoint saves are automatic - only log at DEBUG level
             # User will see explicit checkpoint messages at start/end of operations
-            from .logging_utils import get_logger
+            from deletepy.utils.logging_utils import get_logger
 
             logger = get_logger(__name__)
             logger.debug(f"Checkpoint saved: {checkpoint.checkpoint_id}")

@@ -200,3 +200,110 @@ class ValidationError(Auth0ManagerError):
             parts.append(f"Details: {self.details}")
 
         return " | ".join(parts)
+
+
+class RateLimitError(APIError):
+    """Rate limiting errors from Auth0 API.
+
+    Raised when the Auth0 API rate limit is exceeded.
+    Contains retry-after information when available.
+    """
+
+    def __init__(
+        self,
+        message: str = "Rate limit exceeded",
+        retry_after: int | None = None,
+        endpoint: str | None = None,
+        details: str | None = None,
+    ):
+        """Initialize the rate limit error.
+
+        Args:
+            message: The main error message
+            retry_after: Seconds to wait before retrying
+            endpoint: The API endpoint that was rate limited
+            details: Optional additional details
+        """
+        self.retry_after = retry_after
+        super().__init__(
+            message=message,
+            status_code=429,
+            endpoint=endpoint,
+            details=details,
+        )
+
+    def _format_message(self) -> str:
+        """Format the complete error message with retry information."""
+        msg = super()._format_message()
+        if self.retry_after:
+            msg += f" | Retry after: {self.retry_after}s"
+        return msg
+
+
+def wrap_sdk_exception(
+    exc: Exception, operation: str | None = None
+) -> Auth0ManagerError:
+    """Wrap Auth0 SDK exceptions into DeletePy exception hierarchy.
+
+    This function translates Auth0 SDK exceptions into our custom exception
+    types for consistent error handling across the application.
+
+    Args:
+        exc: The original exception from Auth0 SDK
+        operation: Optional operation context
+
+    Returns:
+        Auth0ManagerError: Wrapped exception
+    """
+    # Try to import Auth0 exception types
+    try:
+        from auth0.exceptions import Auth0Error
+    except ImportError:
+        # If SDK exceptions aren't available, wrap as generic error
+        return Auth0ManagerError(
+            message=f"SDK error: {str(exc)}",
+            details=f"Operation: {operation}" if operation else None,
+        )
+
+    # Handle Auth0 SDK exceptions
+    if isinstance(exc, Auth0Error):
+        # Extract error details from SDK exception
+        error_code = getattr(exc, "status_code", None)
+        error_msg = str(exc)
+
+        # Rate limit errors
+        if error_code == 429:
+            return RateLimitError(
+                message=error_msg,
+                details=f"Operation: {operation}" if operation else None,
+            )
+
+        # Authentication/authorization errors
+        if error_code in (401, 403):
+            return AuthConfigError(
+                message=f"Authentication failed: {error_msg}",
+                details=f"Status: {error_code}",
+            )
+
+        # Not found errors
+        if error_code == 404:
+            return UserOperationError(
+                message=f"Resource not found: {error_msg}",
+                operation=operation,
+                details=f"Status: {error_code}",
+            )
+
+        # Other API errors
+        return APIError(
+            message=error_msg,
+            status_code=error_code,
+            details=f"Operation: {operation}" if operation else None,
+        )
+
+    # Wrap any other exceptions
+    return Auth0ManagerError(
+        message=f"Unexpected error: {str(exc)}",
+        details=f"Operation: {operation}, Type: {type(exc).__name__}"
+        if operation
+        else f"Type: {type(exc).__name__}",
+    )

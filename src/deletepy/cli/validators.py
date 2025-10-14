@@ -207,7 +207,7 @@ def validate_user_id_list(user_ids: list[str]) -> list[str]:
     Raises:
         ValueError: If any user ID is invalid
     """
-    from ..utils.validators import InputValidator
+    from deletepy.utils.validators import InputValidator
 
     invalid_ids = []
     error_details = []
@@ -238,7 +238,7 @@ def validate_file_path_argument(file_path: str | None, operation: str) -> str | 
     Raises:
         ValueError: If file path is invalid for the operation
     """
-    from ..utils.validators import InputValidator
+    from deletepy.utils.validators import InputValidator
 
     if operation == "doctor":
         return None
@@ -253,7 +253,7 @@ def validate_file_path_argument(file_path: str | None, operation: str) -> str | 
 
     # Show warnings if any
     if result.warnings:
-        from ..utils.display_utils import print_warning
+        from deletepy.utils.display_utils import print_warning
 
         for warning in result.warnings:
             print_warning(f"File path warning: {warning}")

@@ -5,7 +5,7 @@ from typing import Any, cast
 
 import dotenv
 
-from .exceptions import AuthConfigError
+from deletepy.core.exceptions import AuthConfigError
 
 # Global constants for API configuration
 API_RATE_LIMIT = 0.5  # seconds between requests
@@ -32,7 +32,7 @@ def validate_env_var(name: str, value: str | None) -> str:
     Raises:
         AuthConfigError: If the environment variable is missing or empty
     """
-    from ..utils.validators import SecurityValidator
+    from deletepy.utils.validators import SecurityValidator
 
     if not value:
         raise AuthConfigError(

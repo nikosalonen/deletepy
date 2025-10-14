@@ -2,7 +2,7 @@ import csv
 import os
 import tempfile
 
-from src.deletepy.utils.csv_utils import (
+from deletepy.utils.csv_utils import (
     clean_identifier,
     extract_identifiers_from_csv,
     find_best_column,

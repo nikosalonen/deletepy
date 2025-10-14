@@ -8,8 +8,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TextIO, cast
 
-from ..core.exceptions import FileOperationError
-from .display_utils import print_error, print_warning
+from deletepy.core.exceptions import FileOperationError
+from deletepy.utils.display_utils import print_error, print_warning
 
 # Graceful shutdown handler
 shutdown_requested = False
@@ -246,7 +246,7 @@ def read_user_ids(filepath: str) -> list[str]:
     Returns:
         List of validated user IDs
     """
-    from .validators import InputValidator, SecurityValidator
+    from deletepy.utils.validators import InputValidator, SecurityValidator
 
     try:
         # First validate the file path for security
@@ -287,7 +287,7 @@ def read_user_ids_generator(filepath: str) -> Generator[str, None, None]:
     Yields:
         Validated user IDs one at a time
     """
-    from .validators import InputValidator, SecurityValidator
+    from deletepy.utils.validators import InputValidator, SecurityValidator
 
     try:
         # First validate the file path for security

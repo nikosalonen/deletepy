@@ -44,7 +44,7 @@ def validate_auth0_user_id(user_id: str) -> bool:
         bool: True if valid Auth0 user ID format, False otherwise
     """
     # Import here to avoid circular imports
-    from .validators import InputValidator
+    from deletepy.utils.validators import InputValidator
 
     result = InputValidator.validate_auth0_user_id_enhanced(user_id)
     return result.is_valid

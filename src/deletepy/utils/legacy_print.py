@@ -7,7 +7,7 @@ backward compatibility.
 
 from typing import Any
 
-from .logging_utils import get_logger
+from deletepy.utils.logging_utils import get_logger
 
 # Global logger for legacy functions
 _logger = get_logger(__name__)
