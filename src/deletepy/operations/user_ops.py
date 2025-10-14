@@ -8,6 +8,7 @@ import requests
 
 from ..core.auth0_client import Auth0ClientManager
 from ..core.config import API_RATE_LIMIT, API_TIMEOUT
+from ..core.exceptions import UserOperationError
 from ..core.sdk_operations import SDKGrantOperations, SDKUserOperations
 from ..models.checkpoint import (
     Checkpoint,
@@ -499,6 +500,9 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
         user_id: Auth0 user ID
         token: Auth0 access token (kept for backward compatibility, not used)
         base_url: Auth0 API base URL
+
+    Raises:
+        Exception: Re-raises any exceptions to ensure calling functions know about failures
     """
     _, grant_ops = _get_sdk_ops_from_base_url(base_url)
 
@@ -511,11 +515,14 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
                 operation="revoke_user_grants",
             )
         else:
+            # This shouldn't happen now that delete_grants_by_user raises on error
+            error_msg = f"Failed to revoke grants for user {user_id}"
             print_error(
-                f"Failed to revoke grants for user {user_id}",
+                error_msg,
                 user_id=user_id,
                 operation="revoke_user_grants",
             )
+            raise UserOperationError(message=error_msg, user_id=user_id)
     except Exception as e:
         print_error(
             f"Error revoking grants for user {user_id}: {e}",
@@ -523,6 +530,8 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
             error=str(e),
             operation="revoke_user_grants",
         )
+        # Re-raise to propagate the error
+        raise
 
 
 def unlink_user_identity(

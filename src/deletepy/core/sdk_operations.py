@@ -233,25 +233,31 @@ class SDKGrantOperations:
 
         Returns:
             True if successful, False otherwise
+
+        Raises:
+            Exception: Re-raises wrapped exceptions for proper error propagation
         """
         try:
-            # First get all grants for this user
-            grants_list = self.client.grants.list(user_id=user_id)
+            # Use SDK's all() method to get all grants for this user
+            grants_response = self.client.grants.all(user_id=user_id)
+
+            # The SDK returns a dict with 'grants' key or potentially a list
+            grants = []
+            if isinstance(grants_response, dict):
+                grants = grants_response.get("grants", [])
+            elif isinstance(grants_response, list):
+                grants = grants_response
 
             # Delete each grant individually
-            if isinstance(grants_list, dict) and "grants" in grants_list:
-                for grant in grants_list["grants"]:
-                    grant_id = grant.get("id")
-                    if grant_id:
-                        self.client.grants.delete(id=grant_id)
-            elif isinstance(grants_list, list):
-                for grant in grants_list:
-                    grant_id = grant.get("id")
-                    if grant_id:
-                        self.client.grants.delete(id=grant_id)
+            for grant in grants:
+                grant_id = grant.get("id")
+                if grant_id:
+                    self.client.grants.delete(id=grant_id)
+                    time.sleep(API_RATE_LIMIT)
 
-            time.sleep(API_RATE_LIMIT)
-            logger.info(f"Successfully revoked grants for user {user_id}")
+            logger.info(
+                f"Successfully revoked {len(grants)} grant(s) for user {user_id}"
+            )
             return True
         except Exception as e:
             wrapped = wrap_sdk_exception(e, f"delete_grants:{user_id}")
@@ -259,7 +265,8 @@ class SDKGrantOperations:
                 f"Failed to revoke grants for user {user_id}: {wrapped}",
                 extra={"user_id": user_id, "error": str(wrapped)},
             )
-            return False
+            # Re-raise to propagate the error instead of silently returning False
+            raise wrapped from e
 
 
 def get_sdk_operations(
