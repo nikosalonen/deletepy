@@ -99,6 +99,7 @@ deletepy/
 ## Prerequisites
 
 - **Python 3.11+** - The tool requires Python 3.11 or higher
+- **auth0-python SDK >= 4.7.1** - Official Auth0 Python SDK (automatically installed)
 - Auth0 account with appropriate API permissions
 - Auth0 Management API access
 

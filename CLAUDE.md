@@ -48,6 +48,27 @@ deletepy/
 
 The application uses a generator pattern for memory-efficient file processing and implements rate limiting (0.2s between API calls) to prevent Auth0 API throttling.
 
+### SDK Integration
+
+DeletePy now uses the official **auth0-python SDK** (>= 4.7.1) for Auth0 Management API interactions:
+
+- **SDK Wrapper Layer** (`src/deletepy/core/auth0_client.py`): Manages Auth0 Management API client initialization, token caching, and connection pooling
+- **SDK Operations** (`src/deletepy/core/sdk_operations.py`): Wraps SDK methods with consistent error handling and logging
+- **Exception Translation** (`src/deletepy/core/exceptions.py`): Maps SDK exceptions to custom exception hierarchy via `wrap_sdk_exception()`
+
+#### SDK Benefits
+
+1. **Type Safety**: SDK provides typed request/response models
+2. **Automatic Token Management**: SDK handles token refresh and caching
+3. **Built-in Rate Limiting**: SDK manages request throttling automatically
+4. **Better Error Handling**: Structured exceptions with detailed error information
+5. **Connection Pooling**: SDK reuses HTTP connections for better performance
+6. **API Coverage**: Official SDK stays up-to-date with Auth0 API changes
+
+#### Hybrid Approach
+
+While most operations use the SDK, some endpoints (e.g., session management) still use direct HTTP requests where SDK coverage is incomplete. The `requests` library remains a dependency for these legacy endpoints.
+
 ## Environment Configuration
 
 The tool requires a `.env` file with separate credentials for dev and prod:
