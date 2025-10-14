@@ -803,20 +803,33 @@ def _search_user_by_field(
     Returns:
         User details dictionary or None if not found
     """
-    from ..core.sdk_operations import get_sdk_ops_from_base_url
+    from deletepy.core.sdk_operations import get_sdk_ops_from_base_url
 
     if is_auth0_user_id(identifier):
         # Direct user ID lookup
         return get_user_details(identifier, token, base_url)
     else:
-        # Use search API for username lookups via SDK
+        # Use search API for username/email lookups via SDK
         user_ops, _ = get_sdk_ops_from_base_url(base_url)
 
-        # Username search
-        users = user_ops.search_users(query=f'username:"{identifier}"', per_page=1)
+        # Determine search field based on whether identifier contains "@"
+        if "@" in identifier:
+            query = f'email:"{identifier}"'
+        else:
+            query = f'username:"{identifier}"'
+
+        # Try primary search
+        users = user_ops.search_users(query=query, per_page=1)
 
         if users and len(users) > 0:
             # Return the first match
+            return users[0]
+
+        # Fallback: try OR query if primary search returned no results
+        fallback_query = f'(email:"{identifier}" OR username:"{identifier}")'
+        users = user_ops.search_users(query=fallback_query, per_page=1)
+
+        if users and len(users) > 0:
             return users[0]
 
         return None
