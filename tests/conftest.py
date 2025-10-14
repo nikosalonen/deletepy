@@ -14,6 +14,54 @@ def mock_response():
 
 
 @pytest.fixture
+def mock_auth0_client():
+    """Create a mock Auth0 management client."""
+    client = MagicMock()
+
+    # Mock users resource
+    client.users = MagicMock()
+    client.users.get = MagicMock(
+        return_value={"user_id": "test_user_id", "email": "test@example.com"}
+    )
+    client.users.delete = MagicMock()
+    client.users.update = MagicMock(
+        return_value={"user_id": "test_user_id", "blocked": True}
+    )
+    client.users.list = MagicMock(return_value={"users": [], "total": 0})
+    client.users.unlink_user_identity = MagicMock()
+
+    # Mock users_by_email resource
+    client.users_by_email = MagicMock()
+    client.users_by_email.search_users_by_email = MagicMock(return_value=[])
+
+    # Mock grants resource
+    client.grants = MagicMock()
+    client.grants.list = MagicMock(return_value={"grants": []})
+    client.grants.delete = MagicMock()
+
+    return client
+
+
+@pytest.fixture
+def mock_get_token():
+    """Create a mock GetToken instance."""
+    get_token = MagicMock()
+    get_token.client_credentials = MagicMock(
+        return_value={"access_token": "test_token", "expires_in": 86400}
+    )
+    return get_token
+
+
+@pytest.fixture
+def mock_auth0_client_manager(mock_auth0_client, mock_get_token):
+    """Create a mock Auth0ClientManager."""
+    manager = MagicMock()
+    manager.get_client = MagicMock(return_value=mock_auth0_client)
+    manager.get_token = MagicMock(return_value="test_token")
+    return manager
+
+
+@pytest.fixture
 def mock_requests(request):
     """Create a mock requests module.
 
