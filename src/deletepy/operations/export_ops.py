@@ -380,6 +380,28 @@ def _build_csv_data_dict(
             # Keep original if parsing fails
             pass
 
+    # Extract and format created_at
+    created_at = user_details.get("created_at", "")
+    if created_at:
+        try:
+            # Parse and format the date
+            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            created_at = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError):
+            # Keep original if parsing fails
+            pass
+
+    # Extract and format updated_at
+    updated_at = user_details.get("updated_at", "")
+    if updated_at:
+        try:
+            # Parse and format the date
+            dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+            updated_at = dt.strftime("%Y-%m-%d %H:%M:%S")
+        except (ValueError, TypeError):
+            # Keep original if parsing fails
+            pass
+
     # Extract connection from identities
     connection = ""
     identities = user_details.get("identities", [])
@@ -391,8 +413,8 @@ def _build_csv_data_dict(
         "user_id": user_id,
         "connection": connection,
         "last_login": last_login,
-        "created_at": user_details.get("created_at", ""),
-        "updated_at": user_details.get("updated_at", ""),
+        "created_at": created_at,
+        "updated_at": updated_at,
         "status": status,
         "blocked": str(user_details.get("blocked", False)),
         "email_verified": str(user_details.get("email_verified", False)),
