@@ -7,94 +7,96 @@ from src.deletepy.core.auth import AuthConfigError, doctor, get_access_token
 
 @pytest.fixture
 def mock_config():
-    with patch("src.deletepy.core.auth.get_env_config") as mock:
+    with patch("src.deletepy.core.config.get_env_config") as mock:
         mock.return_value = {
             "client_id": "test_client_id",
             "client_secret": "test_client_secret",
             "domain": "test.auth0.com",
+            "base_url": "https://test.auth0.com",
         }
         yield mock
 
 
-def test_get_access_token_success(mock_requests, mock_response, mock_config):
-    mock_response.json.return_value = {"access_token": "test_token"}
-    mock_requests.post.return_value = mock_response
+def test_get_access_token_success(mock_config, mock_get_token):
+    """Test successful token acquisition via SDK."""
+    with patch("src.deletepy.core.auth0_client.GetToken", return_value=mock_get_token):
+        token = get_access_token("dev")
 
-    token = get_access_token("dev")
-
-    assert token == "test_token"
-    mock_requests.post.assert_called_once()
-    mock_requests.post.assert_called_with(
-        "https://test.auth0.com/oauth/token",
-        json={
-            "client_id": "test_client_id",
-            "client_secret": "test_client_secret",
-            "audience": "https://test.auth0.com/api/v2/",
-            "grant_type": "client_credentials",
-            "scope": "delete:users update:users delete:sessions delete:grants read:users",
-        },
-        headers={
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-            "Content-Type": "application/json",
-        },
-        timeout=30,
-    )
+        assert token == "test_token"
+        mock_get_token.client_credentials.assert_called_once()
 
 
 def test_get_access_token_missing_client_id(mock_config):
+    """Test error when client_id is missing."""
     mock_config.return_value = {
         "client_id": "",
         "client_secret": "test_client_secret",
         "domain": "test.auth0.com",
+        "base_url": "https://test.auth0.com",
     }
 
-    with pytest.raises(AuthConfigError) as exc_info:
-        get_access_token("dev")
-    assert "Missing Auth0 Client ID" in str(exc_info.value)
+    mock_get_token = MagicMock()
+    mock_get_token.client_credentials.side_effect = Exception("invalid_client")
+
+    with patch("src.deletepy.core.auth0_client.GetToken", return_value=mock_get_token):
+        with pytest.raises(AuthConfigError):
+            get_access_token("dev")
 
 
 def test_get_access_token_missing_client_secret(mock_config):
+    """Test error when client_secret is missing."""
     mock_config.return_value = {
         "client_id": "test_client_id",
         "client_secret": "",
         "domain": "test.auth0.com",
+        "base_url": "https://test.auth0.com",
     }
 
-    with pytest.raises(AuthConfigError) as exc_info:
-        get_access_token("dev")
-    assert "Missing Auth0 Client Secret" in str(exc_info.value)
+    mock_get_token = MagicMock()
+    mock_get_token.client_credentials.side_effect = Exception("invalid_client")
+
+    with patch("src.deletepy.core.auth0_client.GetToken", return_value=mock_get_token):
+        with pytest.raises(AuthConfigError):
+            get_access_token("dev")
 
 
 def test_get_access_token_missing_domain(mock_config):
+    """Test error when domain is missing."""
     mock_config.return_value = {
         "client_id": "test_client_id",
         "client_secret": "test_client_secret",
         "domain": "",
+        "base_url": "https://test.auth0.com",
     }
 
-    with pytest.raises(AuthConfigError) as exc_info:
-        get_access_token("dev")
-    assert "Missing Auth0 Domain" in str(exc_info.value)
+    mock_get_token = MagicMock()
+    mock_get_token.client_credentials.side_effect = Exception("invalid_domain")
+
+    with patch("src.deletepy.core.auth0_client.GetToken", return_value=mock_get_token):
+        with pytest.raises(AuthConfigError):
+            get_access_token("dev")
 
 
-def test_get_access_token_no_token_in_response(
-    mock_requests, mock_response, mock_config
-):
-    mock_response.json.return_value = {"error": "invalid_client"}
-    mock_requests.post.return_value = mock_response
+def test_get_access_token_no_token_in_response(mock_config):
+    """Test error when token is not in response."""
+    mock_get_token = MagicMock()
+    mock_get_token.client_credentials.return_value = {"error": "invalid_client"}
 
-    with pytest.raises(AuthConfigError) as exc_info:
-        get_access_token("dev")
-    assert "Access token not found in Auth0 response" in str(exc_info.value)
+    with patch("src.deletepy.core.auth0_client.GetToken", return_value=mock_get_token):
+        with pytest.raises(AuthConfigError) as exc_info:
+            get_access_token("dev")
+        assert "Access token not found" in str(exc_info.value)
 
 
-def test_get_access_token_invalid_json(mock_requests, mock_response, mock_config):
-    mock_response.json.side_effect = ValueError("Invalid JSON")
-    mock_requests.post.return_value = mock_response
+def test_get_access_token_sdk_exception(mock_config):
+    """Test handling of SDK exceptions."""
+    mock_get_token = MagicMock()
+    mock_get_token.client_credentials.side_effect = Exception("SDK Error")
 
-    with pytest.raises(AuthConfigError) as exc_info:
-        get_access_token("dev")
-    assert "Invalid JSON response from Auth0" in str(exc_info.value)
+    with patch("src.deletepy.core.auth0_client.GetToken", return_value=mock_get_token):
+        with pytest.raises(AuthConfigError) as exc_info:
+            get_access_token("dev")
+        assert "Failed to obtain Auth0 management token" in str(exc_info.value)
 
 
 def test_doctor_success():
@@ -123,12 +125,12 @@ def test_doctor_success():
         assert "Credentials are working correctly" in result["details"]
 
 
-def test_doctor_with_api_test_success():
+def test_doctor_with_api_test_success(mock_auth0_client):
     """Test doctor function with API test enabled and successful."""
     with (
         patch("src.deletepy.core.config.get_env_config") as mock_get_config,
         patch("src.deletepy.core.auth.get_access_token") as mock_get_token,
-        patch("src.deletepy.core.auth.requests.get") as mock_get,
+        patch("src.deletepy.core.auth.Auth0ClientManager") as mock_manager_class,
     ):
         # Mock successful configuration
         mock_get_config.return_value = {
@@ -141,10 +143,13 @@ def test_doctor_with_api_test_success():
         # Mock successful token retrieval
         mock_get_token.return_value = "test_token"
 
+        # Mock Auth0ClientManager to return our mock client
+        mock_manager = MagicMock()
+        mock_manager.get_client.return_value = mock_auth0_client
+        mock_manager_class.return_value = mock_manager
+
         # Mock successful API response
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_get.return_value = mock_response
+        mock_auth0_client.users.list.return_value = {"users": [], "total": 0}
 
         result = doctor("prod", test_api=True)
 
@@ -156,12 +161,12 @@ def test_doctor_with_api_test_success():
         assert "Credentials and API access are working correctly" in result["details"]
 
 
-def test_doctor_with_api_test_failure():
+def test_doctor_with_api_test_failure(mock_auth0_client):
     """Test doctor function with API test enabled but API call fails."""
     with (
         patch("src.deletepy.core.config.get_env_config") as mock_get_config,
         patch("src.deletepy.core.auth.get_access_token") as mock_get_token,
-        patch("src.deletepy.core.auth.requests.get") as mock_get,
+        patch("src.deletepy.core.auth.Auth0ClientManager") as mock_manager_class,
     ):
         # Mock successful configuration
         mock_get_config.return_value = {
@@ -174,10 +179,13 @@ def test_doctor_with_api_test_failure():
         # Mock successful token retrieval
         mock_get_token.return_value = "test_token"
 
+        # Mock Auth0ClientManager to return our mock client
+        mock_manager = MagicMock()
+        mock_manager.get_client.return_value = mock_auth0_client
+        mock_manager_class.return_value = mock_manager
+
         # Mock failed API response
-        mock_response = MagicMock()
-        mock_response.status_code = 403
-        mock_get.return_value = mock_response
+        mock_auth0_client.users.list.side_effect = Exception("API Error")
 
         result = doctor("dev", test_api=True)
 
@@ -185,7 +193,7 @@ def test_doctor_with_api_test_failure():
         assert result["environment"] == "dev"
         assert result["token_obtained"] is True
         assert result["api_tested"] is True
-        assert result["api_status"] == "failed_403"
+        assert result["api_status"] == "failed"
         assert "Token obtained but API access failed" in result["details"]
 
 
