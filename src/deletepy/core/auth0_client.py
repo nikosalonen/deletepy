@@ -44,7 +44,7 @@ class Auth0ClientManager:
         if cache_key in _client_cache:
             logger.debug(
                 f"Reusing cached Auth0 client for {self.env}",
-                extra={"environment": self.env, "cache_key": cache_key},
+                extra={"environment": self.env},
             )
             return _client_cache[cache_key]
 
