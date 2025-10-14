@@ -6,7 +6,9 @@ from urllib.parse import quote
 
 import requests
 
+from ..core.auth0_client import Auth0ClientManager
 from ..core.config import API_RATE_LIMIT, API_TIMEOUT
+from ..core.sdk_operations import SDKGrantOperations, SDKUserOperations
 from ..models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
@@ -16,8 +18,44 @@ from ..models.checkpoint import (
 from ..utils.checkpoint_manager import CheckpointManager
 from ..utils.display_utils import show_progress, shutdown_requested
 from ..utils.legacy_print import print_error, print_info, print_success, print_warning
-from ..utils.request_utils import make_rate_limited_request
 from ..utils.validators import InputValidator
+
+# Cache for SDK operations to avoid re-initialization
+_sdk_ops_cache: dict[str, tuple[SDKUserOperations, SDKGrantOperations]] = {}
+
+
+def _get_sdk_ops_from_base_url(
+    base_url: str,
+) -> tuple[SDKUserOperations, SDKGrantOperations]:
+    """Get SDK operations from base URL by inferring environment.
+
+    This is a compatibility helper for functions that receive base_url instead of env.
+
+    Args:
+        base_url: Auth0 base URL (e.g., https://domain.auth0.com)
+
+    Returns:
+        Tuple of (user_ops, grant_ops)
+    """
+    # Check cache first
+    if base_url in _sdk_ops_cache:
+        return _sdk_ops_cache[base_url]
+
+    # Infer environment from base_url (dev URLs typically have 'dev' in domain)
+    env = "dev" if "dev" in base_url.lower() else "prod"
+
+    # Get client manager
+    manager = Auth0ClientManager(env)
+    client = manager.get_client()
+
+    # Create operation wrappers
+    user_ops = SDKUserOperations(client)
+    grant_ops = SDKGrantOperations(client)
+
+    # Cache for reuse
+    _sdk_ops_cache[base_url] = (user_ops, grant_ops)
+
+    return user_ops, grant_ops
 
 
 def secure_url_encode(value: str, context: str = "URL parameter") -> str:
@@ -56,28 +94,29 @@ def secure_url_encode(value: str, context: str = "URL parameter") -> str:
 
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
-    """Delete user from Auth0."""
+    """Delete user from Auth0 using SDK.
+
+    Args:
+        user_id: Auth0 user ID
+        token: Auth0 access token (kept for backward compatibility, not used)
+        base_url: Auth0 base URL
+    """
     print_info(f"Deleting user: {user_id}", user_id=user_id, operation="delete_user")
 
     # First revoke all sessions
     revoke_user_sessions(user_id, token, base_url)
 
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    # Use SDK operations
+    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+
     try:
-        response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
+        user_ops.delete_user(user_id)
         print_success(
             f"Successfully deleted user {user_id}",
             user_id=user_id,
             operation="delete_user",
         )
-        time.sleep(API_RATE_LIMIT)
-    except requests.exceptions.RequestException as e:
+    except Exception as e:
         print_error(
             f"Error deleting user {user_id}: {e}",
             user_id=user_id,
@@ -86,32 +125,37 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
 
 
 def block_user(user_id: str, token: str, base_url: str) -> None:
-    """Block user in Auth0."""
+    """Block user in Auth0 using SDK.
+
+    Args:
+        user_id: Auth0 user ID
+        token: Auth0 access token (kept for backward compatibility, not used)
+        base_url: Auth0 base URL
+    """
     print_info(f"Blocking user: {user_id}", user_id=user_id, operation="block_user")
 
     # First revoke all sessions and grants
     revoke_user_sessions(user_id, token, base_url)
     revoke_user_grants(user_id, token, base_url)
 
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    payload = {"blocked": True}
+    # Use SDK operations
+    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+
     try:
-        response = requests.patch(
-            url, headers=headers, json=payload, timeout=API_TIMEOUT
-        )
-        response.raise_for_status()
-        print_success(
-            f"Successfully blocked user {user_id}",
-            user_id=user_id,
-            operation="block_user",
-        )
-        time.sleep(API_RATE_LIMIT)
-    except requests.exceptions.RequestException as e:
+        success = user_ops.block_user(user_id)
+        if success:
+            print_success(
+                f"Successfully blocked user {user_id}",
+                user_id=user_id,
+                operation="block_user",
+            )
+        else:
+            print_error(
+                f"Failed to block user {user_id}",
+                user_id=user_id,
+                operation="block_user",
+            )
+    except Exception as e:
         print_error(
             f"Error blocking user {user_id}: {e}",
             user_id=user_id,
@@ -151,11 +195,11 @@ def get_user_id_from_email(
 def _fetch_users_by_email(
     email: str, token: str, base_url: str
 ) -> list[dict[str, Any]] | None:
-    """Fetch users from Auth0 API by email address.
+    """Fetch users from Auth0 API by email address using SDK.
 
     Args:
         email: Email address to search for
-        token: Auth0 access token
+        token: Auth0 access token (kept for backward compatibility, not used)
         base_url: Auth0 API base URL
 
     Returns:
@@ -164,68 +208,42 @@ def _fetch_users_by_email(
     from ..utils.logging_utils import get_logger
 
     logger = get_logger(__name__)
-    url = f"{base_url}/api/v2/users-by-email"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    params = {"email": email}
 
-    response = make_rate_limited_request("GET", url, headers, params=params)
-    if response is None:
-        logger.error(
-            f"Error fetching user_id for email {email}: Request failed after retries",
-            extra={
-                "email": email,
-                "operation": "get_user_id_from_email",
-                "api_endpoint": url,
-                "error_type": "request_failed",
-            },
-        )
-        return None
+    # Use SDK operations
+    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
 
     try:
-        users = response.json()
-        if isinstance(users, list):
-            if users:
-                logger.info(
-                    f"Found {len(users)} user(s) for email {email}",
-                    extra={
-                        "email": email,
-                        "operation": "get_user_id_from_email",
-                        "user_count": len(users),
-                    },
-                )
-                return cast(list[dict[str, Any]], users)
-            else:
-                logger.info(
-                    f"No users found for email {email}",
-                    extra={
-                        "email": email,
-                        "operation": "get_user_id_from_email",
-                        "user_count": 0,
-                    },
-                )
-                return []  # Return empty list instead of None for consistency
-        else:
-            logger.warning(
-                f"Unexpected response format for email {email}: expected list, got {type(users)}",
+        users = user_ops.search_users_by_email(email)
+
+        if users:
+            logger.info(
+                f"Found {len(users)} user(s) for email {email}",
                 extra={
                     "email": email,
                     "operation": "get_user_id_from_email",
-                    "response_type": str(type(users)),
+                    "user_count": len(users),
                 },
             )
-            return []
-    except ValueError as e:
+            return users
+        else:
+            logger.info(
+                f"No users found for email {email}",
+                extra={
+                    "email": email,
+                    "operation": "get_user_id_from_email",
+                    "user_count": 0,
+                },
+            )
+            return []  # Return empty list instead of None for consistency
+
+    except Exception as e:
         logger.error(
-            f"Error parsing response for email {email}: {e}",
+            f"Error fetching users by email {email}: {e}",
             extra={
                 "email": email,
                 "error": str(e),
                 "operation": "get_user_id_from_email",
-                "error_type": "json_parse_error",
+                "error_type": "sdk_error",
             },
             exc_info=True,
         )
@@ -288,29 +306,24 @@ def _user_matches_connection(user: dict[str, Any], connection: str, email: str) 
 
 
 def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
-    """Fetch user's email address from Auth0.
+    """Fetch user's email address from Auth0 using SDK.
 
     Args:
         user_id: The Auth0 user ID
-        token: Auth0 access token
+        token: Auth0 access token (kept for backward compatibility, not used)
         base_url: Auth0 API base URL
 
     Returns:
         Optional[str]: User's email address if found, None otherwise
     """
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+
     try:
-        response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
-        user_data: dict[str, Any] = response.json()
-        time.sleep(API_RATE_LIMIT)
-        return user_data.get("email")
-    except requests.exceptions.RequestException as e:
+        user_data = user_ops.get_user(user_id)
+        if user_data:
+            return user_data.get("email")
+        return None
+    except Exception as e:
         print_error(
             f"Error fetching email for user {user_id}: {e}",
             user_id=user_id,
@@ -321,38 +334,24 @@ def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
 
 
 def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] | None:
-    """Fetch user details from Auth0 including connection information.
+    """Fetch user details from Auth0 including connection information using SDK.
 
     Args:
         user_id: The Auth0 user ID
-        token: Auth0 access token
+        token: Auth0 access token (kept for backward compatibility, not used)
         base_url: Auth0 API base URL
 
     Returns:
         Optional[Dict[str, Any]]: User details if found, None otherwise
     """
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-
-    response = make_rate_limited_request("GET", url, headers)
-    if response is None:
-        print_error(
-            f"Error fetching details for user {user_id}: Request failed after retries",
-            user_id=user_id,
-            operation="get_user_details",
-        )
-        return None
+    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
 
     try:
-        user_data: dict[str, Any] = response.json()
+        user_data = user_ops.get_user(user_id)
         return user_data
-    except ValueError as e:
+    except Exception as e:
         print_error(
-            f"Error parsing response for user {user_id}: {e}",
+            f"Error fetching details for user {user_id}: {e}",
             user_id=user_id,
             error=str(e),
             operation="get_user_details",
@@ -494,25 +493,30 @@ def _revoke_single_session(
 
 
 def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
-    """Revoke all application grants (authorized applications) for a user in one call."""
-    grants_url = (
-        f"{base_url}/api/v2/grants?user_id={secure_url_encode(user_id, 'user ID')}"
-    )
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    """Revoke all application grants (authorized applications) for a user using SDK.
+
+    Args:
+        user_id: Auth0 user ID
+        token: Auth0 access token (kept for backward compatibility, not used)
+        base_url: Auth0 API base URL
+    """
+    _, grant_ops = _get_sdk_ops_from_base_url(base_url)
+
     try:
-        response = requests.delete(grants_url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
-        print_success(
-            f"Revoked all application grants for user {user_id}",
-            user_id=user_id,
-            operation="revoke_user_grants",
-        )
-        time.sleep(API_RATE_LIMIT)
-    except requests.exceptions.RequestException as e:
+        success = grant_ops.delete_grants_by_user(user_id)
+        if success:
+            print_success(
+                f"Revoked all application grants for user {user_id}",
+                user_id=user_id,
+                operation="revoke_user_grants",
+            )
+        else:
+            print_error(
+                f"Failed to revoke grants for user {user_id}",
+                user_id=user_id,
+                operation="revoke_user_grants",
+            )
+    except Exception as e:
         print_error(
             f"Error revoking grants for user {user_id}: {e}",
             user_id=user_id,
@@ -524,37 +528,32 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
 def unlink_user_identity(
     user_id: str, provider: str, user_identity_id: str, token: str, base_url: str
 ) -> bool:
-    """Unlink a social identity from a user.
+    """Unlink a social identity from a user using SDK.
 
     Args:
         user_id: The Auth0 user ID
         provider: The identity provider (e.g., "google-oauth2", "facebook")
         user_identity_id: The identity ID to unlink
-        token: Auth0 access token
+        token: Auth0 access token (kept for backward compatibility, not used)
         base_url: Auth0 API base URL
 
     Returns:
         bool: True if successful, False otherwise
     """
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}/identities/{provider}/{user_identity_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    user_ops, _ = _get_sdk_ops_from_base_url(base_url)
+
     try:
-        response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
-        print_success(
-            f"Successfully unlinked {provider} identity {user_identity_id} from user {user_id}",
-            user_id=user_id,
-            provider=provider,
-            user_identity_id=user_identity_id,
-            operation="unlink_user_identity",
-        )
-        time.sleep(API_RATE_LIMIT)
-        return True
-    except requests.exceptions.RequestException as e:
+        success = user_ops.delete_user_identity(user_id, provider, user_identity_id)
+        if success:
+            print_success(
+                f"Successfully unlinked {provider} identity {user_identity_id} from user {user_id}",
+                user_id=user_id,
+                provider=provider,
+                user_identity_id=user_identity_id,
+                operation="unlink_user_identity",
+            )
+        return success
+    except Exception as e:
         print_error(
             f"Error unlinking {provider} identity {user_identity_id} from user {user_id}: {e}",
             user_id=user_id,
