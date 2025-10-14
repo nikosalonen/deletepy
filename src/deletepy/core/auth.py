@@ -1,9 +1,9 @@
-from typing import Any, cast
+from typing import Any
 
-import requests
 from dotenv import load_dotenv
 
 from ..utils.logging_utils import get_logger
+from .auth0_client import Auth0ClientManager, get_management_token
 from .config import get_env_config
 from .exceptions import AuthConfigError
 
@@ -15,7 +15,7 @@ logger = get_logger(__name__)
 
 
 def get_access_token(env: str = "dev") -> str:
-    """Get access token from Auth0 using client credentials.
+    """Get access token from Auth0 using client credentials via SDK.
 
     Args:
         env: Environment to use ('dev' or 'prod')
@@ -25,50 +25,18 @@ def get_access_token(env: str = "dev") -> str:
 
     Raises:
         AuthConfigError: If required environment variables are missing
-        requests.exceptions.RequestException: If the token request fails
     """
     load_dotenv(override=True)
-    config = get_env_config(env)
 
-    client_id = config["client_id"]
-    client_secret = config["client_secret"]
-    domain = config["domain"]
-
-    # Validate required environment variables
-    if not client_id:
-        raise AuthConfigError(
-            f"Missing Auth0 Client ID. Please set the {'DEV_AUTH0_CLIENT_ID' if env == 'dev' else 'AUTH0_CLIENT_ID'} environment variable."
-        )
-    if not client_secret:
-        raise AuthConfigError(
-            f"Missing Auth0 Client Secret. Please set the {'DEV_AUTH0_CLIENT_SECRET' if env == 'dev' else 'AUTH0_CLIENT_SECRET'} environment variable."
-        )
-    if not domain:
-        raise AuthConfigError(
-            f"Missing Auth0 Domain. Please set the {'DEV_AUTH0_DOMAIN' if env == 'dev' else 'AUTH0_DOMAIN'} environment variable."
-        )
-
-    url = f"https://{domain}/oauth/token"
-    headers = {
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "client_id": client_id,
-        "client_secret": client_secret,
-        "audience": f"https://{domain}/api/v2/",
-        "grant_type": "client_credentials",
-        "scope": "delete:users update:users delete:sessions delete:grants read:users",
-    }
-    response = requests.post(url, json=payload, headers=headers, timeout=API_TIMEOUT)
-    response.raise_for_status()
+    # Use the SDK-based token acquisition
     try:
-        json_response: dict[str, Any] = response.json()
-        if "access_token" not in json_response:
-            raise AuthConfigError("Access token not found in Auth0 response")
-        return cast(str, json_response["access_token"])
-    except ValueError as e:
-        raise AuthConfigError(f"Invalid JSON response from Auth0: {str(e)}") from e
+        return get_management_token(env)
+    except AuthConfigError:
+        # Re-raise as-is
+        raise
+    except Exception as e:
+        # Wrap any unexpected errors
+        raise AuthConfigError(f"Failed to get access token for {env}: {str(e)}") from e
 
 
 def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
@@ -98,8 +66,8 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
         logger.info(f"    ✅ Auth0 Domain: {config['domain']}")
         logger.info(f"    ✅ API URL: {config['base_url']}")
 
-        logger.info("  🔑 Getting access token...")
-        token = get_access_token(env)
+        logger.info("  🔑 Getting access token via SDK...")
+        get_access_token(env)
         logger.info(
             "    ✅ Access token obtained successfully",
             extra={"operation": "token_request", "status": "success"},
@@ -114,48 +82,40 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
         }
 
         if test_api:
-            logger.info("  🌐 Testing API access...")
-            base_url = f"https://{config['domain']}"
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-            }
+            logger.info("  🌐 Testing API access via SDK...")
+            try:
+                # Use SDK client to test API access
+                client_manager = Auth0ClientManager(env)
+                client = client_manager.get_client()
 
-            # Make a simple API call to test the token
-            test_url = f"{base_url}/api/v2/users"
-            response = requests.get(
-                test_url, headers=headers, timeout=API_TIMEOUT, params={"per_page": 1}
-            )
+                # Make a simple API call to test access
+                # List users with minimal result set
+                _ = client.users.list(per_page=1)
 
-            if response.status_code == 200:
                 logger.info(
                     "    ✅ API access successful",
                     extra={
                         "operation": "api_test",
                         "status": "success",
-                        "status_code": response.status_code,
-                        "api_endpoint": test_url,
                     },
                 )
                 result["api_tested"] = True
                 result["api_status"] = "success"
                 result["details"] = "Credentials and API access are working correctly"
-            else:
+            except Exception as api_error:
                 logger.warning(
-                    f"    ⚠️  API access failed with status {response.status_code}",
+                    f"    ⚠️  API access test failed: {api_error}",
                     extra={
                         "operation": "api_test",
                         "status": "failed",
-                        "status_code": response.status_code,
-                        "api_endpoint": test_url,
+                        "error": str(api_error),
                     },
                 )
                 result["api_tested"] = True
-                result["api_status"] = f"failed_{response.status_code}"
+                result["api_status"] = "failed"
                 result[
                     "details"
-                ] = f"Token obtained but API access failed with status {response.status_code}"
+                ] = f"Token obtained but API access failed: {str(api_error)}"
 
         logger.info(
             "✅ Doctor check completed successfully!",
@@ -184,24 +144,6 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
             "api_tested": False,
             "error": str(e),
             "details": "Authentication configuration is invalid",
-        }
-    except requests.exceptions.RequestException as e:
-        logger.error(
-            f"❌ Network/API error: {str(e)}",
-            extra={
-                "operation": "doctor_check",
-                "error_type": "RequestException",
-                "environment": env,
-            },
-            exc_info=True,
-        )
-        return {
-            "success": False,
-            "environment": env,
-            "token_obtained": False,
-            "api_tested": False,
-            "error": str(e),
-            "details": "Network or API request failed",
         }
     except Exception as e:
         logger.error(
