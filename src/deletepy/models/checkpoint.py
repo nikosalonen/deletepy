@@ -15,6 +15,7 @@ class OperationType(Enum):
     """Types of operations that can be checkpointed."""
 
     EXPORT_LAST_LOGIN = "export_last_login"
+    FETCH_EMAILS = "fetch_emails"
     BATCH_DELETE = "batch_delete"
     BATCH_BLOCK = "batch_block"
     BATCH_REVOKE_GRANTS = "batch_revoke_grants"
