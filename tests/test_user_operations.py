@@ -1,6 +1,4 @@
-from unittest.mock import patch
-
-import requests
+from unittest.mock import MagicMock, patch
 
 from src.deletepy.operations.user_ops import (
     block_user,
@@ -14,35 +12,35 @@ from src.deletepy.operations.user_ops import (
 )
 
 
-def test_delete_user(mock_requests, mock_response):
-    mock_requests.delete.return_value = mock_response
+def test_delete_user(mock_auth0_client):
+    """Test user deletion via SDK."""
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.revoke_user_sessions"
+        ) as mock_revoke_sessions,
+        patch(
+            "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+        ) as mock_get_ops,
+    ):
+        # Mock SDK operations
+        mock_user_ops = MagicMock()
+        mock_user_ops.delete_user = MagicMock()
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    with patch(
-        "src.deletepy.operations.user_ops.revoke_user_sessions"
-    ) as mock_revoke_sessions:
         delete_user("auth0|test_user_id", "test_token", "http://test.com")
 
-        # Verify revoke_user_sessions was called first with correct parameters
+        # Verify revoke_user_sessions was called first
         mock_revoke_sessions.assert_called_once_with(
             "auth0|test_user_id", "test_token", "http://test.com"
         )
 
-        # Verify delete request was made with correct parameters
-        mock_requests.delete.assert_called_once()
-        mock_requests.delete.assert_called_with(
-            "http://test.com/api/v2/users/auth0%7Ctest_user_id",
-            headers={
-                "Authorization": "Bearer test_token",
-                "Content-Type": "application/json",
-                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-            },
-            timeout=30,
-        )
+        # Verify SDK delete was called
+        mock_user_ops.delete_user.assert_called_once_with("auth0|test_user_id")
 
 
-def test_block_user(mock_requests, mock_response):
-    mock_requests.patch.return_value = mock_response
-
+def test_block_user():
+    """Test user blocking via SDK."""
     with (
         patch(
             "src.deletepy.operations.user_ops.revoke_user_sessions"
@@ -50,151 +48,208 @@ def test_block_user(mock_requests, mock_response):
         patch(
             "src.deletepy.operations.user_ops.revoke_user_grants"
         ) as mock_revoke_grants,
+        patch(
+            "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+        ) as mock_get_ops,
     ):
+        # Mock SDK operations
+        mock_user_ops = MagicMock()
+        mock_user_ops.block_user = MagicMock(return_value=True)
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
+
         block_user("auth0|test_user_id", "test_token", "http://test.com")
 
-        # Verify revoke_user_sessions was called first with correct parameters
+        # Verify revoke functions were called
         mock_revoke_sessions.assert_called_once_with(
             "auth0|test_user_id", "test_token", "http://test.com"
         )
-
-        # Verify revoke_user_grants was called second with correct parameters
         mock_revoke_grants.assert_called_once_with(
             "auth0|test_user_id", "test_token", "http://test.com"
         )
 
-        # Verify patch request was made last with correct parameters
-        mock_requests.patch.assert_called_once()
-        mock_requests.patch.assert_called_with(
-            "http://test.com/api/v2/users/auth0%7Ctest_user_id",
-            headers={
-                "Authorization": "Bearer test_token",
-                "Content-Type": "application/json",
-                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-            },
-            json={"blocked": True},
-            timeout=30,
+        # Verify SDK block was called
+        mock_user_ops.block_user.assert_called_once_with("auth0|test_user_id")
+
+
+def test_get_user_id_from_email():
+    """Test getting user ID from email via SDK."""
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.search_users_by_email = MagicMock(
+            return_value=[{"user_id": "test_user_id"}]
+        )
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
+
+        result = get_user_id_from_email(
+            "test@example.com", "test_token", "http://test.com"
         )
 
-
-def test_get_user_id_from_email(mock_requests, mock_response):
-    mock_response.json.return_value = [{"user_id": "test_user_id"}]
-    mock_requests.request.return_value = mock_response
-
-    result = get_user_id_from_email("test@example.com", "test_token", "http://test.com")
-
-    assert result == ["test_user_id"]
-    mock_requests.request.assert_called_once()
-    mock_requests.request.assert_called_with(
-        "GET",
-        "http://test.com/api/v2/users-by-email",
-        headers={
-            "Authorization": "Bearer test_token",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        },
-        params={"email": "test@example.com"},
-        timeout=30,
-    )
+        assert result == ["test_user_id"]
+        mock_user_ops.search_users_by_email.assert_called_once_with("test@example.com")
 
 
-def test_get_user_id_from_email_multiple_users(mock_requests, mock_response):
-    mock_response.json.return_value = [
-        {"user_id": "test_user_id_1"},
-        {"user_id": "test_user_id_2"},
-    ]
-    mock_requests.request.return_value = mock_response
+def test_get_user_id_from_email_multiple_users():
+    """Test getting multiple user IDs from email via SDK."""
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.search_users_by_email = MagicMock(
+            return_value=[
+                {"user_id": "test_user_id_1"},
+                {"user_id": "test_user_id_2"},
+            ]
+        )
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = get_user_id_from_email("test@example.com", "test_token", "http://test.com")
+        result = get_user_id_from_email(
+            "test@example.com", "test_token", "http://test.com"
+        )
 
-    assert result == ["test_user_id_1", "test_user_id_2"]
-    mock_requests.request.assert_called_once()
-
-
-def test_get_user_id_from_email_not_found(mock_requests, mock_response):
-    mock_response.json.return_value = []
-    mock_requests.request.return_value = mock_response
-
-    result = get_user_id_from_email("test@example.com", "test_token", "http://test.com")
-
-    assert result is None
+        assert result == ["test_user_id_1", "test_user_id_2"]
 
 
-def test_fetch_users_by_email_empty_response(mock_requests, mock_response):
+def test_get_user_id_from_email_not_found():
+    """Test getting user ID when not found via SDK."""
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.search_users_by_email = MagicMock(return_value=[])
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
+
+        result = get_user_id_from_email(
+            "test@example.com", "test_token", "http://test.com"
+        )
+
+        assert result is None
+
+
+def test_fetch_users_by_email_empty_response():
     """Test _fetch_users_by_email handles empty response array consistently."""
     from src.deletepy.operations.user_ops import _fetch_users_by_email
 
-    mock_response.json.return_value = []
-    mock_requests.request.return_value = mock_response
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.search_users_by_email = MagicMock(return_value=[])
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+        result = _fetch_users_by_email(
+            "test@example.com", "test_token", "http://test.com"
+        )
 
-    assert result == []  # Should return empty list, not None
-    mock_requests.request.assert_called_once()
+        assert result == []
 
 
-def test_fetch_users_by_email_none_response(mock_requests, mock_response):
+def test_fetch_users_by_email_none_response():
     """Test _fetch_users_by_email handles None response from API."""
     from src.deletepy.operations.user_ops import _fetch_users_by_email
 
-    mock_response.json.return_value = None
-    mock_requests.request.return_value = mock_response
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.search_users_by_email = MagicMock(return_value=None)
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+        result = _fetch_users_by_email(
+            "test@example.com", "test_token", "http://test.com"
+        )
 
-    assert result == []  # Should return empty list for consistency
+        assert result == []
 
 
-def test_fetch_users_by_email_invalid_json_response(mock_requests, mock_response):
-    """Test _fetch_users_by_email handles invalid JSON response."""
+def test_fetch_users_by_email_invalid_json_response():
+    """Test _fetch_users_by_email handles SDK exceptions."""
     from src.deletepy.operations.user_ops import _fetch_users_by_email
 
-    mock_response.json.side_effect = ValueError("Invalid JSON")
-    mock_requests.request.return_value = mock_response
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.search_users_by_email = MagicMock(
+            side_effect=Exception("SDK Error")
+        )
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+        result = _fetch_users_by_email(
+            "test@example.com", "test_token", "http://test.com"
+        )
 
-    assert result is None  # Should return None for JSON parse errors
+        assert result is None
 
 
-def test_fetch_users_by_email_request_failure(mock_requests):
+def test_fetch_users_by_email_request_failure():
     """Test _fetch_users_by_email handles request failure."""
     from src.deletepy.operations.user_ops import _fetch_users_by_email
 
-    # Simulate request failure by raising an exception
-    mock_requests.request.side_effect = requests.exceptions.RequestException(
-        "Connection failed"
-    )
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.search_users_by_email = MagicMock(
+            side_effect=Exception("Connection failed")
+        )
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+        result = _fetch_users_by_email(
+            "test@example.com", "test_token", "http://test.com"
+        )
 
-    assert result is None  # Should return None for request failures
+        assert result is None
 
 
-def test_fetch_users_by_email_non_list_response(mock_requests, mock_response):
+def test_fetch_users_by_email_non_list_response():
     """Test _fetch_users_by_email handles non-list response."""
     from src.deletepy.operations.user_ops import _fetch_users_by_email
 
-    mock_response.json.return_value = {"error": "Invalid request"}
-    mock_requests.request.return_value = mock_response
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        # SDK returns empty list for no results
+        mock_user_ops.search_users_by_email = MagicMock(return_value=[])
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+        result = _fetch_users_by_email(
+            "test@example.com", "test_token", "http://test.com"
+        )
 
-    assert result == []  # Should return empty list for non-list responses
+        assert result == []
 
 
-def test_fetch_users_by_email_successful_response(mock_requests, mock_response):
+def test_fetch_users_by_email_successful_response():
     """Test _fetch_users_by_email handles successful response with users."""
     from src.deletepy.operations.user_ops import _fetch_users_by_email
 
     expected_users = [{"user_id": "test_user_1"}, {"user_id": "test_user_2"}]
-    mock_response.json.return_value = expected_users
-    mock_requests.request.return_value = mock_response
 
-    result = _fetch_users_by_email("test@example.com", "test_token", "http://test.com")
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.search_users_by_email = MagicMock(return_value=expected_users)
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    assert result == expected_users
-    mock_requests.request.assert_called_once()
+        result = _fetch_users_by_email(
+            "test@example.com", "test_token", "http://test.com"
+        )
+
+        assert result == expected_users
 
 
 def test_revoke_user_sessions(mock_requests, mock_response):
@@ -255,97 +310,95 @@ def test_revoke_user_sessions(mock_requests, mock_response):
     }
 
 
-def test_revoke_user_grants(mock_requests, mock_response):
-    mock_requests.delete.return_value = mock_response
+def test_revoke_user_grants():
+    """Test revoking user grants via SDK."""
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_grant_ops = MagicMock()
+        mock_grant_ops.delete_grants_by_user = MagicMock(return_value=True)
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    revoke_user_grants("auth0|test_user_id", "test_token", "http://test.com")
+        revoke_user_grants("auth0|test_user_id", "test_token", "http://test.com")
 
-    mock_requests.delete.assert_called_once()
-    mock_requests.delete.assert_called_with(
-        "http://test.com/api/v2/grants?user_id=auth0%7Ctest_user_id",
-        headers={
-            "Authorization": "Bearer test_token",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        },
-        timeout=30,
-    )
-
-
-def test_get_user_email(mock_requests, mock_response):
-    mock_response.json.return_value = {"email": "test@example.com"}
-    mock_requests.get.return_value = mock_response
-
-    result = get_user_email("auth0|test_user_id", "test_token", "http://test.com")
-
-    assert result == "test@example.com"
-    mock_requests.get.assert_called_once()
-    mock_requests.get.assert_called_with(
-        "http://test.com/api/v2/users/auth0%7Ctest_user_id",
-        headers={
-            "Authorization": "Bearer test_token",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        },
-        timeout=30,
-    )
+        mock_grant_ops.delete_grants_by_user.assert_called_once_with(
+            "auth0|test_user_id"
+        )
 
 
-def test_get_user_details(mock_requests, mock_response):
-    mock_response.json.return_value = {
-        "user_id": "auth0|test_user_id",
-        "identities": [{"connection": "test-connection"}],
-    }
-    mock_requests.request.return_value = mock_response
+def test_get_user_email():
+    """Test getting user email via SDK."""
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.get_user = MagicMock(return_value={"email": "test@example.com"})
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = get_user_details("auth0|test_user_id", "test_token", "http://test.com")
+        result = get_user_email("auth0|test_user_id", "test_token", "http://test.com")
 
-    assert result == {
-        "user_id": "auth0|test_user_id",
-        "identities": [{"connection": "test-connection"}],
-    }
-    mock_requests.request.assert_called_once()
-    mock_requests.request.assert_called_with(
-        "GET",
-        "http://test.com/api/v2/users/auth0%7Ctest_user_id",
-        headers={
-            "Authorization": "Bearer test_token",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        },
-        timeout=30,
-    )
+        assert result == "test@example.com"
+        mock_user_ops.get_user.assert_called_once_with("auth0|test_user_id")
 
 
-def test_unlink_user_identity_success(mock_requests, mock_response):
-    mock_response.status_code = 200
-    mock_requests.delete.return_value = mock_response
+def test_get_user_details():
+    """Test getting user details via SDK."""
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.get_user = MagicMock(
+            return_value={
+                "user_id": "auth0|test_user_id",
+                "identities": [{"connection": "test-connection"}],
+            }
+        )
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = unlink_user_identity(
-        "auth0|123", "google-oauth2", "google123", "test_token", "http://test.com"
-    )
+        result = get_user_details("auth0|test_user_id", "test_token", "http://test.com")
 
-    assert result is True
-    mock_requests.delete.assert_called_once()
-    mock_requests.delete.assert_called_with(
-        "http://test.com/api/v2/users/auth0%7C123/identities/google-oauth2/google123",
-        headers={
-            "Authorization": "Bearer test_token",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        },
-        timeout=30,
-    )
+        assert result == {
+            "user_id": "auth0|test_user_id",
+            "identities": [{"connection": "test-connection"}],
+        }
+        mock_user_ops.get_user.assert_called_once_with("auth0|test_user_id")
 
 
-def test_unlink_user_identity_failure(mock_requests, mock_response):
-    mock_response.status_code = 400
-    mock_requests.delete.side_effect = requests.exceptions.RequestException(
-        "400 Client Error"
-    )
+def test_unlink_user_identity_success():
+    """Test unlinking user identity via SDK."""
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.delete_user_identity = MagicMock(return_value=True)
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
 
-    result = unlink_user_identity(
-        "auth0|123", "google-oauth2", "google123", "test_token", "http://test.com"
-    )
+        result = unlink_user_identity(
+            "auth0|123", "google-oauth2", "google123", "test_token", "http://test.com"
+        )
 
-    assert result is False
+        assert result is True
+        mock_user_ops.delete_user_identity.assert_called_once_with(
+            "auth0|123", "google-oauth2", "google123"
+        )
+
+
+def test_unlink_user_identity_failure():
+    """Test unlinking user identity failure via SDK."""
+    with patch(
+        "src.deletepy.operations.user_ops._get_sdk_ops_from_base_url"
+    ) as mock_get_ops:
+        mock_user_ops = MagicMock()
+        mock_user_ops.delete_user_identity = MagicMock(return_value=False)
+        mock_grant_ops = MagicMock()
+        mock_get_ops.return_value = (mock_user_ops, mock_grant_ops)
+
+        result = unlink_user_identity(
+            "auth0|123", "google-oauth2", "google123", "test_token", "http://test.com"
+        )
+
+        assert result is False
