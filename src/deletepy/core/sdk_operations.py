@@ -196,10 +196,8 @@ class SDKUserOperations:
             True if successful, False otherwise
         """
         try:
-            # SDK method: users.delete_multifactor() or direct REST call
-            # The SDK doesn't have a direct delete_user_identity method on the users resource
-            # We need to use the unlink method
-            self.client.users.unlink_user_identity(user_id, provider, identity_id)
+            # Use SDK's unlink_user_account method
+            self.client.users.unlink_user_account(user_id, provider, identity_id)
             time.sleep(API_RATE_LIMIT)
             logger.info(
                 f"Successfully unlinked identity {provider}:{identity_id} from user {user_id}"
