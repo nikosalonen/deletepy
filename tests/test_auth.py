@@ -19,11 +19,18 @@ def mock_config():
 
 def test_get_access_token_success(mock_config, mock_get_token):
     """Test successful token acquisition via SDK."""
-    with patch("src.deletepy.core.auth0_client.GetToken", return_value=mock_get_token):
+    with patch(
+        "src.deletepy.core.auth0_client.GetToken", return_value=mock_get_token
+    ) as mock_get_token_class:
         token = get_access_token("dev")
 
         assert token == "test_token"
         mock_get_token.client_credentials.assert_called_once()
+        # Verify timeout is passed to GetToken constructor
+        mock_get_token_class.assert_called_once()
+        call_kwargs = mock_get_token_class.call_args.kwargs
+        assert "timeout" in call_kwargs
+        assert call_kwargs["timeout"] == 5
 
 
 def test_get_access_token_missing_client_id(mock_config):

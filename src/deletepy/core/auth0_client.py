@@ -3,10 +3,14 @@
 
 from auth0.authentication import GetToken
 from auth0.management import Auth0
+from auth0.rest import RestClientOptions
 
 from ..utils.logging_utils import get_logger
 from .config import get_env_config
 from .exceptions import AuthConfigError
+
+# Auth0 token request timeout in seconds
+AUTH0_TOKEN_TIMEOUT = 5
 
 # Module logger
 logger = get_logger(__name__)
@@ -57,6 +61,7 @@ class Auth0ClientManager:
             self._client = Auth0(
                 domain=self._config["domain"],
                 token=self._token,
+                rest_options=RestClientOptions(timeout=30.0),
             )
 
             # Cache the client for reuse
@@ -96,6 +101,7 @@ class Auth0ClientManager:
                 domain=self._config["domain"],
                 client_id=self._config["client_id"],
                 client_secret=self._config["client_secret"],
+                timeout=AUTH0_TOKEN_TIMEOUT,
             )
 
             # Request token with required scopes
