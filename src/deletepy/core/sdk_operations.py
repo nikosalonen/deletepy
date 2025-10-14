@@ -238,8 +238,8 @@ class SDKGrantOperations:
             Exception: Re-raises wrapped exceptions for proper error propagation
         """
         try:
-            # Use SDK's all() method to get all grants for this user
-            grants_response = self.client.grants.all(user_id=user_id)
+            # Use SDK's all() method with user_id in extra_params
+            grants_response = self.client.grants.all(extra_params={"user_id": user_id})
 
             # The SDK returns a dict with 'grants' key or potentially a list
             grants = []
