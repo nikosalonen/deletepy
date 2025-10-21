@@ -123,6 +123,7 @@ If you need to install or manage Python versions, we recommend using version man
 - [asdf](https://asdf-vm.com/) - Extendable version manager with Python plugin
 
 ## Installation
+
 ### Logging
 
 DeletePy defaults to Rich-powered console logging when available. You can control logging via environment variables:
@@ -490,28 +491,28 @@ deletepy cleanup-csv ids.csv prod --output-type=username
 
 1. **User Management Files** - Auth0 user IDs or email addresses:
 
-   ```
+   ```text
    auth0|123456789
    user@example.com
    ```
 
 2. **Social ID Files** - Social media IDs for identity management:
 
-   ```
+   ```text
    10157490928027692
    115346286307134396784
    ```
 
 3. **Email Files** - Email addresses for domain checking or export:
 
-   ```
+   ```text
    user1@example.com
    user2@company.org
    ```
 
 4. **User ID Files** - Auth0 user IDs for email fetching:
 
-   ```
+   ```text
    auth0|123456789
    google-oauth2|987654321
    facebook|555666777
