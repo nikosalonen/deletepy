@@ -23,6 +23,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Block status checking** (`check-unblocked`) - Identify users who are not currently blocked
 - **Domain validation** (`check-domains`) - Check email domains against blocklists with optional bulk actions
 - **Data export** (`export-last-login`) - Export user last login data to timestamped CSV files
+- **Email fetching** (`fetch-emails`) - Fetch email addresses for given Auth0 user IDs and export to CSV
 - **Credential testing** (`doctor`) - Validate Auth0 API credentials and permissions
 
 ### Dry-Run Preview
@@ -122,6 +123,7 @@ If you need to install or manage Python versions, we recommend using version man
 - [asdf](https://asdf-vm.com/) - Extendable version manager with Python plugin
 
 ## Installation
+
 ### Logging
 
 DeletePy defaults to Rich-powered console logging when available. You can control logging via environment variables:
@@ -234,6 +236,9 @@ deletepy check-domains users.txt [dev|prod]
 
 # Export user last_login data to CSV
 deletepy export-last-login emails.txt [dev|prod] [--connection CONNECTION]
+
+# Fetch email addresses for given user IDs and export to CSV
+deletepy fetch-emails user_ids.txt [dev|prod]
 
 # Find users by social media IDs (unlinks identities or deletes users)
 deletepy unlink-social-ids social_ids.txt [dev|prod] [--dry-run]
@@ -423,6 +428,7 @@ Checkpoints are automatically created for these operations:
 | `deletepy users block` | `batch_block` | User blocking operations |
 | `deletepy users revoke-grants-only` | `batch_revoke_grants` | Grant/session revocation |
 | `deletepy export-last-login` | `export_last_login` | Data export operations |
+| `deletepy fetch-emails` | `fetch_emails` | Email fetching operations |
 | `deletepy check-unblocked` | `check_unblocked` | Status checking operations |
 | `deletepy unlink-social-ids` | `social_unlink` | Identity management operations |
 
@@ -485,23 +491,31 @@ deletepy cleanup-csv ids.csv prod --output-type=username
 
 1. **User Management Files** - Auth0 user IDs or email addresses:
 
-   ```
+   ```text
    auth0|123456789
    user@example.com
    ```
 
 2. **Social ID Files** - Social media IDs for identity management:
 
-   ```
+   ```text
    10157490928027692
    115346286307134396784
    ```
 
 3. **Email Files** - Email addresses for domain checking or export:
 
-   ```
+   ```text
    user1@example.com
    user2@company.org
+   ```
+
+4. **User ID Files** - Auth0 user IDs for email fetching:
+
+   ```text
+   auth0|123456789
+   google-oauth2|987654321
+   facebook|555666777
    ```
 
 ## Operation Details
@@ -542,6 +556,15 @@ Example workflow:
 4. Exports to timestamped CSV with columns: email, user_id, last_login, created_at, updated_at, status
 5. Handles edge cases: NOT_FOUND, MULTIPLE_USERS, ERROR_FETCHING_DETAILS
 6. Automatic batch size optimization based on dataset size
+
+### Email Fetching (`fetch-emails`)
+
+1. Processes Auth0 user IDs from input file in configurable batches
+2. Fetches email addresses for each user ID with comprehensive error handling
+3. Exports to timestamped CSV with columns: user_id, email, status
+4. Handles edge cases: NOT_FOUND, ERROR_FETCHING
+5. Automatic batch size optimization based on dataset size
+6. Supports checkpoint recovery for interrupted operations
 
 ### Dry-Run Preview Operations
 

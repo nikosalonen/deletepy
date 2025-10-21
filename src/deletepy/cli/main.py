@@ -76,6 +76,23 @@ def export_last_login(input_file: str, env: str, connection: str | None) -> None
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
 )
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
+def fetch_emails(input_file: str, env: str) -> None:
+    """Fetch email addresses for given user IDs and export to CSV."""
+    if env == "prod":
+        click.confirm(
+            "You are about to fetch user emails from production. Continue?",
+            abort=True,
+        )
+    handler = OperationHandler()
+    handler.handle_fetch_emails(Path(input_file), env)
+
+
+@cli.command()
+@click.argument(
+    "input_file",
+    type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
+)
+@click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
@@ -193,6 +210,7 @@ def checkpoint() -> None:
     type=click.Choice(
         [
             "export-last-login",
+            "fetch-emails",
             "batch-delete",
             "batch-block",
             "batch-revoke-grants",

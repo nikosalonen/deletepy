@@ -518,6 +518,75 @@ class OperationHandler:
         except Exception as e:
             self._handle_operation_error(e, "Export last login")
 
+    def handle_fetch_emails(self, input_file: Path, env: str) -> None:
+        """Handle fetch emails operation."""
+        try:
+            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+
+            # For fetch emails operation, treat input as user IDs with validation
+            from ..utils.validators import InputValidator, SecurityValidator
+
+            validated_user_ids = []
+            for line in user_ids:
+                sanitized_line = SecurityValidator.sanitize_user_input(line)
+                if sanitized_line:
+                    # Validate user ID format
+                    user_id_result = InputValidator.validate_auth0_user_id_enhanced(
+                        sanitized_line
+                    )
+                    if user_id_result.is_valid:
+                        validated_user_ids.append(sanitized_line)
+                        # Show warnings if any
+                        if user_id_result.warnings:
+                            for warning in user_id_result.warnings:
+                                click.echo(
+                                    f"{YELLOW}User ID validation warning for {sanitized_line}: {warning}{RESET}"
+                                )
+                    else:
+                        click.echo(
+                            f"{RED}Invalid user ID skipped: {sanitized_line} - {user_id_result.error_message}{RESET}"
+                        )
+
+            if not validated_user_ids:
+                click.echo("No valid user IDs found to process.")
+                return
+
+            # Setup export parameters
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"user_emails_{timestamp}.csv"
+
+            click.echo(
+                f"\n{CYAN}Fetching emails for {len(validated_user_ids)} user IDs...{RESET}"
+            )
+            click.echo(f"Output file: {GREEN}{output_file}{RESET}")
+
+            # Use checkpoint-enabled operation
+            from ..operations.export_ops import (
+                FetchEmailsConfig,
+                fetch_emails_with_checkpoints,
+            )
+
+            config = FetchEmailsConfig(
+                token=token,
+                base_url=base_url,
+                env=env,
+                output_file=output_file,
+            )
+
+            checkpoint_id = fetch_emails_with_checkpoints(
+                user_ids=validated_user_ids, config=config
+            )
+
+            if checkpoint_id:
+                click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+                click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
+
+        except KeyboardInterrupt:
+            click.echo(f"\n{YELLOW}Fetch emails operation interrupted by user.{RESET}")
+            sys.exit(0)
+        except Exception as e:
+            self._handle_operation_error(e, "Fetch emails")
+
     def handle_user_operations(
         self, input_file: Path, env: str, operation: str, dry_run: bool = False
     ) -> None:
@@ -799,6 +868,7 @@ class OperationHandler:
 
         op_type_map = {
             "export-last-login": OperationType.EXPORT_LAST_LOGIN,
+            "fetch-emails": OperationType.FETCH_EMAILS,
             "batch-delete": OperationType.BATCH_DELETE,
             "batch-block": OperationType.BATCH_BLOCK,
             "batch-revoke-grants": OperationType.BATCH_REVOKE_GRANTS,
@@ -919,6 +989,8 @@ class OperationHandler:
 
         if operation_type == OperationType.EXPORT_LAST_LOGIN:
             self._resume_export_last_login(checkpoint, checkpoint_manager)
+        elif operation_type == OperationType.FETCH_EMAILS:
+            self._resume_fetch_emails(checkpoint, checkpoint_manager)
         elif operation_type == OperationType.CHECK_UNBLOCKED:
             self._resume_check_unblocked(checkpoint, checkpoint_manager)
         elif operation_type == OperationType.SOCIAL_UNLINK:
@@ -972,6 +1044,46 @@ class OperationHandler:
 
         export_users_last_login_to_csv_with_checkpoints(
             emails=checkpoint.remaining_items,
+            config=config,
+        )
+
+    def _resume_fetch_emails(
+        self, checkpoint: Checkpoint, checkpoint_manager: CheckpointManager
+    ) -> None:
+        """Resume fetch emails operation from checkpoint.
+
+        Args:
+            checkpoint: The checkpoint to resume
+            checkpoint_manager: Checkpoint manager instance
+        """
+        from ..operations.export_ops import (
+            FetchEmailsConfig,
+            fetch_emails_with_checkpoints,
+        )
+
+        env = checkpoint.config.environment
+        checkpoint_id = checkpoint.checkpoint_id
+
+        # Handle case where output_file might be None for older checkpoints
+        output_file = checkpoint.config.output_file
+        if not output_file:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = f"user_emails_resumed_{timestamp}.csv"
+            click.echo(
+                f"{YELLOW}Warning: Checkpoint missing output_file, using: {output_file}{RESET}"
+            )
+
+        config = FetchEmailsConfig(
+            token=get_access_token(env),
+            base_url=get_base_url(env),
+            output_file=output_file,
+            env=env,
+            resume_checkpoint_id=checkpoint_id,
+            checkpoint_manager=checkpoint_manager,
+        )
+
+        fetch_emails_with_checkpoints(
+            user_ids=checkpoint.remaining_items,
             config=config,
         )
 
