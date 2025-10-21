@@ -335,6 +335,28 @@ def _generate_export_summary(
             print(f"  {i + 1}. {row['email']} -> {row['user_id']} ({row['status']})")
 
 
+def _format_iso_datetime(iso_string: str) -> str:
+    """Format an ISO 8601 datetime string to a readable format.
+
+    Args:
+        iso_string: ISO 8601 datetime string (e.g., "2023-01-01T12:00:00.000Z")
+
+    Returns:
+        str: Formatted datetime string in "YYYY-MM-DD HH:MM:SS" format,
+             or the original string if parsing fails
+    """
+    if not iso_string:
+        return ""
+
+    try:
+        # Parse and format the date
+        dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except (ValueError, TypeError):
+        # Keep original if parsing fails
+        return iso_string
+
+
 def _build_csv_data_dict(
     email: str, user_id: str, user_details: dict[str, Any] | None, status: str
 ) -> dict[str, Any]:
@@ -369,38 +391,10 @@ def _build_csv_data_dict(
             "identities_count": "0",
         }
 
-    # Extract last_login with proper formatting
-    last_login = user_details.get("last_login", "")
-    if last_login:
-        try:
-            # Parse and format the date
-            dt = datetime.fromisoformat(last_login.replace("Z", "+00:00"))
-            last_login = dt.strftime("%Y-%m-%d %H:%M:%S")
-        except (ValueError, TypeError):
-            # Keep original if parsing fails
-            pass
-
-    # Extract and format created_at
-    created_at = user_details.get("created_at", "")
-    if created_at:
-        try:
-            # Parse and format the date
-            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-            created_at = dt.strftime("%Y-%m-%d %H:%M:%S")
-        except (ValueError, TypeError):
-            # Keep original if parsing fails
-            pass
-
-    # Extract and format updated_at
-    updated_at = user_details.get("updated_at", "")
-    if updated_at:
-        try:
-            # Parse and format the date
-            dt = datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
-            updated_at = dt.strftime("%Y-%m-%d %H:%M:%S")
-        except (ValueError, TypeError):
-            # Keep original if parsing fails
-            pass
+    # Extract and format datetime fields
+    last_login = _format_iso_datetime(user_details.get("last_login", ""))
+    created_at = _format_iso_datetime(user_details.get("created_at", ""))
+    updated_at = _format_iso_datetime(user_details.get("updated_at", ""))
 
     # Extract connection from identities
     connection = ""
