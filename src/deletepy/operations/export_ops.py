@@ -1225,6 +1225,7 @@ def _process_fetch_emails_with_checkpoints(
         # Update checkpoint progress
         results_update = {
             "processed_count": batch_counters.get("processed_count", 0),
+            "not_found_count": batch_counters.get("not_found_count", 0),
             "error_count": batch_counters.get("error_count", 0),
         }
 
@@ -1274,11 +1275,12 @@ def _process_user_id_batch(
     Returns:
         Tuple[List[Dict[str, Any]], Dict[str, int]]: (csv_data, batch_counters)
     """
-    from .user_ops import get_user_email
+    from deletepy.operations.user_ops import get_user_email
 
     csv_data = []
     batch_counters = {
         "processed_count": 0,
+        "not_found_count": 0,
         "error_count": 0,
     }
 
@@ -1304,7 +1306,7 @@ def _process_user_id_batch(
                     "email": "",
                     "status": "Not Found",
                 }
-                batch_counters["error_count"] += 1
+                batch_counters["not_found_count"] += 1
 
             csv_data.append(csv_row)
 
@@ -1397,7 +1399,12 @@ def _generate_fetch_summary_from_checkpoint(
         processed_count=results.processed_count,
     )
     print_info(
-        f"Errors/Not found: {results.error_count}",
+        f"Not found: {results.not_found_count}",
+        operation="fetch_emails_summary",
+        not_found_count=results.not_found_count,
+    )
+    print_info(
+        f"Errors: {results.error_count}",
         operation="fetch_emails_summary",
         error_count=results.error_count,
     )
