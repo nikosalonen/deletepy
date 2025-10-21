@@ -895,6 +895,9 @@ def fetch_emails_with_checkpoints(
         PermissionError: If the output file path is not writable
         FileNotFoundError: If the output directory does not exist
     """
+    # Validate output file path before proceeding
+    _validate_output_file_writable(config.output_file)
+
     # Initialize checkpoint manager if not provided
     checkpoint_manager = config.checkpoint_manager
     if checkpoint_manager is None:
@@ -917,6 +920,41 @@ def fetch_emails_with_checkpoints(
         return _handle_fetch_interruption(checkpoint, checkpoint_manager)
     except Exception as e:
         return _handle_fetch_error(checkpoint, checkpoint_manager, e)
+
+
+def _validate_output_file_writable(output_file: str) -> None:
+    """Validate that the output file path is writable.
+
+    Args:
+        output_file: Path to the output file
+
+    Raises:
+        FileNotFoundError: If the output directory does not exist
+        PermissionError: If the output directory is not writable
+    """
+    output_path = Path(output_file)
+    output_dir = output_path.parent if output_path.parent != Path(".") else Path(".")
+
+    # Check if directory exists
+    if not output_dir.exists():
+        raise FileNotFoundError(f"Output directory does not exist: {output_dir}")
+
+    # Attempt a safe test write
+    test_file = output_dir / ".deletepy_write_test"
+    try:
+        # Create a temporary test file
+        test_file.write_text("")
+        # Clean up the test file
+        test_file.unlink()
+    except PermissionError as e:
+        raise PermissionError(f"Output directory is not writable: {output_dir}") from e
+    except OSError as e:
+        # Convert other OS errors to PermissionError if they indicate lack of write access
+        if "Permission denied" in str(e):
+            raise PermissionError(
+                f"Output directory is not writable: {output_dir}"
+            ) from e
+        raise
 
 
 def _load_or_create_fetch_checkpoint(
