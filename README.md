@@ -100,21 +100,50 @@ deletepy/
 ## Prerequisites
 
 - **Python 3.11+** - The tool requires Python 3.11 or higher
+- **[uv](https://docs.astral.sh/uv/)** - Fast Python package installer and resolver (recommended)
 - Auth0 account with appropriate API permissions
 - Auth0 Management API access
 
+### Installing uv
+
+uv is an extremely fast Python package installer and resolver, written in Rust. It's the recommended way to manage DeletePy.
+
+**For macOS (easiest with Homebrew):**
+
+```bash
+brew install uv
+```
+
+**For macOS/Linux (standalone installer):**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**For Windows:**
+
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**Alternative methods:**
+
+- With pip: `pip install uv`
+
+See [uv documentation](https://docs.astral.sh/uv/getting-started/installation/) for more options.
+
 ### Python Version Management
 
-If you need to install or manage Python versions, we recommend using version managers:
+If you need to install or manage Python versions:
 
 **For macOS:**
 
 - [pyenv](https://github.com/pyenv/pyenv) - Simple Python version management
-- [Homebrew](https://brew.sh/) - Package manager that can install Python versions
+- [Homebrew](https://brew.sh/) - `brew install python`
 
 **For Windows:**
 
-- [pyenv-win](https://github.com/pyenv-win/pyenv-win) - Python version management for Windows (install via `winget install pyenv-win` or download from GitHub)
+- [pyenv-win](https://github.com/pyenv-win/pyenv-win) - Python version management for Windows
 - [Python.org](https://www.python.org/downloads/) - Official Python installer
 
 **For Linux:**
@@ -124,7 +153,66 @@ If you need to install or manage Python versions, we recommend using version man
 
 ## Installation
 
-### Logging
+### Quick Start with uv (Recommended)
+
+```bash
+# Clone the repository
+git clone https://github.com/nikosalonen/deletepy
+cd deletepy
+
+# Install dependencies with uv (creates .venv automatically)
+uv sync --group dev
+
+# Verify setup
+uv run deletepy doctor dev
+```
+
+**That's it!** You can now use `uv run deletepy` for all commands.
+
+### Using Makefile (Recommended)
+
+The Makefile provides convenient shortcuts for common tasks:
+
+```bash
+# Install dependencies
+make sync-dev          # Install with dev dependencies (recommended)
+make sync              # Install production dependencies only
+
+# Run the tool
+make run ARGS="doctor dev"
+make run ARGS="users block users.txt dev --dry-run"
+
+# Development tasks
+make test              # Run tests
+make lint              # Check code quality
+make format            # Format code
+make type-check        # Run type checking
+make check-all         # Run all quality checks
+
+# Upgrade dependencies
+make upgrade           # Upgrade all dependencies and sync
+```
+
+### Alternative: Traditional pip Installation
+
+If you prefer not to use uv, you can still use pip:
+
+1. Clone the repository and create virtual environment:
+
+   ```bash
+   git clone https://github.com/nikosalonen/deletepy
+   cd deletepy
+   python3 -m venv venv
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+   ```
+
+2. Install in development mode:
+
+   ```bash
+   pip install -e ".[dev]"
+   ```
+
+### Logging Configuration
 
 DeletePy defaults to Rich-powered console logging when available. You can control logging via environment variables:
 
@@ -140,65 +228,6 @@ export DELETEPY_LOG_STRUCTURED=false
 ```
 
 See `docs/LOGGING.md` for full details.
-
-### Installation with uv (Recommended)
-
-```bash
-# Create or update the virtual environment from the lockfile
-uv sync --group dev
-
-# (Optional) Activate the environment if you prefer not to use `uv run`
-source .venv/bin/activate
-
-# Verify setup
-deletepy doctor dev
-```
-
-Alternative via Makefile targets:
-
-```bash
-make uv-install        # sync default groups
-make uv-install-dev    # sync with dev group
-make uv-upgrade        # upgrade lockfile + sync dev
-```
-
-### Modern Installation (Recommended)
-
-1. Clone the repository and create virtual environment:
-
-   ```bash
-   git clone https://github.com/nikosalonen/deletepy
-   cd deletepy
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-2. Install in development mode:
-
-   ```bash
-   pip install -e .
-   ```
-
-### Traditional Installation
-
-1. Create and activate virtual environment:
-
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-2. Install dependencies:
-
-   ```bash
-   pip install -e .
-   ```
-
-   Or with development dependencies:
-
-   ```bash
-   pip install -e ".[dev]"
-   ```
 
 ### Environment Configuration
 
