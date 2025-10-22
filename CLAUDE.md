@@ -10,7 +10,7 @@ This is DeletePy, an Auth0 User Management Tool written in Python that allows bu
 
 The codebase follows a modern modular architecture with clear separation of concerns:
 
-```
+```text
 deletepy/
 ├── src/
 │   └── deletepy/
@@ -64,11 +64,15 @@ The tool requires a `.env` file with separate credentials for dev and prod:
 # Install dependencies with uv (creates .venv automatically)
 uv sync --group dev
 
+# Or use a specific Python version (e.g., 3.14)
+uv python install 3.14
+uv sync --python 3.14 --group dev
+
 # Or using make
 make sync-dev
 ```
 
-**Alternative: Traditional pip setup**
+### Alternative: Traditional pip setup
 
 ```bash
 # Create and activate virtual environment
@@ -218,7 +222,7 @@ When working with the modular structure:
 - Maintain backward compatibility by keeping legacy imports working
 - Follow the established module boundaries and don't cross-import between operation modules
 
-# Important Instructions
+## Important Instructions
 
 Do what has been asked; nothing more, nothing less.
 NEVER create files unless they're absolutely necessary for achieving your goal.

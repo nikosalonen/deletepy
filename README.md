@@ -49,7 +49,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 - **Memory efficient** - Generator-based file processing for large datasets
 - **Robust error handling** - Comprehensive exception handling with detailed error reporting
 
-### Checkpoint System
+### Checkpoint & Recovery
 
 - **Automatic checkpointing** - All operations create recovery points automatically
 - **Interruption recovery** - Resume operations from exactly where they left off
@@ -61,7 +61,7 @@ A comprehensive Python tool for managing Auth0 users with support for bulk opera
 
 DeletePy follows a modern modular architecture for maintainability and scalability:
 
-```
+```text
 deletepy/
 ├── src/
 │   └── deletepy/
@@ -106,7 +106,7 @@ deletepy/
 
 ### Installing uv
 
-uv is an extremely fast Python package installer and resolver, written in Rust. It's the recommended way to manage DeletePy.
+uv is an extremely fast Python package installer and resolver, written in Rust. It's the recommended way to manage DeletePy. **Bonus:** uv can also automatically download and manage Python versions for you!
 
 **For macOS (easiest with Homebrew):**
 
@@ -134,22 +134,31 @@ See [uv documentation](https://docs.astral.sh/uv/getting-started/installation/) 
 
 ### Python Version Management
 
-If you need to install or manage Python versions:
+**With uv (recommended):**
 
-**For macOS:**
+uv can automatically download and manage Python versions for you:
 
-- [pyenv](https://github.com/pyenv/pyenv) - Simple Python version management
-- [Homebrew](https://brew.sh/) - `brew install python`
+```bash
+# List available Python versions
+uv python list
 
-**For Windows:**
+# Install a specific Python version (e.g., Python 3.14)
+uv python install 3.14
 
-- [pyenv-win](https://github.com/pyenv-win/pyenv-win) - Python version management for Windows
-- [Python.org](https://www.python.org/downloads/) - Official Python installer
+# Install the minimum required version
+uv python install 3.11
 
-**For Linux:**
+# Use a specific Python version when creating the environment
+uv sync --python 3.14 --group dev
+```
 
-- [pyenv](https://github.com/pyenv/pyenv) - Simple Python version management
-- [asdf](https://asdf-vm.com/) - Extendable version manager with Python plugin
+**Alternative version managers:**
+
+If you prefer traditional version managers:
+
+- **macOS:** [pyenv](https://github.com/pyenv/pyenv) or [Homebrew](https://brew.sh/) (`brew install python`)
+- **Windows:** [pyenv-win](https://github.com/pyenv-win/pyenv-win) or [Python.org](https://www.python.org/downloads/)
+- **Linux:** [pyenv](https://github.com/pyenv/pyenv) or [asdf](https://asdf-vm.com/)
 
 ## Installation
 
@@ -160,8 +169,14 @@ If you need to install or manage Python versions:
 git clone https://github.com/nikosalonen/deletepy
 cd deletepy
 
+# (Optional) Install a specific Python version with uv
+uv python install 3.14
+
 # Install dependencies with uv (creates .venv automatically)
 uv sync --group dev
+
+# Or use a specific Python version
+uv sync --python 3.14 --group dev
 
 # Verify setup
 uv run deletepy doctor dev
@@ -384,7 +399,7 @@ deletepy checkpoint details checkpoint_20241217_142830_export_last_login_dev
 
 **Sample Output:**
 
-```
+```text
 📋 Checkpoint Details
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
