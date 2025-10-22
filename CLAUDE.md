@@ -58,95 +58,84 @@ The tool requires a `.env` file with separate credentials for dev and prod:
 
 ## Common Commands
 
-### Setup
+### Setup (Recommended: uv)
+
+```bash
+# Install dependencies with uv (creates .venv automatically)
+uv sync --group dev
+
+# Or using make
+make sync-dev
+```
+
+**Alternative: Traditional pip setup**
 
 ```bash
 # Create and activate virtual environment
 python3 -m venv venv
 source venv/bin/activate
 
-# Install dependencies (modern approach)
-pip install -e .
-
-# Or with development dependencies
+# Install dependencies
 pip install -e ".[dev]"
 ```
-
-**Important**: Always ensure the virtual environment is activated before running any commands. You can tell it's active when you see `(venv)` at the beginning of your command prompt.
 
 ### Running Tests
 
 ```bash
-# Make sure virtual environment is activated first!
-source venv/bin/activate
+# With uv (recommended)
+uv run pytest
 
-# Run all tests
-pytest
+# Or using make (auto-detects uv)
+make test
 
 # Run tests with verbose output
-pytest -v
+uv run pytest -v
 
 # Run specific test file
-pytest tests/test_auth.py
+uv run pytest tests/test_auth.py
 
 # Run specific test function
-pytest tests/test_auth.py::test_get_access_token_success
+uv run pytest tests/test_auth.py::test_get_access_token_success
 ```
 
-### Main Operations (New CLI)
+### Main Operations
 
 ```bash
-# Make sure virtual environment is activated first!
-source venv/bin/activate
+# With uv (recommended)
+uv run deletepy doctor [dev|prod]
+uv run deletepy check-unblocked users.txt [dev|prod]
+uv run deletepy check-domains users.txt [dev|prod]
+uv run deletepy export-last-login emails.txt [dev|prod] [--connection CONNECTION]
+uv run deletepy fetch-emails user_ids.txt [dev|prod]
+uv run deletepy unlink-social-ids social_ids.txt [dev|prod]
+uv run deletepy users block users.txt [dev|prod]
+uv run deletepy users delete users.txt [dev|prod]
+uv run deletepy users revoke-grants-only users.txt [dev|prod]
 
-# Check authentication configuration
-python -m src.deletepy.cli.main doctor [dev|prod]
+# Or using make
+make run ARGS="doctor dev"
+make run ARGS="users block users.txt dev --dry-run"
 
-# Check if specified users are unblocked
-python -m src.deletepy.cli.main check-unblocked users.txt [dev|prod]
-
-# Check email domains for specified users
-python -m src.deletepy.cli.main check-domains users.txt [dev|prod]
-
-# Export user last_login data to CSV
-python -m src.deletepy.cli.main export-last-login emails.txt [dev|prod] [--connection CONNECTION]
-
-# Find users by social media IDs (unlinks identities or deletes users)
-python -m src.deletepy.cli.main unlink-social-ids social_ids.txt [dev|prod]
-
-# User management operations
-python -m src.deletepy.cli.main users block users.txt [dev|prod]
-python -m src.deletepy.cli.main users delete users.txt [dev|prod]
-python -m src.deletepy.cli.main users revoke-grants-only users.txt [dev|prod]
-```
-
-### Legacy Operations (Backward Compatibility)
-
-```bash
-# Legacy CLI still works with deprecation warnings
-python main.py doctor [dev|prod]
-python main.py users.txt dev --block
-python main.py users.txt prod --delete
-python main.py users.txt dev --revoke-grants-only
-python main.py users.txt dev --check-unblocked
-python main.py users.txt dev --check-domains
-python main.py social_ids.txt dev --unlink-social-ids
+# Or direct (if virtual environment is activated)
+deletepy doctor dev
+deletepy users block users.txt dev
 ```
 
 ### Code Quality
 
 ```bash
-# Format code with ruff
-ruff format .
+# With uv (recommended)
+uv run ruff format src/ tests/
+uv run ruff check src/ tests/
+uv run ruff check src/ tests/ --fix
+uv run mypy src/
 
-# Lint code with ruff
-ruff check .
-
-# Fix auto-fixable lint issues
-ruff check --fix .
-
-# Type checking (if mypy is installed)
-mypy src/
+# Or using make (auto-detects uv)
+make format
+make lint
+make lint-fix
+make type-check
+make check-all
 ```
 
 ## Development Guidelines
