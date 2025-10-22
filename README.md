@@ -251,31 +251,51 @@ There's also a `.env.example` file that you can use as a template.
 
 ## Usage
 
-### Modern CLI (Recommended)
+### Command Line Interface
+
+All commands can be run with `uv run deletepy` or directly as `deletepy` if you've activated the virtual environment.
+
+**With uv (recommended):**
 
 ```bash
 # Check authentication configuration
-deletepy doctor [dev|prod]
+uv run deletepy doctor [dev|prod]
 
 # Check if specified users are unblocked
-deletepy check-unblocked users.txt [dev|prod]
+uv run deletepy check-unblocked users.txt [dev|prod]
 
 # Check email domains for specified users
-deletepy check-domains users.txt [dev|prod]
+uv run deletepy check-domains users.txt [dev|prod]
 
 # Export user last_login data to CSV
-deletepy export-last-login emails.txt [dev|prod] [--connection CONNECTION]
+uv run deletepy export-last-login emails.txt [dev|prod] [--connection CONNECTION]
 
 # Fetch email addresses for given user IDs and export to CSV
-deletepy fetch-emails user_ids.txt [dev|prod]
+uv run deletepy fetch-emails user_ids.txt [dev|prod]
 
 # Find users by social media IDs (unlinks identities or deletes users)
-deletepy unlink-social-ids social_ids.txt [dev|prod] [--dry-run]
+uv run deletepy unlink-social-ids social_ids.txt [dev|prod] [--dry-run]
 
 # User management operations
-deletepy users block users.txt [dev|prod] [--dry-run]
-deletepy users delete users.txt [dev|prod] [--dry-run]
-deletepy users revoke-grants-only users.txt [dev|prod] [--dry-run]
+uv run deletepy users block users.txt [dev|prod] [--dry-run]
+uv run deletepy users delete users.txt [dev|prod] [--dry-run]
+uv run deletepy users revoke-grants-only users.txt [dev|prod] [--dry-run]
+```
+
+**With Makefile:**
+
+```bash
+# Run any command using make
+make run ARGS="doctor dev"
+make run ARGS="users block users.txt dev --dry-run"
+make run ARGS="export-last-login emails.txt prod"
+```
+
+**Direct (if virtual environment is activated):**
+
+```bash
+deletepy doctor dev
+deletepy users block users.txt dev --dry-run
 ```
 
 ## Checkpoint System
@@ -670,36 +690,65 @@ The tool requires appropriate Auth0 Management API scopes:
 
 ## Development
 
+### Setup Development Environment
+
+```bash
+# Install with development dependencies
+uv sync --group dev
+
+# Or using make
+make sync-dev
+```
+
 ### Running Tests
 
 ```bash
-# Install test dependencies
-pip install -e .[dev]
+# Run all tests (with uv)
+uv run pytest
 
-# Run all tests
-pytest
+# Or using make (automatically uses uv if available)
+make test
 
 # Run with coverage
-pytest --cov=src/deletepy
+make test-coverage
 
 # Run specific test file
-pytest tests/test_auth.py
+uv run pytest tests/test_auth.py
 ```
 
 ### Code Quality
 
 ```bash
 # Format code
-ruff format .
+make format
+# or: uv run ruff format src/ tests/
 
 # Lint code
-ruff check .
+make lint
+# or: uv run ruff check src/ tests/
 
 # Fix auto-fixable issues
-ruff check --fix .
+make lint-fix
+# or: uv run ruff check src/ tests/ --fix
 
-# Type checking (if mypy is installed)
-mypy src/
+# Type checking
+make type-check
+# or: uv run mypy src/
+
+# Run all quality checks
+make check-all
+```
+
+### Pre-commit Hooks
+
+```bash
+# Install pre-commit hooks
+make install-pre-commit
+# or: uv run pre-commit install
+
+# Update hooks
+make update-pre-commit
+# or: uv run pre-commit autoupdate
 ```
 
 ## Technical Notes
