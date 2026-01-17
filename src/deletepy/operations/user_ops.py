@@ -85,13 +85,24 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
         )
 
 
-def block_user(user_id: str, token: str, base_url: str) -> None:
-    """Block user in Auth0."""
+def block_user(user_id: str, token: str, base_url: str, rotate_password: bool = False) -> None:
+    """Block user in Auth0.
+
+    Args:
+        user_id: Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        rotate_password: If True, rotate user's password before blocking
+    """
     print_info(f"Blocking user: {user_id}", user_id=user_id, operation="block_user")
 
     # First revoke all sessions and grants
     revoke_user_sessions(user_id, token, base_url)
     revoke_user_grants(user_id, token, base_url)
+
+    # Rotate password if requested
+    if rotate_password:
+        rotate_user_password(user_id, token, base_url)
 
     url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
     headers = {
@@ -521,6 +532,71 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
         )
 
 
+def rotate_user_password(user_id: str, token: str, base_url: str) -> bool:
+    """Rotate user's password to a secure randomly-generated password.
+
+    Args:
+        user_id: The Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    from ..utils.password_utils import (
+        generate_secure_password,
+        get_user_database_connection,
+    )
+
+    # Auto-detect user's database connection
+    connection = get_user_database_connection(user_id, token, base_url)
+    if connection is None:
+        print_warning(
+            f"Skipping password rotation for {user_id} (no database connection)",
+            user_id=user_id,
+            operation="rotate_user_password",
+        )
+        return False
+
+    print_info(
+        f"Rotating password for user: {user_id}",
+        user_id=user_id,
+        operation="rotate_user_password",
+    )
+
+    # Generate secure random password
+    new_password = generate_secure_password(length=16)
+
+    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+    }
+    payload = {"password": new_password, "connection": connection}
+
+    try:
+        response = requests.patch(
+            url, headers=headers, json=payload, timeout=API_TIMEOUT
+        )
+        response.raise_for_status()
+        print_success(
+            f"Successfully rotated password for user {user_id}",
+            user_id=user_id,
+            operation="rotate_user_password",
+        )
+        time.sleep(API_RATE_LIMIT)
+        return True
+    except requests.exceptions.RequestException as e:
+        print_error(
+            f"Error rotating password for user {user_id}: {e}",
+            user_id=user_id,
+            error=str(e),
+            operation="rotate_user_password",
+        )
+        return False
+
+
 def unlink_user_identity(
     user_id: str, provider: str, user_identity_id: str, token: str, base_url: str
 ) -> bool:
@@ -724,6 +800,7 @@ def batch_user_operations_with_checkpoints(
     env: str = "dev",
     resume_checkpoint_id: str | None = None,
     checkpoint_manager: CheckpointManager | None = None,
+    rotate_password: bool = False,
 ) -> str | None:
     """Perform batch user operations with checkpointing support.
 
@@ -735,6 +812,7 @@ def batch_user_operations_with_checkpoints(
         env: Environment (dev/prod)
         resume_checkpoint_id: Optional checkpoint ID to resume from
         checkpoint_manager: Optional checkpoint manager instance
+        rotate_password: If True, rotate user passwords during operation
 
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
@@ -780,6 +858,7 @@ def batch_user_operations_with_checkpoints(
             base_url=base_url,
             operation=operation,
             checkpoint_manager=checkpoint_manager,
+            rotate_password=rotate_password,
         )
     except (KeyboardInterrupt, Exception) as e:
         return _handle_checkpoint_error(checkpoint, checkpoint_manager, operation, e)
@@ -791,6 +870,7 @@ def _process_batch_user_operations_with_checkpoints(
     base_url: str,
     operation: str,
     checkpoint_manager: CheckpointManager,
+    rotate_password: bool = False,
 ) -> str | None:
     """Process batch user operations with checkpointing support.
 
@@ -800,6 +880,7 @@ def _process_batch_user_operations_with_checkpoints(
         base_url: Auth0 API base URL
         operation: Operation to perform
         checkpoint_manager: Checkpoint manager instance
+        rotate_password: If True, rotate user passwords during operation
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
@@ -823,6 +904,7 @@ def _process_batch_user_operations_with_checkpoints(
         base_url,
         operation,
         tracking_state,
+        rotate_password,
     )
 
     if interrupted_checkpoint_id:
@@ -874,6 +956,7 @@ def _process_batch_loop(
     base_url: str,
     operation: str,
     tracking_state: dict[str, Any],
+    rotate_password: bool = False,
 ) -> str | None:
     """Process user IDs in batches with checkpoint management.
 
@@ -886,6 +969,7 @@ def _process_batch_loop(
         base_url: Auth0 API base URL
         operation: Operation to perform
         tracking_state: State tracking dictionary
+        rotate_password: If True, rotate user passwords during operation
 
     Returns:
         Optional[str]: Checkpoint ID if interrupted, None if completed
@@ -916,6 +1000,7 @@ def _process_batch_loop(
             base_url,
             operation,
             tracking_state,
+            rotate_password,
         )
 
     return None
@@ -929,6 +1014,7 @@ def _process_and_update_batch(
     base_url: str,
     operation: str,
     tracking_state: dict[str, Any],
+    rotate_password: bool = False,
 ) -> None:
     """Process a single batch and update checkpoint.
 
@@ -940,9 +1026,10 @@ def _process_and_update_batch(
         base_url: Auth0 API base URL
         operation: Operation to perform
         tracking_state: State tracking dictionary
+        rotate_password: If True, rotate user passwords during operation
     """
     # Process users in this batch
-    batch_results = _process_user_batch(batch_user_ids, token, base_url, operation)
+    batch_results = _process_user_batch(batch_user_ids, token, base_url, operation, rotate_password)
 
     # Update tracking lists
     tracking_state["multiple_users"].update(batch_results.get("multiple_users", {}))
@@ -1012,6 +1099,7 @@ def _process_users_in_batch(
     base_url: str,
     operation: str,
     results: dict[str, Any],
+    rotate_password: bool = False,
 ) -> dict[str, Any]:
     """Process users in a batch, handling user resolution and operation execution.
 
@@ -1021,6 +1109,7 @@ def _process_users_in_batch(
         base_url: Auth0 API base URL
         operation: Operation to perform
         results: Results dictionary to update
+        rotate_password: If True, rotate user passwords during operation
 
     Returns:
         dict: Updated results dictionary
@@ -1050,7 +1139,7 @@ def _process_users_in_batch(
 
         # Perform the operation
         try:
-            _execute_user_operation(operation, resolved_user_id, token, base_url)
+            _execute_user_operation(operation, resolved_user_id, token, base_url, rotate_password)
             results["processed_count"] += 1
         except Exception as e:
             print_error(f"\nFailed to {operation} user {resolved_user_id}: {e}")
@@ -1060,7 +1149,7 @@ def _process_users_in_batch(
 
 
 def _process_user_batch(
-    user_ids: list[str], token: str, base_url: str, operation: str
+    user_ids: list[str], token: str, base_url: str, operation: str, rotate_password: bool = False
 ) -> dict[str, Any]:
     """Process a batch of users for a specific operation.
 
@@ -1069,6 +1158,7 @@ def _process_user_batch(
         token: Auth0 access token
         base_url: Auth0 API base URL
         operation: Operation to perform
+        rotate_password: If True, rotate user passwords during operation
 
     Returns:
         dict: Processing results for this batch
@@ -1082,7 +1172,7 @@ def _process_user_batch(
     }
 
     # Process users using the extracted helper function
-    results = _process_users_in_batch(user_ids, token, base_url, operation, results)
+    results = _process_users_in_batch(user_ids, token, base_url, operation, results, rotate_password)
 
     print("\n")  # Clear progress line
     return results
@@ -1126,7 +1216,7 @@ def _resolve_user_identifier_for_batch(
 
 
 def _execute_user_operation(
-    operation: str, user_id: str, token: str, base_url: str
+    operation: str, user_id: str, token: str, base_url: str, rotate_password: bool = False
 ) -> None:
     """Execute the specified operation on a user.
 
@@ -1135,14 +1225,17 @@ def _execute_user_operation(
         user_id: Auth0 user ID
         token: Auth0 access token
         base_url: Auth0 API base URL
+        rotate_password: If True, rotate user password during operation
     """
     if operation == "block":
-        block_user(user_id, token, base_url)
+        block_user(user_id, token, base_url, rotate_password)
     elif operation == "delete":
         delete_user(user_id, token, base_url)
     elif operation == "revoke-grants-only":
         revoke_user_sessions(user_id, token, base_url)
         revoke_user_grants(user_id, token, base_url)
+        if rotate_password:
+            rotate_user_password(user_id, token, base_url)
 
 
 def _display_multiple_users_details(
