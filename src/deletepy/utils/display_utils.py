@@ -176,12 +176,13 @@ def print_info(message: str) -> None:
     print(f"{CYAN}INFO: {message}{RESET}")
 
 
-def confirm_production_operation(operation: str, total_users: int) -> bool:
+def confirm_production_operation(operation: str, total_users: int, rotate_password: bool = False) -> bool:
     """Confirm operation in production environment.
 
     Args:
         operation: The operation to be performed
         total_users: Total number of users to be processed
+        rotate_password: Whether password rotation is enabled
 
     Returns:
         bool: True if confirmed, False otherwise
@@ -240,6 +241,10 @@ def confirm_production_operation(operation: str, total_users: int) -> bool:
         f"\nYou are about to perform {operation_details['action']} {total_users} users in PRODUCTION environment."
     )
     print(f"Consequence: {operation_details['consequence']}")
+
+    if rotate_password:
+        print(f"{YELLOW}WARNING: Password rotation is enabled. This will invalidate current user credentials.{RESET}")
+
     print("This action cannot be undone.")
     from .validators import SecurityValidator
 
