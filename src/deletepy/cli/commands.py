@@ -187,19 +187,20 @@ class OperationHandler:
             "revoke-grants-only": "Revoking grants and sessions",
         }.get(operation, "Processing users")
 
-    def _confirm_production_operation(self, operation: str, total_users: int) -> bool:
+    def _confirm_production_operation(self, operation: str, total_users: int, rotate_password: bool = False) -> bool:
         """Confirm production operation with user.
 
         Args:
             operation: Operation type
             total_users: Number of users to process
+            rotate_password: Whether password rotation is enabled
 
         Returns:
             bool: True if confirmed, False otherwise
         """
         from ..utils.display_utils import confirm_production_operation
 
-        return confirm_production_operation(operation, total_users)
+        return confirm_production_operation(operation, total_users, rotate_password)
 
     def _initialize_processing_state(self) -> dict[str, Any]:
         """Initialize the processing state tracking variables.
@@ -588,7 +589,7 @@ class OperationHandler:
             self._handle_operation_error(e, "Fetch emails")
 
     def handle_user_operations(
-        self, input_file: Path, env: str, operation: str, dry_run: bool = False
+        self, input_file: Path, env: str, operation: str, dry_run: bool = False, rotate_password: bool = False
     ) -> None:
         """Handle user operations (block, delete, revoke-grants-only)."""
         try:
@@ -605,7 +606,7 @@ class OperationHandler:
 
             # Request confirmation for production environment
             if env == "prod" and not self._confirm_production_operation(
-                operation, total_users
+                operation, total_users, rotate_password
             ):
                 click.echo("Operation cancelled by user.")
                 return
@@ -619,6 +620,7 @@ class OperationHandler:
                 base_url=base_url,
                 operation=operation,
                 env=env,
+                rotate_password=rotate_password,
             )
 
             if checkpoint_id:
