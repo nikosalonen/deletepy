@@ -194,7 +194,7 @@ class TestOperationHandler:
         result = handler._confirm_production_operation("delete", 10)
 
         assert result is True
-        mock_confirm.assert_called_once_with("delete", 10)
+        mock_confirm.assert_called_once_with("delete", 10, False)
 
     @patch("deletepy.cli.commands.get_user_email")
     def test_fetch_user_emails(self, mock_get_email):
