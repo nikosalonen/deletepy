@@ -85,13 +85,24 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
         )
 
 
-def block_user(user_id: str, token: str, base_url: str) -> None:
-    """Block user in Auth0."""
+def block_user(user_id: str, token: str, base_url: str, rotate_password: bool = False) -> None:
+    """Block user in Auth0.
+
+    Args:
+        user_id: Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        rotate_password: If True, rotate user's password before blocking
+    """
     print_info(f"Blocking user: {user_id}", user_id=user_id, operation="block_user")
 
     # First revoke all sessions and grants
     revoke_user_sessions(user_id, token, base_url)
     revoke_user_grants(user_id, token, base_url)
+
+    # Rotate password if requested
+    if rotate_password:
+        rotate_user_password(user_id, token, base_url)
 
     url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
     headers = {
@@ -519,6 +530,71 @@ def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
             error=str(e),
             operation="revoke_user_grants",
         )
+
+
+def rotate_user_password(user_id: str, token: str, base_url: str) -> bool:
+    """Rotate user's password to a secure randomly-generated password.
+
+    Args:
+        user_id: The Auth0 user ID
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    from ..utils.password_utils import (
+        generate_secure_password,
+        get_user_database_connection,
+    )
+
+    # Auto-detect user's database connection
+    connection = get_user_database_connection(user_id, token, base_url)
+    if connection is None:
+        print_warning(
+            f"Skipping password rotation for {user_id} (no database connection)",
+            user_id=user_id,
+            operation="rotate_user_password",
+        )
+        return False
+
+    print_info(
+        f"Rotating password for user: {user_id}",
+        user_id=user_id,
+        operation="rotate_user_password",
+    )
+
+    # Generate secure random password
+    new_password = generate_secure_password(length=16)
+
+    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+    }
+    payload = {"password": new_password, "connection": connection}
+
+    try:
+        response = requests.patch(
+            url, headers=headers, json=payload, timeout=API_TIMEOUT
+        )
+        response.raise_for_status()
+        print_success(
+            f"Successfully rotated password for user {user_id}",
+            user_id=user_id,
+            operation="rotate_user_password",
+        )
+        time.sleep(API_RATE_LIMIT)
+        return True
+    except requests.exceptions.RequestException as e:
+        print_error(
+            f"Error rotating password for user {user_id}: {e}",
+            user_id=user_id,
+            error=str(e),
+            operation="rotate_user_password",
+        )
+        return False
 
 
 def unlink_user_identity(
@@ -1135,14 +1211,17 @@ def _execute_user_operation(
         user_id: Auth0 user ID
         token: Auth0 access token
         base_url: Auth0 API base URL
+        rotate_password: If True, rotate user password during operation
     """
     if operation == "block":
-        block_user(user_id, token, base_url)
+        block_user(user_id, token, base_url, rotate_password)
     elif operation == "delete":
         delete_user(user_id, token, base_url)
     elif operation == "revoke-grants-only":
         revoke_user_sessions(user_id, token, base_url)
         revoke_user_grants(user_id, token, base_url)
+        if rotate_password:
+            rotate_user_password(user_id, token, base_url)
 
 
 def _display_multiple_users_details(
