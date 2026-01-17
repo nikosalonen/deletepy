@@ -163,10 +163,13 @@ def users() -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
-def block(input_file: str, env: str, dry_run: bool) -> None:
+@click.option(
+    "--rotate-password", is_flag=True, help="Rotate user passwords after operation"
+)
+def block(input_file: str, env: str, dry_run: bool, rotate_password: bool) -> None:
     """Block the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(Path(input_file), env, "block", dry_run)
+    handler.handle_user_operations(Path(input_file), env, "block", dry_run, rotate_password)
 
 
 @users.command()
@@ -193,10 +196,13 @@ def delete(input_file: str, env: str, dry_run: bool) -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
-def revoke_grants_only(input_file: str, env: str, dry_run: bool) -> None:
+@click.option(
+    "--rotate-password", is_flag=True, help="Rotate user passwords after operation"
+)
+def revoke_grants_only(input_file: str, env: str, dry_run: bool, rotate_password: bool) -> None:
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(Path(input_file), env, "revoke-grants-only", dry_run)
+    handler.handle_user_operations(Path(input_file), env, "revoke-grants-only", dry_run, rotate_password)
 
 
 @cli.group()
