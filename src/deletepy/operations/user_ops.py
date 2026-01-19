@@ -2,7 +2,6 @@
 
 import time
 from typing import Any, cast
-from urllib.parse import quote
 
 import requests
 
@@ -10,49 +9,23 @@ from ..core.config import API_RATE_LIMIT, API_TIMEOUT
 from ..models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
-    OperationConfig,
     OperationType,
 )
 from ..utils.checkpoint_manager import CheckpointManager
+from ..utils.checkpoint_utils import (
+    CheckpointConfig,
+    load_or_create_checkpoint,
+)
+from ..utils.checkpoint_utils import (
+    handle_checkpoint_error as _checkpoint_error_handler,
+)
+from ..utils.checkpoint_utils import (
+    handle_checkpoint_interruption as _checkpoint_interruption_handler,
+)
 from ..utils.display_utils import show_progress, shutdown_requested
 from ..utils.legacy_print import print_error, print_info, print_success, print_warning
 from ..utils.request_utils import make_rate_limited_request
-from ..utils.validators import InputValidator
-
-
-def secure_url_encode(value: str, context: str = "URL parameter") -> str:
-    """Securely URL encode a value with validation.
-
-    Args:
-        value: Value to encode
-        context: Context description for error messages
-
-    Returns:
-        str: Safely encoded value
-
-    Raises:
-        ValueError: If value fails security validation
-    """
-    if not value:
-        raise ValueError(f"{context} cannot be empty")
-
-    # Validate the original value
-    if "user" in context.lower() or "id" in context.lower():
-        result = InputValidator.validate_auth0_user_id_enhanced(value)
-        if not result.is_valid:
-            raise ValueError(f"Invalid {context}: {result.error_message}")
-
-    # URL encode the value
-    encoded = quote(value, safe="")
-
-    # Validate the encoded result
-    validation_result = InputValidator.validate_url_encoding_secure(encoded)
-    if not validation_result.is_valid:
-        raise ValueError(
-            f"URL encoding failed security validation for {context}: {validation_result.error_message}"
-        )
-
-    return encoded
+from ..utils.url_utils import secure_url_encode
 
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
@@ -85,7 +58,9 @@ def delete_user(user_id: str, token: str, base_url: str) -> None:
         )
 
 
-def block_user(user_id: str, token: str, base_url: str, rotate_password: bool = False) -> None:
+def block_user(
+    user_id: str, token: str, base_url: str, rotate_password: bool = False
+) -> None:
     """Block user in Auth0.
 
     Args:
@@ -296,6 +271,43 @@ def _user_matches_connection(user: dict[str, Any], connection: str, email: str) 
             operation="get_user_id_from_email",
         )
         return False
+
+
+def get_users_by_email(
+    email: str, token: str, base_url: str, connection: str | None = None
+) -> list[dict[str, Any]] | None:
+    """Fetch full user data from Auth0 using email address.
+
+    This function returns the complete user objects, not just user IDs.
+    Use this when you need user details to avoid a second API call.
+
+    Args:
+        email: Email address to search for
+        token: Auth0 access token
+        base_url: Auth0 API base URL
+        connection: Optional connection filter (e.g., "google-oauth2", "auth0")
+
+    Returns:
+        Optional[List[Dict[str, Any]]]: List of user objects matching the email
+        and connection filter, or None if request failed
+    """
+    # Fetch users by email
+    users = _fetch_users_by_email(email, token, base_url)
+    if users is None:
+        return None
+
+    # Handle empty list
+    if not users:
+        return []
+
+    # Apply connection filter if specified
+    if connection:
+        filtered_users = [
+            user for user in users if _user_matches_connection(user, connection, email)
+        ]
+        return filtered_users
+
+    return users
 
 
 def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
@@ -642,156 +654,6 @@ def unlink_user_identity(
         return False
 
 
-def _load_or_create_checkpoint(
-    resume_checkpoint_id: str | None,
-    checkpoint_manager: CheckpointManager,
-    operation: str,
-    operation_type: OperationType,
-    env: str,
-    user_ids: list[str],
-) -> Checkpoint:
-    """Load existing checkpoint or create a new one.
-
-    Args:
-        resume_checkpoint_id: Optional checkpoint ID to resume from
-        checkpoint_manager: Checkpoint manager instance
-        operation: Operation to perform
-        operation_type: Operation type enum
-        env: Environment (dev/prod)
-        user_ids: List of user IDs to process
-
-    Returns:
-        Checkpoint: Loaded or newly created checkpoint
-    """
-    # Try to load existing checkpoint
-    checkpoint = _try_load_existing_checkpoint(resume_checkpoint_id, checkpoint_manager)
-
-    # If not resuming, create a new checkpoint
-    if checkpoint is None:
-        checkpoint = _create_new_checkpoint(
-            checkpoint_manager, operation, operation_type, env, user_ids
-        )
-        print_info(
-            f"Created checkpoint: {checkpoint.checkpoint_id}",
-            operation=operation,
-            checkpoint_id=checkpoint.checkpoint_id,
-        )
-    else:
-        print_success(
-            f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
-            operation=operation,
-            checkpoint_id=checkpoint.checkpoint_id,
-        )
-
-    return checkpoint
-
-
-def _try_load_existing_checkpoint(
-    resume_checkpoint_id: str | None, checkpoint_manager: CheckpointManager
-) -> Checkpoint | None:
-    """Try to load an existing checkpoint with validation.
-
-    Args:
-        resume_checkpoint_id: Optional checkpoint ID to resume from
-        checkpoint_manager: Checkpoint manager instance
-
-    Returns:
-        Optional[Checkpoint]: Valid checkpoint if found and resumable, None otherwise
-    """
-    if not resume_checkpoint_id:
-        return None
-
-    checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
-    if not checkpoint:
-        print_warning(
-            f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
-        )
-        return None
-
-    # Validate checkpoint status
-    if checkpoint.status != CheckpointStatus.ACTIVE:
-        print_warning(
-            f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
-        )
-        return None
-
-    # Validate checkpoint is resumable
-    if not checkpoint.is_resumable():
-        print_warning(
-            f"Checkpoint {resume_checkpoint_id} is not resumable",
-            operation="checkpoint_resume",
-            checkpoint_id=resume_checkpoint_id,
-        )
-        return None
-
-    return checkpoint
-
-
-def _create_new_checkpoint(
-    checkpoint_manager: CheckpointManager,
-    operation: str,
-    operation_type: OperationType,
-    env: str,
-    user_ids: list[str],
-) -> Checkpoint:
-    """Create a new checkpoint for the operation.
-
-    Args:
-        checkpoint_manager: Checkpoint manager instance
-        operation: Operation to perform
-        operation_type: Operation type enum
-        env: Environment (dev/prod)
-        user_ids: List of user IDs to process
-
-    Returns:
-        Checkpoint: Newly created checkpoint
-    """
-    # Create operation config
-    config = OperationConfig(
-        environment=env, additional_params={"operation": operation}
-    )
-
-    # Create new checkpoint
-    return checkpoint_manager.create_checkpoint(
-        operation_type=operation_type, config=config, items=user_ids, batch_size=50
-    )
-
-
-def _handle_checkpoint_error(
-    checkpoint: Checkpoint,
-    checkpoint_manager: CheckpointManager,
-    operation: str,
-    error: KeyboardInterrupt | Exception | None = None,
-) -> str:
-    """Handle checkpoint error by marking status and saving.
-
-    Args:
-        checkpoint: Checkpoint to handle
-        checkpoint_manager: Checkpoint manager instance
-        operation: Operation being performed
-        error: Optional exception that occurred
-
-    Returns:
-        str: Checkpoint ID
-    """
-    if isinstance(error, KeyboardInterrupt):
-        print_warning(f"\n{operation.title()} operation interrupted by user")
-        checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
-        checkpoint_manager.save_checkpoint(checkpoint)
-        print_info("You can resume this operation later using:", operation=operation)
-        print_info(
-            f"  deletepy resume {checkpoint.checkpoint_id}",
-            operation=operation,
-            checkpoint_id=checkpoint.checkpoint_id,
-        )
-    elif error is not None:
-        print_warning(f"\n{operation.title()} operation failed: {error}")
-        checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
-        checkpoint_manager.save_checkpoint(checkpoint)
-
-    return checkpoint.checkpoint_id
-
-
 def batch_user_operations_with_checkpoints(
     user_ids: list[str],
     token: str,
@@ -817,10 +679,6 @@ def batch_user_operations_with_checkpoints(
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
     """
-    # Initialize checkpoint manager if not provided
-    if checkpoint_manager is None:
-        checkpoint_manager = CheckpointManager()
-
     # Map operation to checkpoint operation type
     operation_type_map = {
         "delete": OperationType.BATCH_DELETE,
@@ -833,23 +691,29 @@ def batch_user_operations_with_checkpoints(
 
     operation_type = operation_type_map[operation]
 
-    # Load or create checkpoint
-    checkpoint = _load_or_create_checkpoint(
-        resume_checkpoint_id,
-        checkpoint_manager,
-        operation,
-        operation_type,
-        env,
-        user_ids,
+    # Use unified checkpoint loading/creation
+    config = CheckpointConfig(
+        operation_type=operation_type,
+        env=env,
+        items=user_ids,
+        batch_size=50,
+        operation_name=operation,
+        additional_params={"operation": operation},
     )
 
+    checkpoint_result = load_or_create_checkpoint(
+        resume_checkpoint_id=resume_checkpoint_id,
+        checkpoint_manager=checkpoint_manager,
+        config=config,
+    )
+
+    checkpoint = checkpoint_result.checkpoint
+    checkpoint_manager = checkpoint_result.checkpoint_manager
+
     # Use configuration from checkpoint if resuming
-    if resume_checkpoint_id and checkpoint.config:
+    if checkpoint_result.is_resuming and checkpoint.config:
         env = checkpoint.config.environment
         operation = checkpoint.config.additional_params.get("operation", operation)
-
-    # Save initial checkpoint
-    checkpoint_manager.save_checkpoint(checkpoint)
 
     try:
         return _process_batch_user_operations_with_checkpoints(
@@ -860,8 +724,14 @@ def batch_user_operations_with_checkpoints(
             checkpoint_manager=checkpoint_manager,
             rotate_password=rotate_password,
         )
-    except (KeyboardInterrupt, Exception) as e:
-        return _handle_checkpoint_error(checkpoint, checkpoint_manager, operation, e)
+    except KeyboardInterrupt:
+        return _checkpoint_interruption_handler(
+            checkpoint, checkpoint_manager, f"{operation.title()} operation"
+        )
+    except Exception as e:
+        return _checkpoint_error_handler(
+            checkpoint, checkpoint_manager, f"{operation.title()} operation", e
+        )
 
 
 def _process_batch_user_operations_with_checkpoints(
@@ -1029,7 +899,9 @@ def _process_and_update_batch(
         rotate_password: If True, rotate user passwords during operation
     """
     # Process users in this batch
-    batch_results = _process_user_batch(batch_user_ids, token, base_url, operation, rotate_password)
+    batch_results = _process_user_batch(
+        batch_user_ids, token, base_url, operation, rotate_password
+    )
 
     # Update tracking lists
     tracking_state["multiple_users"].update(batch_results.get("multiple_users", {}))
@@ -1139,7 +1011,9 @@ def _process_users_in_batch(
 
         # Perform the operation
         try:
-            _execute_user_operation(operation, resolved_user_id, token, base_url, rotate_password)
+            _execute_user_operation(
+                operation, resolved_user_id, token, base_url, rotate_password
+            )
             results["processed_count"] += 1
         except Exception as e:
             print_error(f"\nFailed to {operation} user {resolved_user_id}: {e}")
@@ -1149,7 +1023,11 @@ def _process_users_in_batch(
 
 
 def _process_user_batch(
-    user_ids: list[str], token: str, base_url: str, operation: str, rotate_password: bool = False
+    user_ids: list[str],
+    token: str,
+    base_url: str,
+    operation: str,
+    rotate_password: bool = False,
 ) -> dict[str, Any]:
     """Process a batch of users for a specific operation.
 
@@ -1172,7 +1050,9 @@ def _process_user_batch(
     }
 
     # Process users using the extracted helper function
-    results = _process_users_in_batch(user_ids, token, base_url, operation, results, rotate_password)
+    results = _process_users_in_batch(
+        user_ids, token, base_url, operation, results, rotate_password
+    )
 
     print("\n")  # Clear progress line
     return results
@@ -1216,7 +1096,11 @@ def _resolve_user_identifier_for_batch(
 
 
 def _execute_user_operation(
-    operation: str, user_id: str, token: str, base_url: str, rotate_password: bool = False
+    operation: str,
+    user_id: str,
+    token: str,
+    base_url: str,
+    rotate_password: bool = False,
 ) -> None:
     """Execute the specified operation on a user.
 
