@@ -64,7 +64,7 @@ def get_user_database_connection(
     Returns:
         Optional[str]: Database connection name if found, None otherwise
     """
-    from ..operations.user_ops import secure_url_encode
+    from .url_utils import secure_url_encode
 
     url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
     headers = {
