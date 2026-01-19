@@ -7,13 +7,13 @@ import tempfile
 from io import StringIO
 from unittest.mock import patch
 
-from deletepy.utils.legacy_print import (
+from src.deletepy.utils.legacy_print import (
     print_error,
     print_info,
     print_success,
     print_warning,
 )
-from deletepy.utils.logging_utils import (
+from src.deletepy.utils.logging_utils import (
     ColoredFormatter,
     DetailedFormatter,
     StructuredFormatter,

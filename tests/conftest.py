@@ -36,7 +36,6 @@ def mock_requests(request):
         ],
         "utils": ["src.deletepy.utils.file_utils"],
         "cleanup_csv": ["src.deletepy.utils.csv_utils"],
-        "email_domain_checker": ["src.deletepy.operations.domain_ops"],
     }
 
     module_paths = module_mapping.get(test_name, [f"src.deletepy.{test_name}"])
