@@ -4,7 +4,6 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
-from urllib.parse import quote
 
 import requests
 
@@ -12,62 +11,18 @@ from ..core.config import API_RATE_LIMIT, API_TIMEOUT
 from ..models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
-    OperationConfig,
     OperationType,
 )
 from ..utils.checkpoint_manager import CheckpointManager
+from ..utils.checkpoint_utils import CheckpointConfig, load_or_create_checkpoint
+from ..utils.checkpoint_utils import handle_checkpoint_error as _handle_checkpoint_error
+from ..utils.checkpoint_utils import (
+    handle_checkpoint_interruption as _handle_checkpoint_interruption,
+)
 from ..utils.display_utils import show_progress, shutdown_requested
 from ..utils.legacy_print import print_error, print_info, print_success, print_warning
-from ..utils.validators import InputValidator
+from ..utils.url_utils import secure_url_encode
 from .user_ops import delete_user, unlink_user_identity
-
-
-def secure_url_encode(value: str, context: str = "URL parameter") -> str:
-    """Securely URL encode a value with validation.
-
-    Args:
-        value: Value to encode
-        context: Context description for error messages
-
-    Returns:
-        str: Safely encoded value
-
-    Raises:
-        ValueError: If value fails security validation
-    """
-    if not value:
-        raise ValueError(f"{context} cannot be empty")
-
-    # Validate the original value
-    if "user" in context.lower() or "id" in context.lower():
-        result = InputValidator.validate_auth0_user_id_enhanced(value)
-        if not result.is_valid:
-            raise ValueError(f"Invalid {context}: {result.error_message}")
-
-    # URL encode the value
-    encoded = quote(value, safe="")
-
-    # Validate the encoded result
-    validation_result = InputValidator.validate_url_encoding_secure(encoded)
-    if not validation_result.is_valid:
-        raise ValueError(
-            f"URL encoding failed security validation for {context}: {validation_result.error_message}"
-        )
-
-    return encoded
-
-
-@dataclass
-class CheckpointSetupConfig:
-    """Configuration for checkpoint setup operations."""
-
-    operation_type: OperationType
-    items: list[str]
-    env: str
-    auto_delete: bool = True
-    resume_checkpoint_id: str | None = None
-    checkpoint_manager: CheckpointManager | None = None
-    operation_name: str = "operation"
 
 
 @dataclass
@@ -898,184 +853,6 @@ def _find_users_with_primary_social_id(
     return found_users
 
 
-def _initialize_checkpoint_manager(
-    checkpoint_manager: CheckpointManager | None = None,
-) -> CheckpointManager:
-    """Initialize checkpoint manager if not provided.
-
-    Args:
-        checkpoint_manager: Optional checkpoint manager instance
-
-    Returns:
-        CheckpointManager: Initialized checkpoint manager
-    """
-    return checkpoint_manager if checkpoint_manager is not None else CheckpointManager()
-
-
-def _load_existing_checkpoint(
-    checkpoint_manager: CheckpointManager, checkpoint_id: str
-) -> Checkpoint | None:
-    """Load and validate existing checkpoint for resumption.
-
-    Args:
-        checkpoint_manager: Checkpoint manager instance
-        checkpoint_id: Checkpoint ID to load
-
-    Returns:
-        Checkpoint | None: Valid checkpoint or None if invalid
-    """
-    checkpoint = checkpoint_manager.load_checkpoint(checkpoint_id)
-
-    if not checkpoint:
-        print_warning(f"Could not load checkpoint {checkpoint_id}, starting fresh")
-        return None
-
-    if checkpoint.status != CheckpointStatus.ACTIVE:
-        print_warning(
-            f"Checkpoint {checkpoint_id} is not active (status: {checkpoint.status.value})"
-        )
-        return None
-
-    if not checkpoint.is_resumable():
-        print_warning(
-            f"Checkpoint {checkpoint_id} is not resumable",
-            operation="checkpoint_resume",
-            checkpoint_id=checkpoint_id,
-        )
-        return None
-
-    return checkpoint
-
-
-def _create_new_checkpoint(
-    checkpoint_manager: CheckpointManager,
-    operation_type: OperationType,
-    items: list[str],
-    env: str,
-    auto_delete: bool,
-    operation_name: str,
-) -> Checkpoint:
-    """Create a new checkpoint for the operation.
-
-    Args:
-        checkpoint_manager: Checkpoint manager instance
-        operation_type: Type of operation to checkpoint
-        items: List of items to process
-        env: Environment (dev/prod)
-        auto_delete: Whether auto-delete is enabled
-        operation_name: Name of the operation for logging
-
-    Returns:
-        Checkpoint: Newly created checkpoint
-    """
-    config = OperationConfig(
-        environment=env,
-        auto_delete=auto_delete,
-        additional_params={"operation": operation_name},
-    )
-
-    checkpoint = checkpoint_manager.create_checkpoint(
-        operation_type=operation_type, config=config, items=items, batch_size=50
-    )
-
-    print_info(
-        f"Created checkpoint: {checkpoint.checkpoint_id}",
-        operation="checkpoint_create",
-        checkpoint_id=checkpoint.checkpoint_id,
-    )
-    return checkpoint
-
-
-def _setup_checkpoint_operation(
-    setup_config: CheckpointSetupConfig,
-) -> tuple[Checkpoint, CheckpointManager, str, bool]:
-    """Set up checkpoint operation by creating or resuming checkpoints.
-
-    Args:
-        setup_config: Configuration for checkpoint setup containing all required parameters
-
-    Returns:
-        Tuple of (checkpoint, checkpoint_manager, env, auto_delete)
-    """
-    checkpoint_manager = _initialize_checkpoint_manager(setup_config.checkpoint_manager)
-
-    # Try to load existing checkpoint if resuming
-    checkpoint = None
-    if setup_config.resume_checkpoint_id:
-        checkpoint = _load_existing_checkpoint(
-            checkpoint_manager, setup_config.resume_checkpoint_id
-        )
-
-    # Create new checkpoint if not resuming or loading failed
-    if checkpoint is None:
-        checkpoint = _create_new_checkpoint(
-            checkpoint_manager,
-            setup_config.operation_type,
-            setup_config.items,
-            setup_config.env,
-            setup_config.auto_delete,
-            setup_config.operation_name,
-        )
-    else:
-        print_success(
-            f"Resuming from checkpoint: {checkpoint.checkpoint_id}",
-            operation="checkpoint_resume",
-            checkpoint_id=checkpoint.checkpoint_id,
-        )
-        # Use configuration from checkpoint
-        setup_config.env = checkpoint.config.environment
-        setup_config.auto_delete = checkpoint.config.auto_delete
-
-    # Save initial checkpoint state
-    checkpoint_manager.save_checkpoint(checkpoint)
-
-    return checkpoint, checkpoint_manager, setup_config.env, setup_config.auto_delete
-
-
-def _handle_checkpoint_interruption(
-    checkpoint: Checkpoint, checkpoint_manager: CheckpointManager, operation_name: str
-) -> str:
-    """Handle checkpoint interruption (KeyboardInterrupt).
-
-    Args:
-        checkpoint: Checkpoint to save
-        checkpoint_manager: Checkpoint manager instance
-        operation_name: Name of the operation for logging
-
-    Returns:
-        str: Checkpoint ID
-    """
-    print_warning(f"\n{operation_name} interrupted by user")
-    checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
-    checkpoint_manager.save_checkpoint(checkpoint)
-    print_info("You can resume this operation later using:")
-    print_info(f"  deletepy resume {checkpoint.checkpoint_id}")
-    return checkpoint.checkpoint_id
-
-
-def _handle_checkpoint_error(
-    checkpoint: Checkpoint,
-    checkpoint_manager: CheckpointManager,
-    operation_name: str,
-    error: Exception,
-) -> str:
-    """Handle checkpoint error.
-
-    Args:
-        checkpoint: Checkpoint to save
-        checkpoint_manager: Checkpoint manager instance
-        operation_name: Name of the operation for logging
-        error: Exception that occurred
-
-    Returns:
-        str: Checkpoint ID
-    """
-    print_warning(f"\n{operation_name} failed: {error}")
-    checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
-    checkpoint_manager.save_checkpoint(checkpoint)
-    return checkpoint.checkpoint_id
-
-
 def _execute_batch_processing_loop(
     remaining_items: list[str],
     batch_size: int,
@@ -1215,16 +992,21 @@ def _setup_checkpoint_operation_from_config(
     if exec_config.processing_config is None:
         exec_config.processing_config = ProcessingConfig()
 
-    setup_config = CheckpointSetupConfig(
+    config = CheckpointConfig(
         operation_type=exec_config.operation_type,
         items=exec_config.items,
         env=exec_config.config.env,
         auto_delete=exec_config.auto_delete,
-        resume_checkpoint_id=exec_config.config.resume_checkpoint_id,
-        checkpoint_manager=exec_config.config.checkpoint_manager,
         operation_name=exec_config.operation_name,
     )
-    return _setup_checkpoint_operation(setup_config)
+
+    result = load_or_create_checkpoint(
+        resume_checkpoint_id=exec_config.config.resume_checkpoint_id,
+        checkpoint_manager=exec_config.config.checkpoint_manager,
+        config=config,
+    )
+
+    return result.checkpoint, result.checkpoint_manager, result.env, result.auto_delete
 
 
 def _prepare_process_parameters(
