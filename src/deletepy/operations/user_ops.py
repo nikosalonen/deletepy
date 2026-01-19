@@ -698,7 +698,10 @@ def batch_user_operations_with_checkpoints(
         items=user_ids,
         batch_size=50,
         operation_name=operation,
-        additional_params={"operation": operation},
+        additional_params={
+            "operation": operation,
+            "rotate_password": rotate_password,
+        },
     )
 
     checkpoint_result = load_or_create_checkpoint(
@@ -713,7 +716,11 @@ def batch_user_operations_with_checkpoints(
     # Use configuration from checkpoint if resuming
     if checkpoint_result.is_resuming and checkpoint.config:
         env = checkpoint.config.environment
-        operation = checkpoint.config.additional_params.get("operation", operation)
+        # Guard against None additional_params
+        additional_params = checkpoint.config.additional_params or {}
+        operation = additional_params.get("operation", operation)
+        # Prefer persisted rotate_password from checkpoint when resuming
+        rotate_password = additional_params.get("rotate_password", rotate_password)
 
     try:
         return _process_batch_user_operations_with_checkpoints(
