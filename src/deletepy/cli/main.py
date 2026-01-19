@@ -5,7 +5,7 @@ import logging
 import sys
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, cast
 
 import click
 
@@ -14,8 +14,6 @@ from deletepy.core.exceptions import AuthConfigError
 from deletepy.utils.display_utils import RED, RESET, YELLOW
 from deletepy.utils.logging_utils import setup_logging
 from deletepy.utils.rich_utils import install_rich_tracebacks
-
-F = TypeVar("F", bound=Callable[..., Any])
 
 
 def _configure_logging(verbose: int, quiet: bool) -> None:
@@ -31,7 +29,7 @@ def _configure_logging(verbose: int, quiet: bool) -> None:
     setup_logging(level=logging.getLevelName(level))
 
 
-def common_options(f: F) -> F:
+def common_options(f: Callable[..., Any]) -> Callable[..., Any]:
     """Decorator to add common verbosity options to commands."""
 
     @click.option(
@@ -40,10 +38,13 @@ def common_options(f: F) -> F:
     @click.option("-q", "--quiet", is_flag=True, help="Suppress non-error output")
     @functools.wraps(f)
     def wrapper(*args: Any, verbose: int, quiet: bool, **kwargs: Any) -> Any:
-        _configure_logging(verbose, quiet)
+        # Only configure logging if flags were explicitly provided,
+        # otherwise keep group-level settings from cli()
+        if verbose != 0 or quiet:
+            _configure_logging(verbose, quiet)
         return f(*args, **kwargs)
 
-    return wrapper  # type: ignore[no-any-return]
+    return cast(Callable[..., Any], wrapper)
 
 
 @click.group(invoke_without_command=True)
