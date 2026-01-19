@@ -85,15 +85,7 @@ def try_load_checkpoint(
         )
         return None
 
-    # Validate checkpoint status
-    if checkpoint.status != CheckpointStatus.ACTIVE:
-        print_warning(
-            f"Checkpoint {checkpoint_id} is not active (status: {checkpoint.status.value})",
-            operation=operation_name,
-        )
-        return None
-
-    # Validate checkpoint is resumable
+    # Validate checkpoint is resumable (handles ACTIVE, FAILED, CANCELLED states)
     if not checkpoint.is_resumable():
         print_warning(
             f"Checkpoint {checkpoint_id} is not resumable",
