@@ -24,17 +24,15 @@ from ..utils.checkpoint_utils import (
     try_load_checkpoint,
 )
 from ..utils.display_utils import (
-    CYAN,
-    GREEN,
-    RED,
-    RESET,
-    YELLOW,
     show_progress,
     shutdown_requested,
 )
 from ..utils.legacy_print import print_info, print_success, print_warning
+from ..utils.logging_utils import get_logger, user_output, user_output_config
 from ..utils.validators import InputValidator
 from .user_ops import get_user_details, get_users_by_email
+
+logger = get_logger(__name__)
 
 
 @dataclass
@@ -103,13 +101,15 @@ def _validate_and_setup_export(
     # Estimate processing time (rough calculation)
     estimated_time = len(emails) * 0.5  # 0.5 seconds per email on average
 
-    print(f"{YELLOW}Export Configuration:{RESET}")
-    print(f"  Total emails: {len(emails)}")
-    print(f"  Batch size: {batch_size}")
-    print(f"  Output file: {output_file}")
+    config_items = {
+        "Total emails": len(emails),
+        "Batch size": batch_size,
+        "Output file": output_file,
+    }
     if connection:
-        print(f"  Connection filter: {connection}")
-    print(f"  Estimated time: {estimated_time:.1f} seconds")
+        config_items["Connection filter"] = connection
+    config_items["Estimated time"] = f"{estimated_time:.1f} seconds"
+    user_output_config("Export Configuration", config_items, style="warning")
 
     return batch_size, estimated_time
 
@@ -180,7 +180,12 @@ def _fetch_user_data(
         return users, counters
 
     except Exception as e:
-        print(f"{RED}Error processing email {CYAN}{email}{RED}: {e}{RESET}")
+        logger.error(
+            "Error processing email %s: %s",
+            email,
+            str(e),
+            extra={"email": email, "operation": "fetch_user_data", "error": str(e)},
+        )
         counters["error_count"] += 1
         return [], counters
 
@@ -329,24 +334,26 @@ def _generate_export_summary(
         output_file: Output file path
         csv_data: Final CSV data
     """
-    print(f"\n{GREEN}Export Summary:{RESET}")
-    print(f"Total emails processed: {total_emails}")
-    print(f"Successfully processed: {processed_count}")
-    print(f"Not found: {not_found_count}")
-    print(f"Multiple users: {multiple_users_count}")
-    print(f"Errors: {error_count}")
+    user_output("\nExport Summary:", style="success")
+    user_output(f"Total emails processed: {total_emails}")
+    user_output(f"Successfully processed: {processed_count}")
+    user_output(f"Not found: {not_found_count}")
+    user_output(f"Multiple users: {multiple_users_count}")
+    user_output(f"Errors: {error_count}")
 
     if connection:
-        print(f"Connection filter: {connection}")
+        user_output(f"Connection filter: {connection}")
 
-    print(f"Output file: {output_file}")
-    print(f"Total CSV rows: {len(csv_data)}")
+    user_output(f"Output file: {output_file}")
+    user_output(f"Total CSV rows: {len(csv_data)}")
 
     # Show sample of data if available
     if csv_data:
-        print(f"\n{YELLOW}Sample data:{RESET}")
+        user_output("\nSample data:", style="warning")
         for i, row in enumerate(csv_data[:3]):  # Show first 3 rows
-            print(f"  {i + 1}. {row['email']} -> {row['user_id']} ({row['status']})")
+            user_output(
+                f"  {i + 1}. {row['email']} -> {row['user_id']} ({row['status']})"
+            )
 
 
 def _format_iso_datetime(iso_string: str) -> str:
@@ -686,7 +693,7 @@ def _process_export_with_checkpoints(
             batch_emails, token, base_url, connection, batch_start, current_batch_num
         )
 
-        print("\n")  # Clear progress line
+        user_output("")  # Clear progress line
 
         # Write batch to CSV
         mode = "w" if write_headers else "a"
@@ -1145,7 +1152,7 @@ def _process_fetch_emails_with_checkpoints(
             batch_user_ids, token, base_url, batch_start, current_batch_num
         )
 
-        print("\n")  # Clear progress line
+        user_output("")  # Clear progress line
 
         # Write batch to CSV
         mode = "w" if write_headers else "a"
@@ -1248,7 +1255,12 @@ def _process_user_id_batch(
             csv_data.append(csv_row)
 
         except Exception as e:
-            print(f"{RED}Error processing user {CYAN}{user_id}{RED}: {e}{RESET}")
+            logger.error(
+                "Error processing user %s: %s",
+                user_id,
+                str(e),
+                extra={"user_id": user_id, "operation": "fetch_email", "error": str(e)},
+            )
             csv_row = {
                 "user_id": user_id,
                 "email": "",
