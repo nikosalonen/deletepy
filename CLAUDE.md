@@ -46,7 +46,7 @@ deletepy/
 - **Utils Layer** (`src/deletepy/utils/`): Shared utilities and helpers
 - **Models Layer** (`src/deletepy/models/`): Data structures and type definitions
 
-The application uses a generator pattern for memory-efficient file processing and implements rate limiting (0.2s between API calls) to prevent Auth0 API throttling.
+The application uses a generator pattern for memory-efficient file processing and implements adaptive rate limiting (0.4-0.5s between API calls, with automatic backoff) to prevent Auth0 API throttling.
 
 ## Environment Configuration
 
