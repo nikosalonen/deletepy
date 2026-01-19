@@ -100,7 +100,9 @@ class Auth0Client:
         """Get the base URL."""
         return self.context.base_url
 
-    def _build_headers(self, extra_headers: dict[str, str] | None = None) -> dict[str, str]:
+    def _build_headers(
+        self, extra_headers: dict[str, str] | None = None
+    ) -> dict[str, str]:
         """Build HTTP headers for Auth0 API requests.
 
         Args:
@@ -149,7 +151,9 @@ class Auth0Client:
 
         time.sleep(sleep_time)
 
-    def _parse_rate_limit_headers(self, response: requests.Response) -> tuple[int | None, int | None]:
+    def _parse_rate_limit_headers(
+        self, response: requests.Response
+    ) -> tuple[int | None, int | None]:
         """Parse rate limit information from response headers.
 
         Args:
@@ -211,8 +215,14 @@ class Auth0Client:
         if 400 <= response.status_code < 500:
             try:
                 error_data = response.json()
-                error_msg = error_data.get("message", error_data.get("error", str(error_data)))
-            except (ValueError, KeyError):
+                if isinstance(error_data, dict):
+                    error_msg = error_data.get(
+                        "message", error_data.get("error", str(error_data))
+                    )
+                else:
+                    # Handle non-dict JSON responses (list, string, etc.)
+                    error_msg = str(error_data)
+            except ValueError:
                 error_msg = response.text or f"Client error {response.status_code}"
 
             return APIResponse(
@@ -568,7 +578,9 @@ class Auth0Client:
         )
 
 
-def create_client_from_token(token: str, base_url: str, env: str = "dev") -> Auth0Client:
+def create_client_from_token(
+    token: str, base_url: str, env: str = "dev"
+) -> Auth0Client:
     """Factory function to create an Auth0Client from basic parameters.
 
     Args:
