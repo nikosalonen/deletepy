@@ -6,12 +6,18 @@ from typing import Any, cast
 import requests
 
 from ..core.config import API_RATE_LIMIT, API_TIMEOUT
+from .rate_limiter import RateLimitExceededError, get_rate_limiter
 
 
 def make_rate_limited_request(
     method: str, url: str, headers: dict[str, str], **kwargs: Any
 ) -> requests.Response | None:
-    """Make an HTTP request with rate limiting.
+    """Make an HTTP request with adaptive rate limiting.
+
+    Uses the adaptive rate limiter which:
+    - Respects Auth0's rate limit headers
+    - Backs off when limits are low
+    - Uses exponential backoff on 429 responses
 
     Args:
         method: HTTP method (GET, POST, etc.)
@@ -22,18 +28,46 @@ def make_rate_limited_request(
     Returns:
         Optional[requests.Response]: Response object or None if failed
     """
+    limiter = get_rate_limiter()
+
     try:
         response = requests.request(
             method, url, headers=headers, timeout=API_TIMEOUT, **kwargs
         )
 
-        # Always apply rate limiting regardless of response status
-        time.sleep(API_RATE_LIMIT)
+        # Handle rate limiting (429)
+        if response.status_code == 429:
+            try:
+                backoff_time = limiter.handle_429()
+                print(
+                    f"Rate limit hit. Backing off for {backoff_time:.1f}s "
+                    f"(attempt {limiter.state.consecutive_429s})"
+                )
+                time.sleep(backoff_time)
+                # Retry once after backoff
+                response = requests.request(
+                    method, url, headers=headers, timeout=API_TIMEOUT, **kwargs
+                )
+                if response.status_code == 429:
+                    # Still rate limited after backoff
+                    backoff_time = limiter.handle_429()
+                    print(
+                        f"Still rate limited. Backing off for {backoff_time:.1f}s "
+                        f"(attempt {limiter.state.consecutive_429s})"
+                    )
+                    return None
+            except RateLimitExceededError as e:
+                print(f"CRITICAL: {e}")
+                raise
 
-        # Handle rate limiting with immediate failure
-        if response.status_code == 429:  # Too Many Requests
-            print("Rate limit exceeded. Request failed.")
-            return None
+        # Success - record it and apply adaptive rate limiting
+        limiter.record_success()
+        limiter.wait(dict(response.headers))
+
+        # Log if rate limits are getting low
+        headroom = limiter.state.headroom_ratio
+        if headroom is not None and headroom < 0.20:
+            print(f"WARNING: {limiter.get_status_summary()}")
 
         # Handle other errors
         if response.status_code >= 400:
@@ -41,6 +75,9 @@ def make_rate_limited_request(
 
         return response
 
+    except RateLimitExceededError:
+        # Re-raise rate limit errors to abort operation
+        raise
     except requests.exceptions.RequestException as e:
         print(f"Request failed: {e}")
         return None
