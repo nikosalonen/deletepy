@@ -517,5 +517,73 @@ def log_batch_progress(
     )
 
 
+# Style colors for user_output
+STYLE_COLORS = {
+    "info": "cyan",
+    "success": "green",
+    "warning": "yellow",
+    "error": "red",
+    "header": "blue",
+}
+
+
+def user_output(message: str, style: str = "info", newline: bool = True) -> None:
+    """Output intended for users - always shown regardless of log level.
+
+    This function should be used for output that users always need to see,
+    such as results, summaries, and important status messages.
+
+    Args:
+        message: Message to display
+        style: Output style (info, success, warning, error, header)
+        newline: Whether to add a newline after the message
+    """
+    try:
+        import click
+
+        fg_color = STYLE_COLORS.get(style, "cyan")
+        click.secho(message, fg=fg_color, nl=newline)
+    except ImportError:
+        # Fallback to print if click is not available
+        print(message, end="\n" if newline else "")
+
+
+def user_output_config(
+    title: str,
+    items: dict[str, Any],
+    style: str = "info",
+) -> None:
+    """Display configuration or summary information to users.
+
+    Args:
+        title: Title for the configuration block
+        items: Dictionary of key-value pairs to display
+        style: Output style for the title
+    """
+    user_output(f"{title}:", style=style)
+    for key, value in items.items():
+        user_output(f"  {key}: {value}")
+
+
+def user_output_summary(
+    title: str,
+    stats: dict[str, int | float | str],
+    style: str = "success",
+) -> None:
+    """Display a summary with statistics to users.
+
+    Args:
+        title: Title for the summary
+        stats: Dictionary of statistic names and values
+        style: Output style for the title
+    """
+    user_output(f"\n{title}:", style=style)
+    for name, value in stats.items():
+        if isinstance(value, float):
+            user_output(f"  {name}: {value:.1f}")
+        else:
+            user_output(f"  {name}: {value}")
+
+
 # Initialize logging when module is imported
 init_default_logging()
