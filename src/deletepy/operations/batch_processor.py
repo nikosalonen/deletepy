@@ -55,6 +55,8 @@ class BatchResults:
         multiple_users_count: Number of items with multiple users
         custom_counts: Additional custom counters
         items_by_status: Items categorized by their result status
+        items_attempted: List of items that were actually attempted (for checkpoint)
+        was_interrupted: Whether processing was interrupted by shutdown signal
     """
 
     processed_count: int = 0
@@ -64,6 +66,8 @@ class BatchResults:
     multiple_users_count: int = 0
     custom_counts: dict[str, int] = field(default_factory=dict)
     items_by_status: dict[str, list[str]] = field(default_factory=dict)
+    items_attempted: list[str] = field(default_factory=list)
+    was_interrupted: bool = False
 
     def to_checkpoint_update(self) -> dict[str, Any]:
         """Convert results to checkpoint update format.
@@ -100,6 +104,11 @@ class BatchResults:
             if status not in self.items_by_status:
                 self.items_by_status[status] = []
             self.items_by_status[status].extend(items)
+
+        self.items_attempted.extend(other.items_attempted)
+        # Propagate interruption flag
+        if other.was_interrupted:
+            self.was_interrupted = True
 
 
 @dataclass
@@ -185,7 +194,6 @@ class BatchOperationProcessor(ABC):
         Returns:
             BatchResult indicating success/failure
         """
-        pass
 
     @abstractmethod
     def get_operation_name(self) -> str:
@@ -194,7 +202,6 @@ class BatchOperationProcessor(ABC):
         Returns:
             Operation name for display and logging
         """
-        pass
 
     @abstractmethod
     def get_operation_type(self) -> OperationType:
@@ -203,7 +210,6 @@ class BatchOperationProcessor(ABC):
         Returns:
             OperationType enum value
         """
-        pass
 
     def validate_item(self, item: str) -> tuple[bool, str | None]:
         """Validate an item before processing.
@@ -230,15 +236,21 @@ class BatchOperationProcessor(ABC):
             batch_number: Current batch number for progress display
 
         Returns:
-            BatchResults with aggregated results
+            BatchResults with aggregated results (including which items were attempted)
         """
         results = BatchResults()
 
         for idx, item in enumerate(items, 1):
             if shutdown_requested():
+                results.was_interrupted = True
                 break
 
-            show_progress(idx, len(items), f"{self.get_operation_name()} batch {batch_number}")
+            show_progress(
+                idx, len(items), f"{self.get_operation_name()} batch {batch_number}"
+            )
+
+            # Track this item as attempted (for checkpoint purposes)
+            results.items_attempted.append(item)
 
             # Validate item
             is_valid, error_msg = self.validate_item(item)
@@ -256,7 +268,9 @@ class BatchOperationProcessor(ABC):
                 else:
                     results.skipped_count += 1
                     if result.message:
-                        results.items_by_status.setdefault("skipped", []).append(str(item))
+                        results.items_by_status.setdefault("skipped", []).append(
+                            str(item)
+                        )
             except Exception:
                 results.error_count += 1
                 results.items_by_status.setdefault("error", []).append(str(item))
@@ -341,7 +355,9 @@ class BatchOperationProcessor(ABC):
             finalize_checkpoint(checkpoint, checkpoint_manager, operation_name)
             return None
 
-        print_info(f"Processing {len(remaining_items)} remaining items for {operation_name}...")
+        print_info(
+            f"Processing {len(remaining_items)} remaining items for {operation_name}..."
+        )
 
         aggregated_results = BatchResults()
 
@@ -366,13 +382,20 @@ class BatchOperationProcessor(ABC):
             batch_results = self.process_batch(batch_items, current_batch)
             aggregated_results.merge(batch_results)
 
-            # Update checkpoint
+            # Update checkpoint with only the items that were actually attempted
+            # This is critical for proper resumption after interruption
             update_checkpoint_batch(
                 checkpoint,
                 checkpoint_manager,
-                batch_items,
+                batch_results.items_attempted,
                 batch_results.to_checkpoint_update(),
             )
+
+            # If batch was interrupted mid-processing, save and return
+            if batch_results.was_interrupted:
+                print_warning(f"\n{operation_name} interrupted during batch processing")
+                checkpoint_manager.save_checkpoint(checkpoint)
+                return checkpoint.checkpoint_id
 
         # Display summary and finalize
         self.display_summary(aggregated_results)
