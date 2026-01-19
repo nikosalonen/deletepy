@@ -55,6 +55,8 @@ def make_rate_limited_request(
                         f"Still rate limited. Backing off for {backoff_time:.1f}s "
                         f"(attempt {limiter.state.consecutive_429s})"
                     )
+                    # Sleep before returning to prevent rapid retries by callers
+                    time.sleep(backoff_time)
                     return None
             except RateLimitExceededError as e:
                 print(f"CRITICAL: {e}")
