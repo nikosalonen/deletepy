@@ -82,7 +82,7 @@ class TestGetUserDatabaseConnection:
     @pytest.fixture
     def mock_secure_url_encode(self):
         """Mock secure_url_encode function."""
-        with patch("src.deletepy.operations.user_ops.secure_url_encode") as mock:
+        with patch("src.deletepy.utils.url_utils.secure_url_encode") as mock:
             mock.side_effect = lambda x, _: x  # Return input as-is
             yield mock
 
