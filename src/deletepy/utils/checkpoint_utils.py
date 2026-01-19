@@ -110,8 +110,10 @@ def create_checkpoint(
     Returns:
         Newly created checkpoint
     """
-    additional_params = config.additional_params or {}
-    additional_params["operation"] = config.operation_name
+    additional_params = {
+        **(config.additional_params or {}),
+        "operation": config.operation_name,
+    }
 
     operation_config = OperationConfig(
         environment=config.env,

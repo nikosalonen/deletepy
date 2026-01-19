@@ -193,6 +193,27 @@ class TestCreateCheckpoint:
         assert operation_config.additional_params["rotate_password"] is True
         assert operation_config.additional_params["operation"] == "social unlink"
 
+    def test_create_checkpoint_does_not_mutate_original_params(self):
+        """Test that create_checkpoint doesn't mutate the original additional_params dict."""
+        manager = MagicMock(spec=CheckpointManager)
+        mock_checkpoint = MagicMock(spec=Checkpoint)
+        manager.create_checkpoint.return_value = mock_checkpoint
+
+        original_params = {"rotate_password": True}
+        config = CheckpointConfig(
+            operation_type=OperationType.SOCIAL_UNLINK,
+            env="prod",
+            items=["123"],
+            additional_params=original_params,
+            operation_name="social unlink",
+        )
+
+        create_checkpoint(manager, config)
+
+        # Original dict should not have been modified
+        assert "operation" not in original_params
+        assert original_params == {"rotate_password": True}
+
     def test_create_checkpoint_none_additional_params(self):
         """Test creating checkpoint with None additional_params."""
         manager = MagicMock(spec=CheckpointManager)
