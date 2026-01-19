@@ -14,6 +14,15 @@ from ..models.checkpoint import (
     OperationType,
 )
 from ..utils.checkpoint_manager import CheckpointManager
+from ..utils.checkpoint_utils import (
+    handle_checkpoint_error as _base_checkpoint_error,
+)
+from ..utils.checkpoint_utils import (
+    handle_checkpoint_interruption as _base_checkpoint_interruption,
+)
+from ..utils.checkpoint_utils import (
+    try_load_checkpoint,
+)
 from ..utils.display_utils import (
     CYAN,
     GREEN,
@@ -25,7 +34,7 @@ from ..utils.display_utils import (
 )
 from ..utils.legacy_print import print_info, print_success, print_warning
 from ..utils.validators import InputValidator
-from .user_ops import get_user_details, get_user_id_from_email
+from .user_ops import get_user_details, get_users_by_email
 
 
 @dataclass
@@ -113,6 +122,10 @@ def _fetch_user_data(
     The "email" parameter may be either an actual email address or an Auth0
     user ID (e.g., "auth0|...", "google-oauth2|...").
 
+    This function is optimized to avoid redundant API calls:
+    - For email lookups, uses get_users_by_email which returns full user data
+    - For user ID lookups, fetches user details directly
+
     Args:
         email: Email address or Auth0 user ID to fetch data for
         token: Auth0 access token
@@ -130,40 +143,41 @@ def _fetch_user_data(
     }
 
     try:
-        # If input looks like an Auth0 user ID, skip email lookup and fetch directly
+        # If input looks like an Auth0 user ID, fetch directly by ID
         looks_like_user_id = (
             "|" in email
             or InputValidator.validate_auth0_user_id_enhanced(email).is_valid
         )
 
-        user_ids: list[str] = []
         if looks_like_user_id and "@" not in email:
-            user_ids = [email]
-        else:
-            # Resolve email to user IDs
-            resolved = get_user_id_from_email(email, token, base_url, connection)
-            if not resolved:
+            # Direct user ID lookup - single API call
+            user_details = get_user_details(email, token, base_url)
+            if user_details:
+                counters["processed_count"] += 1
+                return [user_details], counters
+            else:
                 counters["not_found_count"] += 1
                 return [], counters
-            user_ids = resolved
 
-        if not user_ids:
+        # Email lookup - use get_users_by_email to get full user data in one call
+        # This avoids the redundant second API call that get_user_id_from_email + get_user_details would make
+        users = get_users_by_email(email, token, base_url, connection)
+
+        if users is None:
+            # Request failed
+            counters["error_count"] += 1
+            return [], counters
+
+        if not users:
             counters["not_found_count"] += 1
             return [], counters
 
-        if len(user_ids) > 1:
+        if len(users) > 1:
             counters["multiple_users_count"] += 1
             # For multiple users, we'll include all of them in the export
 
-        # Fetch details for each user
-        user_data_list = []
-        for user_id in user_ids:
-            user_details = get_user_details(user_id, token, base_url)
-            if user_details:
-                user_data_list.append(user_details)
-
         counters["processed_count"] += 1
-        return user_data_list, counters
+        return users, counters
 
     except Exception as e:
         print(f"{RED}Error processing email {CYAN}{email}{RED}: {e}{RESET}")
@@ -509,28 +523,11 @@ def _try_load_export_checkpoint(
     Returns:
         Optional[Checkpoint]: Loaded checkpoint if valid, None otherwise
     """
-    checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
-    if not checkpoint:
-        print_warning(
-            f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
-        )
-        return None
-
-    if checkpoint.status != CheckpointStatus.ACTIVE:
-        print_warning(
-            f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
-        )
-        return None
-
-    if not checkpoint.is_resumable():
-        print_warning(
-            f"Checkpoint {resume_checkpoint_id} is not resumable",
-            operation="export_resume",
-            checkpoint_id=resume_checkpoint_id,
-        )
-        return None
-
-    return checkpoint
+    return try_load_checkpoint(
+        checkpoint_id=resume_checkpoint_id,
+        checkpoint_manager=checkpoint_manager,
+        operation_name="export",
+    )
 
 
 def _apply_checkpoint_config(
@@ -610,25 +607,9 @@ def _handle_export_interruption(
     Returns:
         str: Checkpoint ID
     """
-    print_warning(
-        "\nExport operation interrupted by user", operation="export_interrupt"
+    return _base_checkpoint_interruption(
+        checkpoint, checkpoint_manager, "Export operation"
     )
-    checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
-    checkpoint_manager.save_checkpoint(checkpoint)
-    print_info(
-        f"Checkpoint saved: {checkpoint.checkpoint_id}",
-        operation="export_interrupt",
-        checkpoint_id=checkpoint.checkpoint_id,
-    )
-    print_info(
-        "You can resume this operation later using:", operation="export_interrupt"
-    )
-    print_info(
-        f"  deletepy resume {checkpoint.checkpoint_id}",
-        operation="export_interrupt",
-        checkpoint_id=checkpoint.checkpoint_id,
-    )
-    return checkpoint.checkpoint_id
 
 
 def _handle_export_error(
@@ -644,14 +625,9 @@ def _handle_export_error(
     Returns:
         str: Checkpoint ID
     """
-    print_warning(
-        f"\nExport operation failed: {error}",
-        operation="export_failed",
-        error=str(error),
+    return _base_checkpoint_error(
+        checkpoint, checkpoint_manager, "Export operation", error
     )
-    checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
-    checkpoint_manager.save_checkpoint(checkpoint)
-    return checkpoint.checkpoint_id
 
 
 def _process_export_with_checkpoints(
@@ -1003,28 +979,11 @@ def _try_load_fetch_checkpoint(
     Returns:
         Optional[Checkpoint]: Loaded checkpoint if valid, None otherwise
     """
-    checkpoint = checkpoint_manager.load_checkpoint(resume_checkpoint_id)
-    if not checkpoint:
-        print_warning(
-            f"Could not load checkpoint {resume_checkpoint_id}, starting fresh"
-        )
-        return None
-
-    if checkpoint.status != CheckpointStatus.ACTIVE:
-        print_warning(
-            f"Checkpoint {resume_checkpoint_id} is not active (status: {checkpoint.status.value})"
-        )
-        return None
-
-    if not checkpoint.is_resumable():
-        print_warning(
-            f"Checkpoint {resume_checkpoint_id} is not resumable",
-            operation="fetch_emails_resume",
-            checkpoint_id=resume_checkpoint_id,
-        )
-        return None
-
-    return checkpoint
+    return try_load_checkpoint(
+        checkpoint_id=resume_checkpoint_id,
+        checkpoint_manager=checkpoint_manager,
+        operation_name="fetch_emails",
+    )
 
 
 def _apply_fetch_checkpoint_config(
@@ -1105,26 +1064,9 @@ def _handle_fetch_interruption(
     Returns:
         str: Checkpoint ID
     """
-    print_warning(
-        "\nFetch emails operation interrupted by user",
-        operation="fetch_emails_interrupt",
+    return _base_checkpoint_interruption(
+        checkpoint, checkpoint_manager, "Fetch emails operation"
     )
-    checkpoint_manager.mark_checkpoint_cancelled(checkpoint)
-    checkpoint_manager.save_checkpoint(checkpoint)
-    print_info(
-        f"Checkpoint saved: {checkpoint.checkpoint_id}",
-        operation="fetch_emails_interrupt",
-        checkpoint_id=checkpoint.checkpoint_id,
-    )
-    print_info(
-        "You can resume this operation later using:", operation="fetch_emails_interrupt"
-    )
-    print_info(
-        f"  deletepy checkpoint resume {checkpoint.checkpoint_id}",
-        operation="fetch_emails_interrupt",
-        checkpoint_id=checkpoint.checkpoint_id,
-    )
-    return checkpoint.checkpoint_id
 
 
 def _handle_fetch_error(
@@ -1140,14 +1082,9 @@ def _handle_fetch_error(
     Returns:
         str: Checkpoint ID
     """
-    print_warning(
-        f"\nFetch emails operation failed: {error}",
-        operation="fetch_emails_failed",
-        error=str(error),
+    return _base_checkpoint_error(
+        checkpoint, checkpoint_manager, "Fetch emails operation", error
     )
-    checkpoint_manager.mark_checkpoint_failed(checkpoint, str(error))
-    checkpoint_manager.save_checkpoint(checkpoint)
-    return checkpoint.checkpoint_id
 
 
 def _process_fetch_emails_with_checkpoints(
