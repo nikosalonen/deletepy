@@ -1,20 +1,64 @@
 """Click-based CLI entry point for DeletePy Auth0 User Management Tool."""
 
+import functools
+import logging
 import sys
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, TypeVar
 
 import click
 
 from deletepy.cli.commands import OperationHandler
 from deletepy.core.exceptions import AuthConfigError
 from deletepy.utils.display_utils import RED, RESET, YELLOW
+from deletepy.utils.logging_utils import setup_logging
 from deletepy.utils.rich_utils import install_rich_tracebacks
+
+F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _configure_logging(verbose: int, quiet: bool) -> None:
+    """Configure logging based on verbosity flags."""
+    if quiet:
+        level = logging.ERROR
+    elif verbose == 0:
+        level = logging.WARNING
+    elif verbose == 1:
+        level = logging.INFO
+    else:
+        level = logging.DEBUG
+    setup_logging(level=logging.getLevelName(level))
+
+
+def common_options(f: F) -> F:
+    """Decorator to add common verbosity options to commands."""
+
+    @click.option(
+        "-v", "--verbose", count=True, help="Increase verbosity (-v, -vv, -vvv)"
+    )
+    @click.option("-q", "--quiet", is_flag=True, help="Suppress non-error output")
+    @functools.wraps(f)
+    def wrapper(*args: Any, verbose: int, quiet: bool, **kwargs: Any) -> Any:
+        _configure_logging(verbose, quiet)
+        return f(*args, **kwargs)
+
+    return wrapper  # type: ignore[no-any-return]
 
 
 @click.group(invoke_without_command=True)
+@click.option("-v", "--verbose", count=True, help="Increase verbosity (-v, -vv, -vvv)")
+@click.option("-q", "--quiet", is_flag=True, help="Suppress non-error output")
 @click.pass_context
-def cli(ctx: click.Context) -> None:
+def cli(ctx: click.Context, verbose: int, quiet: bool) -> None:
     """DeletePy - Auth0 User Management Tool for bulk operations."""
+    _configure_logging(verbose, quiet)
+
+    # Store verbosity in context for subcommands to access if needed
+    ctx.ensure_object(dict)
+    ctx.obj["verbose"] = verbose
+    ctx.obj["quiet"] = quiet
+
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
 
@@ -166,10 +210,13 @@ def users() -> None:
 @click.option(
     "--rotate-password", is_flag=True, help="Rotate user passwords after operation"
 )
+@common_options
 def block(input_file: str, env: str, dry_run: bool, rotate_password: bool) -> None:
     """Block the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(Path(input_file), env, "block", dry_run, rotate_password)
+    handler.handle_user_operations(
+        Path(input_file), env, "block", dry_run, rotate_password
+    )
 
 
 @users.command()
@@ -181,6 +228,7 @@ def block(input_file: str, env: str, dry_run: bool, rotate_password: bool) -> No
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
+@common_options
 def delete(input_file: str, env: str, dry_run: bool) -> None:
     """Delete the specified users."""
     handler = OperationHandler()
@@ -199,10 +247,15 @@ def delete(input_file: str, env: str, dry_run: bool) -> None:
 @click.option(
     "--rotate-password", is_flag=True, help="Rotate user passwords after operation"
 )
-def revoke_grants_only(input_file: str, env: str, dry_run: bool, rotate_password: bool) -> None:
+@common_options
+def revoke_grants_only(
+    input_file: str, env: str, dry_run: bool, rotate_password: bool
+) -> None:
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(Path(input_file), env, "revoke-grants-only", dry_run, rotate_password)
+    handler.handle_user_operations(
+        Path(input_file), env, "revoke-grants-only", dry_run, rotate_password
+    )
 
 
 @cli.group()

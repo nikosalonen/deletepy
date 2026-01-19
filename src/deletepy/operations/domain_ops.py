@@ -3,14 +3,10 @@
 from typing import Any
 
 from ..utils.display_utils import (
-    CYAN,
-    GREEN,
-    RED,
-    RESET,
-    YELLOW,
     show_progress,
     shutdown_requested,
 )
+from ..utils.logging_utils import user_output
 from ..utils.validators import InputValidator
 
 
@@ -93,7 +89,7 @@ def check_email_domains(
                 {"email": email, "reason": f"Error processing: {str(e)}"}
             )
 
-    print("\n")  # Clear progress line
+    user_output("")  # Clear progress line
 
     # Display results
     _display_domain_check_results(results, allowed_domains, blocked_domains)
@@ -113,30 +109,30 @@ def _display_domain_check_results(
         allowed_domains: List of allowed domains
         blocked_domains: List of blocked domains
     """
-    print(f"\n{GREEN}Domain Check Results:{RESET}")
-    print(f"Total emails checked: {results['total_checked']}")
-    print(f"Allowed emails: {len(results['allowed'])}")
-    print(f"Blocked emails: {len(results['blocked'])}")
-    print(f"Unknown/errors: {len(results['unknown']) + len(results['errors'])}")
+    user_output("\nDomain Check Results:", style="success")
+    user_output(f"Total emails checked: {results['total_checked']}")
+    user_output(f"Allowed emails: {len(results['allowed'])}")
+    user_output(f"Blocked emails: {len(results['blocked'])}")
+    user_output(f"Unknown/errors: {len(results['unknown']) + len(results['errors'])}")
 
     if allowed_domains:
-        print(f"Allowed domains: {', '.join(allowed_domains)}")
+        user_output(f"Allowed domains: {', '.join(allowed_domains)}")
     if blocked_domains:
-        print(f"Blocked domains: {', '.join(blocked_domains)}")
+        user_output(f"Blocked domains: {', '.join(blocked_domains)}")
 
     if results["blocked"]:
-        print(f"\n{YELLOW}Blocked emails:{RESET}")
+        user_output("\nBlocked emails:", style="warning")
         for item in results["blocked"][:10]:  # Show first 10
-            print(f"  {CYAN}{item['email']}{RESET} - {item['reason']}")
+            user_output(f"  {item['email']} - {item['reason']}", style="info")
         if len(results["blocked"]) > 10:
-            print(f"  ... and {len(results['blocked']) - 10} more")
+            user_output(f"  ... and {len(results['blocked']) - 10} more")
 
     if results["errors"]:
-        print(f"\n{RED}Errors:{RESET}")
+        user_output("\nErrors:", style="error")
         for item in results["errors"][:5]:  # Show first 5
-            print(f"  {CYAN}{item['email']}{RESET} - {item['reason']}")
+            user_output(f"  {item['email']} - {item['reason']}", style="info")
         if len(results["errors"]) > 5:
-            print(f"  ... and {len(results['errors']) - 5} more")
+            user_output(f"  ... and {len(results['errors']) - 5} more")
 
 
 def validate_domain_format(domain: str) -> bool:

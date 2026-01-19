@@ -1,8 +1,12 @@
 """Display utilities for user interaction and progress display."""
 
+import logging
 import signal
 import sys
 from types import FrameType
+
+# Get logger for this module - using standard logging to avoid circular import
+logger = logging.getLogger("deletepy.utils.display_utils")
 
 # Color constants for terminal output
 RED = "\033[91m"
@@ -94,7 +98,12 @@ def safe_file_write(file_path: str, content: str, backup: bool = True) -> bool:
         return True
 
     except Exception as e:
-        print(f"{RED}Error writing file {file_path}: {e}{RESET}")
+        logger.error(
+            "Error writing file %s: %s",
+            file_path,
+            str(e),
+            extra={"file_path": file_path, "operation": "file_write", "error": str(e)},
+        )
         return False
 
 
@@ -135,9 +144,17 @@ def print_section_header(title: str) -> None:
         console = get_console()
         console.print(Rule(f"[info]{title}[/info]"))
     except Exception:
-        print(f"\n{CYAN}{'=' * 60}{RESET}")
-        print(f"{CYAN}{title.center(60)}{RESET}")
-        print(f"{CYAN}{'=' * 60}{RESET}")
+        # Fallback to click.secho if available, else print
+        try:
+            import click
+
+            click.secho(f"\n{'=' * 60}", fg="cyan")
+            click.secho(title.center(60), fg="cyan")
+            click.secho("=" * 60, fg="cyan")
+        except ImportError:
+            print(f"\n{CYAN}{'=' * 60}{RESET}")
+            print(f"{CYAN}{title.center(60)}{RESET}")
+            print(f"{CYAN}{'=' * 60}{RESET}")
 
 
 def print_warning(message: str) -> None:
@@ -176,7 +193,9 @@ def print_info(message: str) -> None:
     print(f"{CYAN}INFO: {message}{RESET}")
 
 
-def confirm_production_operation(operation: str, total_users: int, rotate_password: bool = False) -> bool:
+def confirm_production_operation(
+    operation: str, total_users: int, rotate_password: bool = False
+) -> bool:
     """Confirm operation in production environment.
 
     Args:
@@ -243,7 +262,9 @@ def confirm_production_operation(operation: str, total_users: int, rotate_passwo
     print(f"Consequence: {operation_details['consequence']}")
 
     if rotate_password:
-        print(f"{YELLOW}WARNING: Password rotation is enabled. This will invalidate current user credentials.{RESET}")
+        print(
+            f"{YELLOW}WARNING: Password rotation is enabled. This will invalidate current user credentials.{RESET}"
+        )
 
     print("This action cannot be undone.")
     from .validators import SecurityValidator

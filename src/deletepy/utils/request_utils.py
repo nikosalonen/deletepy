@@ -6,7 +6,10 @@ from typing import Any, cast
 import requests
 
 from ..core.config import API_RATE_LIMIT, API_TIMEOUT
+from .logging_utils import get_logger
 from .rate_limiter import RateLimitExceededError, get_rate_limiter
+
+logger = get_logger(__name__)
 
 
 def make_rate_limited_request(
@@ -39,9 +42,15 @@ def make_rate_limited_request(
         if response.status_code == 429:
             try:
                 backoff_time = limiter.handle_429()
-                print(
-                    f"Rate limit hit. Backing off for {backoff_time:.1f}s "
-                    f"(attempt {limiter.state.consecutive_429s})"
+                logger.warning(
+                    "Rate limit hit. Backing off for %.1fs (attempt %d)",
+                    backoff_time,
+                    limiter.state.consecutive_429s,
+                    extra={
+                        "delay": backoff_time,
+                        "attempt": limiter.state.consecutive_429s,
+                        "operation": "rate_limit_backoff",
+                    },
                 )
                 time.sleep(backoff_time)
                 # Retry once after backoff
@@ -51,15 +60,25 @@ def make_rate_limited_request(
                 if response.status_code == 429:
                     # Still rate limited after backoff
                     backoff_time = limiter.handle_429()
-                    print(
-                        f"Still rate limited. Backing off for {backoff_time:.1f}s "
-                        f"(attempt {limiter.state.consecutive_429s})"
+                    logger.warning(
+                        "Still rate limited. Backing off for %.1fs (attempt %d)",
+                        backoff_time,
+                        limiter.state.consecutive_429s,
+                        extra={
+                            "delay": backoff_time,
+                            "attempt": limiter.state.consecutive_429s,
+                            "operation": "rate_limit_backoff",
+                        },
                     )
                     # Sleep before returning to prevent rapid retries by callers
                     time.sleep(backoff_time)
                     return None
             except RateLimitExceededError as e:
-                print(f"CRITICAL: {e}")
+                logger.critical(
+                    "Rate limit exceeded: %s",
+                    str(e),
+                    extra={"operation": "rate_limit_exceeded", "error": str(e)},
+                )
                 raise
 
         # Success - record it and apply adaptive rate limiting
@@ -69,7 +88,14 @@ def make_rate_limited_request(
         # Log if rate limits are getting low
         headroom = limiter.state.headroom_ratio
         if headroom is not None and headroom < 0.20:
-            print(f"WARNING: {limiter.get_status_summary()}")
+            logger.warning(
+                "Rate limit headroom low: %s",
+                limiter.get_status_summary(),
+                extra={
+                    "headroom_ratio": headroom,
+                    "operation": "rate_limit_warning",
+                },
+            )
 
         # Handle other errors
         if response.status_code >= 400:
@@ -81,7 +107,16 @@ def make_rate_limited_request(
         # Re-raise rate limit errors to abort operation
         raise
     except requests.exceptions.RequestException as e:
-        print(f"Request failed: {e}")
+        logger.error(
+            "Request failed: %s",
+            str(e),
+            extra={
+                "method": method,
+                "url": url,
+                "operation": "http_request",
+                "error": str(e),
+            },
+        )
         return None
 
 
@@ -106,7 +141,16 @@ def make_simple_request(
         response.raise_for_status()
         return response
     except requests.exceptions.RequestException as e:
-        print(f"Request failed: {e}")
+        logger.error(
+            "Request failed: %s",
+            str(e),
+            extra={
+                "method": method,
+                "url": url,
+                "operation": "http_request",
+                "error": str(e),
+            },
+        )
         return None
 
 
@@ -121,8 +165,15 @@ def validate_response(response: requests.Response, expected_status: int = 200) -
         bool: True if response is valid, False otherwise
     """
     if response.status_code != expected_status:
-        print(
-            f"Unexpected status code: {response.status_code} (expected {expected_status})"
+        logger.warning(
+            "Unexpected status code: %d (expected %d)",
+            response.status_code,
+            expected_status,
+            extra={
+                "status_code": response.status_code,
+                "expected_status": expected_status,
+                "operation": "validate_response",
+            },
         )
         return False
 
@@ -130,7 +181,10 @@ def validate_response(response: requests.Response, expected_status: int = 200) -
         response.json()  # Test if response is valid JSON
         return True
     except ValueError:
-        print("Response is not valid JSON")
+        logger.warning(
+            "Response is not valid JSON",
+            extra={"operation": "validate_response", "error": "invalid_json"},
+        )
         return False
 
 
@@ -147,7 +201,11 @@ def get_json_response(response: requests.Response) -> dict[str, Any] | None:
         json_data = response.json()
         return cast(dict[str, Any], json_data)
     except ValueError as e:
-        print(f"Error parsing JSON response: {e}")
+        logger.error(
+            "Error parsing JSON response: %s",
+            str(e),
+            extra={"operation": "parse_json", "error": str(e)},
+        )
         return None
 
 
