@@ -43,6 +43,45 @@ def shutdown_requested() -> bool:
     return _shutdown_requested
 
 
+def _supports_ansi() -> bool:
+    """Check if the terminal supports ANSI escape sequences.
+
+    Returns:
+        True if ANSI sequences are supported, False otherwise.
+    """
+    import os
+
+    # Check for dumb terminal
+    if os.environ.get("TERM", "") == "dumb":
+        return False
+
+    # Check if stdout is a TTY
+    if not sys.stdout.isatty():
+        return False
+
+    return True
+
+
+def clear_progress_line() -> None:
+    """Clear the current progress line and ensure clean output state.
+
+    Call this before any log output that follows a progress bar to avoid
+    text corruption from mixed stdout/stderr output.
+
+    Uses ANSI erase-to-end-of-line sequence when supported, falls back to
+    fixed-space overwrite for dumb terminals.
+    """
+    if _supports_ansi():
+        # Use ANSI escape: carriage return + erase to end of line
+        sys.stdout.write("\r\x1b[K")
+    else:
+        # Fallback: clear with spaces (assuming max 100 char progress bar)
+        sys.stdout.write("\r" + " " * 100 + "\r")
+    sys.stdout.flush()
+    # Also flush stderr to ensure proper ordering
+    sys.stderr.flush()
+
+
 def show_progress(current: int, total: int, operation: str = "Processing") -> None:
     """Display a progress bar.
 
@@ -65,6 +104,8 @@ def show_progress(current: int, total: int, operation: str = "Processing") -> No
     sys.stdout.flush()
 
     if current == total:
+        # Clear the progress line and move to next line
+        clear_progress_line()
         print()  # New line when complete
 
 

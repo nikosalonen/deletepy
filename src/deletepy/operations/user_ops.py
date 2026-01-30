@@ -22,7 +22,7 @@ from ..utils.checkpoint_utils import (
 from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _checkpoint_interruption_handler,
 )
-from ..utils.display_utils import show_progress, shutdown_requested
+from ..utils.display_utils import clear_progress_line, show_progress, shutdown_requested
 from ..utils.legacy_print import print_error, print_info, print_success, print_warning
 from ..utils.request_utils import make_rate_limited_request
 from ..utils.url_utils import secure_url_encode
@@ -1061,7 +1061,7 @@ def _process_user_batch(
         user_ids, token, base_url, operation, results, rotate_password
     )
 
-    print("\n")  # Clear progress line
+    clear_progress_line()
     return results
 
 
