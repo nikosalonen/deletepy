@@ -11,6 +11,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from deletepy.utils.display_utils import (
+    clear_progress_line,
+    show_progress,
+    shutdown_requested,
+)
+
 from ..core.auth0_client import Auth0Client, Auth0Context
 from ..models.checkpoint import Checkpoint, OperationType
 from ..utils.checkpoint_manager import CheckpointManager
@@ -22,7 +28,6 @@ from ..utils.checkpoint_utils import (
     load_or_create_checkpoint,
     update_checkpoint_batch,
 )
-from ..utils.display_utils import clear_progress_line, show_progress, shutdown_requested
 from ..utils.legacy_print import print_info, print_warning
 
 
