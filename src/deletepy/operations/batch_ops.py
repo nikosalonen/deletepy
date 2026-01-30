@@ -19,7 +19,7 @@ from ..utils.checkpoint_utils import handle_checkpoint_error as _handle_checkpoi
 from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _handle_checkpoint_interruption,
 )
-from ..utils.display_utils import show_progress, shutdown_requested
+from ..utils.display_utils import clear_progress_line, show_progress, shutdown_requested
 from ..utils.legacy_print import print_error, print_info, print_success, print_warning
 from ..utils.url_utils import secure_url_encode
 from .user_ops import delete_user, unlink_user_identity
@@ -419,12 +419,17 @@ def _confirm_production_operations(env: str, total_operations: int) -> bool:
     Returns:
         bool: True if confirmed, False if cancelled
     """
+    import sys
+
     if env == "prod":
         print_warning(
-            f"\nThis will perform {total_operations} operations in PRODUCTION!",
+            f"This will perform {total_operations} operations in PRODUCTION!",
             total_operations=total_operations,
             environment="prod",
         )
+        # Flush both streams to ensure clean terminal state before input
+        sys.stdout.flush()
+        sys.stderr.flush()
         confirm = input("Type 'CONFIRM' to proceed: ")
         if confirm != "CONFIRM":
             print_warning("Operations cancelled.", operation="auto_delete")
@@ -474,7 +479,7 @@ def _handle_user_deletions(
             )
             failed_deletions += 1
 
-    print("\n")  # Clear progress line
+    clear_progress_line()
     return {"deleted_count": deleted_count, "failed_deletions": failed_deletions}
 
 
@@ -514,7 +519,7 @@ def _handle_identity_unlinking(
         show_progress(idx, len(identities_to_unlink), "Unlinking identities")
         _process_single_identity_unlink(user, token, base_url, results)
 
-    print("\n")  # Clear progress line
+    clear_progress_line()
     return results
 
 
@@ -1354,7 +1359,7 @@ def _search_batch_social_ids(
             if sanitized_id:
                 not_found_ids.append(sanitized_id)
 
-    print("\n")  # Clear progress line
+    clear_progress_line()
     return found_users, not_found_ids
 
 
@@ -1531,7 +1536,7 @@ def _display_check_unblocked_results(unblocked_users: list[str]) -> None:
     Args:
         unblocked_users: List of unblocked user IDs
     """
-    print("\n")  # Clear progress line
+    clear_progress_line()
 
     if unblocked_users:
         print_warning(

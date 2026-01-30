@@ -43,6 +43,19 @@ def shutdown_requested() -> bool:
     return _shutdown_requested
 
 
+def clear_progress_line() -> None:
+    """Clear the current progress line and ensure clean output state.
+
+    Call this before any log output that follows a progress bar to avoid
+    text corruption from mixed stdout/stderr output.
+    """
+    # Clear the line with spaces (assuming max 100 char progress bar)
+    sys.stdout.write("\r" + " " * 100 + "\r")
+    sys.stdout.flush()
+    # Also flush stderr to ensure proper ordering
+    sys.stderr.flush()
+
+
 def show_progress(current: int, total: int, operation: str = "Processing") -> None:
     """Display a progress bar.
 
@@ -65,6 +78,8 @@ def show_progress(current: int, total: int, operation: str = "Processing") -> No
     sys.stdout.flush()
 
     if current == total:
+        # Clear the progress line and move to next line
+        clear_progress_line()
         print()  # New line when complete
 
 
