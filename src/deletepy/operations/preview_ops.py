@@ -13,6 +13,7 @@ from ..utils.display_utils import (
     RED,
     RESET,
     YELLOW,
+    clear_progress_line,
     show_progress,
     shutdown_requested,
 )
@@ -137,7 +138,7 @@ def preview_user_operations(
                     }
                 )
 
-    print("\n")  # Clear progress line
+    clear_progress_line()
 
     if show_details:
         _display_preview_results(result)
