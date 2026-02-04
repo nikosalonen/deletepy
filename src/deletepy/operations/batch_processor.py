@@ -28,7 +28,7 @@ from ..utils.checkpoint_utils import (
     load_or_create_checkpoint,
     update_checkpoint_batch,
 )
-from ..utils.legacy_print import print_info, print_warning
+from ..utils.output import print_info, print_warning
 
 
 @dataclass

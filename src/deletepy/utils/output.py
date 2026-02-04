@@ -1,8 +1,16 @@
-"""Legacy print function replacements with logging.
+"""Output utilities with structured logging support.
 
-This module provides drop-in replacements for the existing print-based
-functions to gradually migrate to structured logging while maintaining
-backward compatibility.
+This module provides the canonical print functions for user output that integrate
+with the structured logging system. All print_* functions go through the logging
+infrastructure for proper formatting and optional structured output.
+
+Functions:
+    print_info: Print informational messages
+    print_success: Print success messages
+    print_warning: Print warning messages
+    print_error: Print error messages
+    print_section_header: Print section headers
+    log_*: Additional structured logging helpers
 """
 
 from typing import Any

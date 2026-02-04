@@ -27,8 +27,8 @@ from ..utils.display_utils import (
     show_progress,
     shutdown_requested,
 )
-from ..utils.legacy_print import print_info, print_success, print_warning
 from ..utils.logging_utils import get_logger, user_output, user_output_config
+from ..utils.output import print_info, print_success, print_warning
 from ..utils.validators import InputValidator
 from .user_ops import get_user_details, get_users_by_email
 

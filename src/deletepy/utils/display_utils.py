@@ -5,6 +5,15 @@ import signal
 import sys
 from types import FrameType
 
+# Re-export print functions from output module for backward compatibility
+from .output import (
+    print_error,
+    print_info,
+    print_section_header,
+    print_success,
+    print_warning,
+)
+
 # Get logger for this module - using standard logging to avoid circular import
 logger = logging.getLogger("deletepy.utils.display_utils")
 
@@ -170,68 +179,26 @@ def confirm_action(message: str, default: bool = False) -> bool:
     return response in ["y", "yes", "true", "1"]
 
 
-def print_section_header(title: str) -> None:
-    """Print a formatted section header.
-
-    Args:
-        title: Section title
-    """
-    try:
-        # Prefer Rich styled rule if available
-        from rich.rule import Rule
-
-        from .rich_utils import get_console
-
-        console = get_console()
-        console.print(Rule(f"[info]{title}[/info]"))
-    except Exception:
-        # Fallback to click.secho if available, else print
-        try:
-            import click
-
-            click.secho(f"\n{'=' * 60}", fg="cyan")
-            click.secho(title.center(60), fg="cyan")
-            click.secho("=" * 60, fg="cyan")
-        except ImportError:
-            print(f"\n{CYAN}{'=' * 60}{RESET}")
-            print(f"{CYAN}{title.center(60)}{RESET}")
-            print(f"{CYAN}{'=' * 60}{RESET}")
-
-
-def print_warning(message: str) -> None:
-    """Print a warning message.
-
-    Args:
-        message: Warning message
-    """
-    print(f"{YELLOW}WARNING: {message}{RESET}")
-
-
-def print_error(message: str) -> None:
-    """Print an error message.
-
-    Args:
-        message: Error message
-    """
-    print(f"{RED}ERROR: {message}{RESET}")
-
-
-def print_success(message: str) -> None:
-    """Print a success message.
-
-    Args:
-        message: Success message
-    """
-    print(f"{GREEN}SUCCESS: {message}{RESET}")
-
-
-def print_info(message: str) -> None:
-    """Print an info message.
-
-    Args:
-        message: Info message
-    """
-    print(f"{CYAN}INFO: {message}{RESET}")
+# Make re-exports visible to type checkers and importers
+__all__ = [
+    "RED",
+    "GREEN",
+    "YELLOW",
+    "CYAN",
+    "RESET",
+    "setup_shutdown_handler",
+    "shutdown_requested",
+    "clear_progress_line",
+    "show_progress",
+    "safe_file_write",
+    "confirm_action",
+    "confirm_production_operation",
+    "print_error",
+    "print_info",
+    "print_section_header",
+    "print_success",
+    "print_warning",
+]
 
 
 def confirm_production_operation(

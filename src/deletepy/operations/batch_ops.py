@@ -20,7 +20,7 @@ from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _handle_checkpoint_interruption,
 )
 from ..utils.display_utils import clear_progress_line, show_progress, shutdown_requested
-from ..utils.legacy_print import print_error, print_info, print_success, print_warning
+from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.url_utils import secure_url_encode
 from .user_ops import delete_user, unlink_user_identity
 

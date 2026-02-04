@@ -4,7 +4,7 @@ import secrets
 import string
 from typing import Any
 
-from ..utils.legacy_print import print_error, print_warning
+from ..utils.output import print_error, print_warning
 from ..utils.request_utils import make_rate_limited_request
 
 
@@ -51,9 +51,7 @@ def generate_secure_password(length: int = 16) -> str:
     return "".join(password_chars)
 
 
-def get_user_database_connection(
-    user_id: str, token: str, base_url: str
-) -> str | None:
+def get_user_database_connection(user_id: str, token: str, base_url: str) -> str | None:
     """Auto-detect user's database connection from their Auth0 profile.
 
     Args:

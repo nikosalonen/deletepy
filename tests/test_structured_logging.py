@@ -7,12 +7,6 @@ import tempfile
 from io import StringIO
 from unittest.mock import patch
 
-from src.deletepy.utils.legacy_print import (
-    print_error,
-    print_info,
-    print_success,
-    print_warning,
-)
 from src.deletepy.utils.logging_utils import (
     ColoredFormatter,
     DetailedFormatter,
@@ -20,6 +14,12 @@ from src.deletepy.utils.logging_utils import (
     configure_from_env,
     get_logger,
     setup_logging,
+)
+from src.deletepy.utils.output import (
+    print_error,
+    print_info,
+    print_success,
+    print_warning,
 )
 
 
@@ -207,7 +207,7 @@ class TestLegacyPrintFunctions:
                 captured_records.append(record)
 
         # Configure the logger to use our capturing handler
-        logger = logging.getLogger("deletepy.utils.legacy_print")
+        logger = logging.getLogger("deletepy.utils.output")
         original_handlers = logger.handlers.copy()
         logger.handlers = []
         handler = CapturingHandler()

@@ -42,14 +42,14 @@ from .file_utils import (
     setup_signal_handlers,
     validate_file_path,
 )
-from .legacy_print import (
+from .logging_utils import get_logger, log_operation, setup_logging
+from .output import (
     log_api_request,
     log_batch_operation,
     log_file_operation,
     log_progress,
     log_user_operation,
 )
-from .logging_utils import get_logger, log_operation, setup_logging
 
 # FileOperationError is imported from core.exceptions above
 
