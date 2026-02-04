@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from .auth_utils import AUTH0_CONNECTIONS
+
 
 @dataclass
 class ValidationResult:
@@ -40,22 +42,8 @@ class InputValidator:
     # Auth0 user ID patterns
     AUTH0_USER_ID_PATTERN = re.compile(r"^[a-zA-Z0-9\-_]+\|[a-zA-Z0-9\-_]+$")
 
-    # Known Auth0 connection types
-    KNOWN_AUTH0_CONNECTIONS = {
-        "auth0",
-        "google-oauth2",
-        "facebook",
-        "github",
-        "twitter",
-        "linkedin",
-        "apple",
-        "microsoft",
-        "windowslive",
-        "line",
-        "samlp",
-        "oidc",
-        "email",
-    }
+    # Known Auth0 connection types - imported from auth_utils (single source of truth)
+    KNOWN_AUTH0_CONNECTIONS = AUTH0_CONNECTIONS
 
     # Dangerous characters for path traversal
     PATH_TRAVERSAL_PATTERNS = [

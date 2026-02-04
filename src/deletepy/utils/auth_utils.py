@@ -1,20 +1,44 @@
-"""Auth0-specific validation utilities."""
+"""Auth0-specific validation utilities.
 
-# Auth0 user ID prefixes
-AUTH0_USER_ID_PREFIXES = (
-    "auth0|",
-    "google-oauth2|",
-    "facebook|",
-    "github|",
-    "twitter|",
-    "linkedin|",
-    "apple|",
-    "microsoft|",
-    "windowslive|",
-    "line|",
-    "samlp|",
-    "oidc|",
+This module is the single source of truth for Auth0 connection types and prefixes.
+"""
+
+# All known Auth0 connection types
+AUTH0_CONNECTIONS = frozenset(
+    {
+        "auth0",
+        "google-oauth2",
+        "facebook",
+        "github",
+        "twitter",
+        "linkedin",
+        "apple",
+        "microsoft",
+        "windowslive",
+        "line",
+        "samlp",
+        "oidc",
+        "email",
+    }
 )
+
+# Social/OAuth connection types
+SOCIAL_CONNECTIONS = frozenset(
+    {
+        "google-oauth2",
+        "facebook",
+        "github",
+        "twitter",
+        "linkedin",
+        "apple",
+        "microsoft",
+        "windowslive",
+        "line",
+    }
+)
+
+# Auth0 user ID prefixes (derived from connections)
+AUTH0_USER_ID_PREFIXES = tuple(f"{conn}|" for conn in sorted(AUTH0_CONNECTIONS))
 
 
 def is_auth0_user_id(identifier: str) -> bool:
@@ -96,18 +120,7 @@ def is_social_connection(user_id: str) -> bool:
     """
     try:
         connection = get_connection_type(user_id)
-        social_connections = {
-            "google-oauth2",
-            "facebook",
-            "github",
-            "twitter",
-            "linkedin",
-            "apple",
-            "microsoft",
-            "windowslive",
-            "line",
-        }
-        return connection in social_connections
+        return connection in SOCIAL_CONNECTIONS
     except ValueError:
         return False
 
