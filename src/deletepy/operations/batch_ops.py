@@ -26,16 +26,6 @@ from .user_ops import delete_user, unlink_user_identity
 
 
 @dataclass
-class SearchProcessingConfig:
-    """Configuration for search result processing operations."""
-
-    token: str
-    base_url: str
-    env: str
-    auto_delete: bool
-
-
-@dataclass
 class CheckpointOperationConfig:
     """Configuration for checkpoint-enabled operations."""
 
