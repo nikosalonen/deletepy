@@ -1,4 +1,12 @@
-"""Display utilities for user interaction and progress display."""
+"""Display utilities for user interaction and progress display.
+
+This module provides:
+- Terminal color constants
+- Progress bar display
+- Graceful shutdown handling
+- User confirmation prompts
+- Backward-compatible re-exports from output module
+"""
 
 import logging
 import signal
@@ -17,12 +25,39 @@ from .output import (
 # Get logger for this module - using standard logging to avoid circular import
 logger = logging.getLogger("deletepy.utils.display_utils")
 
-# Color constants for terminal output
+# =============================================================================
+# Terminal Color Constants
+# =============================================================================
+
 RED = "\033[91m"
 GREEN = "\033[92m"
 YELLOW = "\033[93m"
 CYAN = "\033[96m"
 RESET = "\033[0m"
+
+
+def _supports_ansi() -> bool:
+    """Check if the terminal supports ANSI escape sequences.
+
+    Returns:
+        True if ANSI sequences are supported, False otherwise.
+    """
+    import os
+
+    # Check for dumb terminal
+    if os.environ.get("TERM", "") == "dumb":
+        return False
+
+    # Check if stdout is a TTY
+    if not sys.stdout.isatty():
+        return False
+
+    return True
+
+
+# =============================================================================
+# Shutdown Handling
+# =============================================================================
 
 # Global flag for shutdown requests
 _shutdown_requested = False
@@ -52,23 +87,9 @@ def shutdown_requested() -> bool:
     return _shutdown_requested
 
 
-def _supports_ansi() -> bool:
-    """Check if the terminal supports ANSI escape sequences.
-
-    Returns:
-        True if ANSI sequences are supported, False otherwise.
-    """
-    import os
-
-    # Check for dumb terminal
-    if os.environ.get("TERM", "") == "dumb":
-        return False
-
-    # Check if stdout is a TTY
-    if not sys.stdout.isatty():
-        return False
-
-    return True
+# =============================================================================
+# Progress Display
+# =============================================================================
 
 
 def clear_progress_line() -> None:
@@ -118,43 +139,9 @@ def show_progress(current: int, total: int, operation: str = "Processing") -> No
         print()  # New line when complete
 
 
-def safe_file_write(file_path: str, content: str, backup: bool = True) -> bool:
-    """Safely write content to a file with optional backup.
-
-    Args:
-        file_path: Path to the file to write
-        content: Content to write to the file
-        backup: Whether to create a backup of existing file
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    import os
-    import shutil
-    from datetime import datetime
-
-    try:
-        # Create backup if file exists and backup is requested
-        if backup and os.path.exists(file_path):
-            backup_path = (
-                f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            )
-            shutil.copy2(file_path, backup_path)
-
-        # Write new content
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(content)
-
-        return True
-
-    except Exception as e:
-        logger.error(
-            "Error writing file %s: %s",
-            file_path,
-            str(e),
-            extra={"file_path": file_path, "operation": "file_write", "error": str(e)},
-        )
-        return False
+# =============================================================================
+# User Confirmation
+# =============================================================================
 
 
 def confirm_action(message: str, default: bool = False) -> bool:
@@ -177,28 +164,6 @@ def confirm_action(message: str, default: bool = False) -> bool:
         return default
 
     return response in ["y", "yes", "true", "1"]
-
-
-# Make re-exports visible to type checkers and importers
-__all__ = [
-    "RED",
-    "GREEN",
-    "YELLOW",
-    "CYAN",
-    "RESET",
-    "setup_shutdown_handler",
-    "shutdown_requested",
-    "clear_progress_line",
-    "show_progress",
-    "safe_file_write",
-    "confirm_action",
-    "confirm_production_operation",
-    "print_error",
-    "print_info",
-    "print_section_header",
-    "print_success",
-    "print_warning",
-]
 
 
 def confirm_production_operation(
@@ -282,4 +247,76 @@ def confirm_production_operation(
     return response == "yes"
 
 
-# Import FileOperationError from centralized exceptions
+# =============================================================================
+# File Operations
+# =============================================================================
+
+
+def safe_file_write(file_path: str, content: str, backup: bool = True) -> bool:
+    """Safely write content to a file with optional backup.
+
+    Args:
+        file_path: Path to the file to write
+        content: Content to write to the file
+        backup: Whether to create a backup of existing file
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    import os
+    import shutil
+    from datetime import datetime
+
+    try:
+        # Create backup if file exists and backup is requested
+        if backup and os.path.exists(file_path):
+            backup_path = (
+                f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+            )
+            shutil.copy2(file_path, backup_path)
+
+        # Write new content
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+        return True
+
+    except Exception as e:
+        logger.error(
+            "Error writing file %s: %s",
+            file_path,
+            str(e),
+            extra={"file_path": file_path, "operation": "file_write", "error": str(e)},
+        )
+        return False
+
+
+# =============================================================================
+# Module Exports
+# =============================================================================
+
+__all__ = [
+    # Terminal colors
+    "RED",
+    "GREEN",
+    "YELLOW",
+    "CYAN",
+    "RESET",
+    # Shutdown handling
+    "setup_shutdown_handler",
+    "shutdown_requested",
+    # Progress display
+    "clear_progress_line",
+    "show_progress",
+    # User confirmation
+    "confirm_action",
+    "confirm_production_operation",
+    # File operations
+    "safe_file_write",
+    # Re-exported from output module
+    "print_error",
+    "print_info",
+    "print_section_header",
+    "print_success",
+    "print_warning",
+]
