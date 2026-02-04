@@ -14,7 +14,7 @@ from ..models.checkpoint import (
     OperationType,
 )
 from .checkpoint_manager import CheckpointManager
-from .legacy_print import print_info, print_success, print_warning
+from .output import print_info, print_success, print_warning
 
 
 @dataclass

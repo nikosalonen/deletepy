@@ -2,6 +2,8 @@
 
 import argparse
 
+from ..utils.auth_utils import AUTH0_CONNECTIONS
+
 
 def validate_args() -> argparse.Namespace:
     """Parse and validate command line arguments.
@@ -176,22 +178,10 @@ def validate_connection_type(connection: str | None) -> str | None:
     if connection is None:
         return None
 
-    valid_connections = [
-        "auth0",
-        "google-oauth2",
-        "facebook",
-        "github",
-        "twitter",
-        "linkedin",
-        "apple",
-        "microsoft",
-        "windowslive",
-        "line",
-        "samlp",
-        "oidc",
-    ]
-    if connection not in valid_connections:
-        raise ValueError(f"Connection must be one of: {', '.join(valid_connections)}")
+    if connection not in AUTH0_CONNECTIONS:
+        raise ValueError(
+            f"Connection must be one of: {', '.join(sorted(AUTH0_CONNECTIONS))}"
+        )
     return connection
 
 

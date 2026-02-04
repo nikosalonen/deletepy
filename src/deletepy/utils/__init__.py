@@ -42,14 +42,24 @@ from .file_utils import (
     setup_signal_handlers,
     validate_file_path,
 )
-from .legacy_print import (
+from .logging_utils import get_logger, log_operation, setup_logging
+from .output import (
     log_api_request,
     log_batch_operation,
     log_file_operation,
     log_progress,
     log_user_operation,
 )
-from .logging_utils import get_logger, log_operation, setup_logging
+from .rich_utils import (
+    create_table,
+    get_console,
+    print_dict,
+    print_operation_result,
+    print_panel,
+    print_summary,
+    print_table,
+    print_user_list,
+)
 
 # FileOperationError is imported from core.exceptions above
 
@@ -103,4 +113,13 @@ __all__ = [
     "log_file_operation",
     "log_progress",
     "log_user_operation",
+    # Rich utilities for pretty output
+    "create_table",
+    "get_console",
+    "print_dict",
+    "print_operation_result",
+    "print_panel",
+    "print_summary",
+    "print_table",
+    "print_user_list",
 ]
