@@ -4,6 +4,9 @@ This module provides the canonical print functions for user output that integrat
 with the structured logging system. All print_* functions go through the logging
 infrastructure for proper formatting and optional structured output.
 
+The logging system uses RichHandler when available for pretty console output.
+For additional Rich formatting (tables, panels, summaries), use rich_utils directly.
+
 Functions:
     print_info: Print informational messages
     print_success: Print success messages

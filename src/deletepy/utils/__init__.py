@@ -50,6 +50,16 @@ from .output import (
     log_progress,
     log_user_operation,
 )
+from .rich_utils import (
+    create_table,
+    get_console,
+    print_dict,
+    print_operation_result,
+    print_panel,
+    print_summary,
+    print_table,
+    print_user_list,
+)
 
 # FileOperationError is imported from core.exceptions above
 
@@ -103,4 +113,13 @@ __all__ = [
     "log_file_operation",
     "log_progress",
     "log_user_operation",
+    # Rich utilities for pretty output
+    "create_table",
+    "get_console",
+    "print_dict",
+    "print_operation_result",
+    "print_panel",
+    "print_summary",
+    "print_table",
+    "print_user_list",
 ]
