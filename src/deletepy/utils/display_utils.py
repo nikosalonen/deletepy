@@ -195,8 +195,7 @@ def create_rich_progress(operation: str = "Processing") -> "Progress | None":
 
 
 class _AdvanceCallable(Protocol):
-    def __call__(self, step: int = 1) -> None:
-        ...
+    def __call__(self, step: int = 1) -> None: ...
 
 
 @contextmanager
