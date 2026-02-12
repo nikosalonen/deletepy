@@ -295,16 +295,14 @@ def _display_preview_results(result: PreviewResult) -> None:
         print_table(table)
 
     # --- Skipped / errors ---
-    _display_item_table(result.blocked_users, "⚠ Already in target state", "warning")
-    _display_item_table(result.not_found_users, "✗ Not found", "error")
-    _display_item_table(result.invalid_user_ids, "✗ Invalid user IDs", "error")
+    _display_item_table(result.blocked_users, "⚠ Already in target state")
+    _display_item_table(result.not_found_users, "✗ Not found")
+    _display_item_table(result.invalid_user_ids, "✗ Invalid user IDs")
     _display_multiple_users(result.multiple_users)
     _display_error_table(result.errors)
 
 
-def _display_item_table(
-    items: list[str], title: str, style: str, limit: int = 5
-) -> None:
+def _display_item_table(items: list[str], title: str, limit: int = 5) -> None:
     """Display a short list of items as a compact table."""
     if not items:
         return
@@ -431,19 +429,15 @@ def _display_social_preview_results(results: dict[str, Any]) -> None:
     )
 
     # --- Category tables ---
+    _display_social_user_table(results["users_to_delete_list"], "✅ Would delete")
+    _display_social_user_table(results["identities_to_unlink_list"], "🔗 Would unlink")
     _display_social_user_table(
-        results["users_to_delete_list"], "✅ Would delete", "success"
-    )
-    _display_social_user_table(
-        results["identities_to_unlink_list"], "🔗 Would unlink", "warning"
-    )
-    _display_social_user_table(
-        results["auth0_main_protected_list"], "🛡 Protected (skipped)", "info"
+        results["auth0_main_protected_list"], "🛡 Protected (skipped)"
     )
 
 
 def _display_social_user_table(
-    user_list: list[dict[str, str]], title: str, style: str, limit: int = 10
+    user_list: list[dict[str, str]], title: str, limit: int = 10
 ) -> None:
     """Display a list of social users as a formatted table."""
     if not user_list:
