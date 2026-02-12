@@ -27,7 +27,7 @@ from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.logging_utils import get_logger, user_output, user_output_config
 from ..utils.output import print_info, print_success, print_warning
 from ..utils.validators import InputValidator
-from .user_ops import get_user_details, get_users_by_email
+from .user_ops import get_user_details, get_user_email, get_users_by_email
 
 logger = get_logger(__name__)
 
@@ -1238,8 +1238,6 @@ def _fetch_and_build_csv_row(
         Tuple of (csv_row, counter_key) where counter_key is
         'processed_count', 'not_found_count', or 'error_count'.
     """
-    from deletepy.operations.user_ops import get_user_email
-
     try:
         email = get_user_email(user_id, token, base_url)
         if email:
