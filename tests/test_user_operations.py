@@ -74,7 +74,7 @@ def test_block_user():
     client.get_user_sessions.assert_called_once_with("auth0%7Ctest_user_id")
 
     # Verify revoke_user_grants was triggered (delete_user_grants called)
-    client.delete_user_grants.assert_called_once_with("auth0%7Ctest_user_id")
+    client.delete_user_grants.assert_called_once_with("auth0|test_user_id")
 
     # Verify block_user was called with encoded user ID
     client.block_user.assert_called_once_with("auth0%7Ctest_user_id")
@@ -374,7 +374,7 @@ def test_revoke_user_grants():
 
     revoke_user_grants("auth0|test_user_id", client)
 
-    client.delete_user_grants.assert_called_once_with("auth0%7Ctest_user_id")
+    client.delete_user_grants.assert_called_once_with("auth0|test_user_id")
 
 
 def test_revoke_user_grants_failure():
@@ -387,7 +387,7 @@ def test_revoke_user_grants_failure():
     # Should not raise, just prints error
     revoke_user_grants("auth0|test_user_id", client)
 
-    client.delete_user_grants.assert_called_once_with("auth0%7Ctest_user_id")
+    client.delete_user_grants.assert_called_once_with("auth0|test_user_id")
 
 
 def test_get_user_email():

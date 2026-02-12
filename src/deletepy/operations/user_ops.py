@@ -412,8 +412,9 @@ def _revoke_single_session(session_id: str, user_id: str, client: Auth0Client) -
 
 def revoke_user_grants(user_id: str, client: Auth0Client) -> None:
     """Revoke all application grants (authorized applications) for a user in one call."""
-    encoded_id = secure_url_encode(user_id, "user ID")
-    result = client.delete_user_grants(encoded_id)
+    # Grants endpoint uses user_id as a query parameter, not a path segment,
+    # so it must NOT be URL-encoded
+    result = client.delete_user_grants(user_id)
     if result.success:
         print_success(
             f"Revoked all application grants for user {user_id}",
