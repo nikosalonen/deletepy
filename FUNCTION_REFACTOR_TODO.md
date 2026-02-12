@@ -51,9 +51,8 @@ All functions now meet the ≤50 lines per function complexity guideline.
 - **Status**: ✅ COMPLETED
 
 ### 9. ✅ `src/deletepy/cli/commands.py` - `_process_users()`
-- **Before**: ~59 lines → **After**: ~16 lines
-- **Refactored**: Extracted `_initialize_processing_state()`, `_process_single_user()`, `_create_processing_results()`
-- **Status**: ✅ COMPLETED
+- **Before**: ~59 lines → **After**: Removed (replaced by checkpoint-based batch processing in `user_ops.py`)
+- **Status**: ✅ COMPLETED (extracted helpers later removed as dead code during Auth0Client consolidation)
 
 ## 📊 Final Results
 

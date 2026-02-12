@@ -71,6 +71,7 @@ deletepy/
 │       │   └── validators.py    # Argument validation
 │       ├── core/                # Core functionality
 │       │   ├── auth.py          # Auth0 authentication
+│       │   ├── auth0_client.py  # Unified Auth0 API client
 │       │   ├── config.py        # Configuration management
 │       │   └── exceptions.py    # Custom exceptions
 │       ├── operations/          # Business operations
@@ -81,7 +82,7 @@ deletepy/
 │       ├── utils/               # Utilities
 │       │   ├── file_utils.py    # File operations
 │       │   ├── display_utils.py # Progress/output formatting
-│       │   ├── request_utils.py # HTTP request utilities
+│       │   ├── request_utils.py # Batch processing utilities
 │       │   └── auth_utils.py    # Authentication utilities
 │       └── models/              # Data models
 ├── tests/                       # Test suite
