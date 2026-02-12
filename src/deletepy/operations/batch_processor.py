@@ -11,11 +11,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from deletepy.utils.display_utils import (
-    live_progress,
-    shutdown_requested,
-)
-
 from ..core.auth0_client import Auth0Client, Auth0Context
 from ..models.checkpoint import Checkpoint, OperationType
 from ..utils.checkpoint_manager import CheckpointManager
@@ -27,6 +22,7 @@ from ..utils.checkpoint_utils import (
     load_or_create_checkpoint,
     update_checkpoint_batch,
 )
+from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_info, print_warning
 
 
@@ -277,9 +273,13 @@ class BatchOperationProcessor(ABC):
                             results.items_by_status.setdefault("skipped", []).append(
                                 str(item)
                             )
-                except Exception:
+                except Exception as e:
                     results.error_count += 1
                     results.items_by_status.setdefault("error", []).append(str(item))
+                    print_warning(
+                        f"Error processing {item}: {e}",
+                        operation=self.get_operation_name(),
+                    )
 
                 advance()
 
