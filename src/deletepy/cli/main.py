@@ -67,6 +67,7 @@ def cli(ctx: click.Context, verbose: int, quiet: bool) -> None:
 @cli.command()
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option("--test-api", is_flag=True, help="Test API access")
+@common_options
 def doctor(env: str, test_api: bool) -> None:
     """Test Auth0 credentials and API access."""
     try:
@@ -82,6 +83,7 @@ def doctor(env: str, test_api: bool) -> None:
 @cli.command()
 @click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
+@common_options
 def check_unblocked(input_file: str, env: str) -> None:
     """Check if specified users are unblocked."""
     handler = OperationHandler()
@@ -91,6 +93,7 @@ def check_unblocked(input_file: str, env: str) -> None:
 @cli.command()
 @click.argument("input_file", type=click.Path(exists=True))
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
+@common_options
 def check_domains(input_file: str, env: str) -> None:
     """Check email domains for the specified users."""
     handler = OperationHandler()
@@ -104,6 +107,7 @@ def check_domains(input_file: str, env: str) -> None:
 )
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
 @click.option("--connection", help="Filter by connection type")
+@common_options
 def export_last_login(input_file: str, env: str, connection: str | None) -> None:
     """Export user last_login data to CSV."""
     if env == "prod":
@@ -121,6 +125,7 @@ def export_last_login(input_file: str, env: str, connection: str | None) -> None
     type=click.Path(exists=True, file_okay=True, dir_okay=False, readable=True),
 )
 @click.argument("env", type=click.Choice(["dev", "prod"]), default="dev")
+@common_options
 def fetch_emails(input_file: str, env: str) -> None:
     """Fetch email addresses for given user IDs and export to CSV."""
     if env == "prod":
@@ -141,6 +146,7 @@ def fetch_emails(input_file: str, env: str) -> None:
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
+@common_options
 def unlink_social_ids(input_file: str, env: str, dry_run: bool) -> None:
     """Unlink social identities from Auth0 users and delete detached accounts."""
     if env == "prod" and not dry_run:
@@ -165,6 +171,7 @@ def unlink_social_ids(input_file: str, env: str, dry_run: bool) -> None:
     default="user_id",
     help="Type of output desired",
 )
+@common_options
 def cleanup_csv(input_file: str, env: str | None, output_type: str) -> None:
     """Process CSV file and extract/convert user identifiers."""
     from deletepy.utils.csv_utils import (
@@ -288,6 +295,7 @@ def checkpoint() -> None:
 )
 @click.option("--env", type=click.Choice(["dev", "prod"]), help="Filter by environment")
 @click.option("--details", is_flag=True, help="Show detailed checkpoint information")
+@common_options
 def list(
     operation_type: str | None, status: str | None, env: str | None, details: bool
 ) -> None:
@@ -303,6 +311,7 @@ def list(
     type=click.Path(exists=True),
     help="Override input file from checkpoint (optional)",
 )
+@common_options
 def resume(checkpoint_id: str, input_file: str | None) -> None:
     """Resume an operation from a checkpoint."""
     handler = OperationHandler()
@@ -328,6 +337,7 @@ def resume(checkpoint_id: str, input_file: str | None) -> None:
     is_flag=True,
     help="Preview what would be cleaned without actually deleting",
 )
+@common_options
 def clean(
     clean_all: bool, failed: bool, completed: bool, days_old: int, dry_run: bool
 ) -> None:
@@ -339,6 +349,7 @@ def clean(
 @checkpoint.command()
 @click.argument("checkpoint_id", type=str)
 @click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
+@common_options
 def delete_checkpoint(checkpoint_id: str, confirm: bool) -> None:
     """Delete a specific checkpoint."""
     handler = OperationHandler()
@@ -347,6 +358,7 @@ def delete_checkpoint(checkpoint_id: str, confirm: bool) -> None:
 
 @checkpoint.command()
 @click.argument("checkpoint_id", type=str)
+@common_options
 def details(checkpoint_id: str) -> None:
     """Show detailed information about a specific checkpoint."""
     handler = OperationHandler()
