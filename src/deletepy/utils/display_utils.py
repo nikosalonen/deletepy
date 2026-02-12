@@ -234,8 +234,10 @@ def live_progress(
             counter["current"] += step
             show_progress(counter["current"], total, operation)
 
-        yield _ascii_advance
-        clear_progress_line()
+        try:
+            yield _ascii_advance
+        finally:
+            clear_progress_line()
         return
 
     from .rich_utils import get_stderr_console

@@ -2,7 +2,7 @@
 
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from ..core.config import API_RATE_LIMIT
@@ -122,7 +122,7 @@ def _process_resolved_user(
                 {
                     "identifier": original_id,
                     "error": "Could not fetch user details",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "operation": operation,
                     "error_type": "user_details_fetch_failed",
                 }
@@ -147,7 +147,7 @@ def _process_resolved_user(
             {
                 "identifier": original_id,
                 "error": f"API error: {str(e)}",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "operation": operation,
                 "error_type": "api_exception",
             }
@@ -182,7 +182,7 @@ def _resolve_user_identifier(
                 {
                     "identifier": user_id,
                     "error": f"Error resolving email: {str(e)}",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "operation": result.operation,
                     "error_type": "email_resolution_failed",
                 }
