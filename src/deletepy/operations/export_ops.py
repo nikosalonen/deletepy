@@ -192,7 +192,6 @@ def _process_email_batch(
     token: str,
     base_url: str,
     connection: str | None,
-    batch_start: int,
     batch_number: int,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Process a batch of email addresses.
@@ -202,7 +201,6 @@ def _process_email_batch(
         token: Auth0 access token
         base_url: Auth0 API base URL
         connection: Optional connection filter
-        batch_start: Starting index of this batch
         batch_number: Batch number for display
 
     Returns:
@@ -688,7 +686,7 @@ def _process_export_with_checkpoints(
 
         # Process this batch
         batch_csv_data, batch_counters = _process_email_batch(
-            batch_emails, token, base_url, connection, batch_start, current_batch_num
+            batch_emails, token, base_url, connection, current_batch_num
         )
 
         user_output("")  # Clear progress line
@@ -1147,7 +1145,7 @@ def _process_fetch_emails_with_checkpoints(
 
         # Process this batch
         batch_csv_data, batch_counters = _process_user_id_batch(
-            batch_user_ids, token, base_url, batch_start, current_batch_num
+            batch_user_ids, token, base_url, current_batch_num
         )
 
         user_output("")  # Clear progress line
@@ -1202,7 +1200,6 @@ def _process_user_id_batch(
     batch_user_ids: list[str],
     token: str,
     base_url: str,
-    batch_start: int,
     batch_number: int,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Process a batch of user IDs to fetch emails.
@@ -1211,7 +1208,6 @@ def _process_user_id_batch(
         batch_user_ids: List of user IDs to process
         token: Auth0 access token
         base_url: Auth0 API base URL
-        batch_start: Starting index of this batch
         batch_number: Batch number for display
 
     Returns:
