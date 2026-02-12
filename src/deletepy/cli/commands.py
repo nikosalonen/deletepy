@@ -6,14 +6,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import click
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
@@ -47,9 +39,9 @@ from ..utils.display_utils import (
     RESET,
     YELLOW,
     confirm_action,
+    live_progress,
 )
 from ..utils.file_utils import read_user_ids_generator
-from ..utils.rich_utils import get_stderr_console
 
 
 class OperationHandler:
@@ -107,23 +99,12 @@ class OperationHandler:
         """
         click.echo(f"\n{CYAN}Fetching user emails...{RESET}")
         emails = []
-        task_description = "Fetching emails"
-        with Progress(
-            TextColumn("{task.description}", style="info"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TextColumn("|"),
-            TimeElapsedColumn(),
-            TextColumn("remaining"),
-            TimeRemainingColumn(),
-            console=get_stderr_console(),
-        ) as progress:
-            task_id = progress.add_task(task_description, total=len(user_ids))
+        with live_progress(len(user_ids), "Fetching emails") as advance:
             for user_id in user_ids:
                 email = get_user_email(user_id, token, base_url)
                 if email:
                     emails.append(email)
-                progress.advance(task_id)
+                advance()
         return emails
 
     def _calculate_export_parameters(self, num_emails: int) -> tuple[int, float]:
