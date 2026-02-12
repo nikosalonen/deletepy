@@ -49,7 +49,7 @@ from ..utils.display_utils import (
     confirm_action,
 )
 from ..utils.file_utils import read_user_ids_generator
-from ..utils.rich_utils import get_console
+from ..utils.rich_utils import get_stderr_console
 
 
 class OperationHandler:
@@ -107,7 +107,6 @@ class OperationHandler:
         """
         click.echo(f"\n{CYAN}Fetching user emails...{RESET}")
         emails = []
-        console = get_console()
         task_description = "Fetching emails"
         with Progress(
             TextColumn("{task.description}", style="info"),
@@ -117,7 +116,7 @@ class OperationHandler:
             TimeElapsedColumn(),
             TextColumn("remaining"),
             TimeRemainingColumn(),
-            console=console,
+            console=get_stderr_console(),
         ) as progress:
             task_id = progress.add_task(task_description, total=len(user_ids))
             for user_id in user_ids:
@@ -187,7 +186,9 @@ class OperationHandler:
             "revoke-grants-only": "Revoking grants and sessions",
         }.get(operation, "Processing users")
 
-    def _confirm_production_operation(self, operation: str, total_users: int, rotate_password: bool = False) -> bool:
+    def _confirm_production_operation(
+        self, operation: str, total_users: int, rotate_password: bool = False
+    ) -> bool:
         """Confirm production operation with user.
 
         Args:
@@ -589,7 +590,12 @@ class OperationHandler:
             self._handle_operation_error(e, "Fetch emails")
 
     def handle_user_operations(
-        self, input_file: Path, env: str, operation: str, dry_run: bool = False, rotate_password: bool = False
+        self,
+        input_file: Path,
+        env: str,
+        operation: str,
+        dry_run: bool = False,
+        rotate_password: bool = False,
     ) -> None:
         """Handle user operations (block, delete, revoke-grants-only)."""
         try:

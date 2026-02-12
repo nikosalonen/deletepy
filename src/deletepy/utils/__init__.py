@@ -20,6 +20,7 @@ from .csv_utils import (
 )
 from .display_utils import (
     confirm_action,
+    live_progress,
     print_error,
     print_info,
     print_section_header,
@@ -53,6 +54,7 @@ from .output import (
 from .rich_utils import (
     create_table,
     get_console,
+    get_stderr_console,
     print_dict,
     print_operation_result,
     print_panel,
@@ -90,6 +92,7 @@ __all__ = [
     "setup_shutdown_handler",
     "shutdown_requested",
     "show_progress",
+    "live_progress",
     # File utilities
     "check_shutdown_requested",
     "handle_shutdown",
@@ -116,6 +119,7 @@ __all__ = [
     # Rich utilities for pretty output
     "create_table",
     "get_console",
+    "get_stderr_console",
     "print_dict",
     "print_operation_result",
     "print_panel",
