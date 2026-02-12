@@ -2,7 +2,7 @@
 
 This module provides:
 - Terminal color constants
-- Progress bar display
+- Progress bar display (including live_progress context manager)
 - Graceful shutdown handling
 - User confirmation prompts
 - Backward-compatible re-exports from output module
@@ -11,7 +11,10 @@ This module provides:
 import logging
 import signal
 import sys
+from collections.abc import Generator
+from contextlib import contextmanager
 from types import FrameType
+from typing import Protocol
 
 # Re-export print functions from output module for backward compatibility
 from .output import (
@@ -191,6 +194,67 @@ def create_rich_progress(operation: str = "Processing") -> "Progress | None":
     )
 
 
+class _AdvanceCallable(Protocol):
+    def __call__(self, step: int = 1) -> None:
+        ...
+
+
+@contextmanager
+def live_progress(
+    total: int, operation: str = "Processing"
+) -> Generator[_AdvanceCallable, None, None]:
+    """Context manager for a live Rich progress bar pinned to the bottom.
+
+    Log messages (via RichHandler on the shared stderr console) automatically
+    scroll above the progress bar while it is active.
+
+    Falls back to the ASCII ``show_progress`` when Rich is not available.
+
+    Args:
+        total: Total number of items to process.
+        operation: Label shown next to the progress bar.
+
+    Yields:
+        A callable ``advance(step=1)`` to increment the progress bar.
+
+    Example::
+
+        with live_progress(len(items), "Deleting users") as advance:
+            for item in items:
+                process(item)
+                advance()
+    """
+    if total == 0:
+        yield lambda step=1: None
+        return
+
+    if not _RICH_PROGRESS_AVAILABLE:
+        counter = {"current": 0}
+
+        def _ascii_advance(step: int = 1) -> None:
+            counter["current"] += step
+            show_progress(counter["current"], total, operation)
+
+        yield _ascii_advance
+        clear_progress_line()
+        return
+
+    from .rich_utils import get_stderr_console
+
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn(f"[bold blue]{operation}"),
+        BarColumn(bar_width=30),
+        TaskProgressColumn(),
+        MofNCompleteColumn(),
+        TimeRemainingColumn(),
+        console=get_stderr_console(),
+    )
+    with progress:
+        task_id = progress.add_task("", total=total)
+        yield lambda step=1: progress.advance(task_id, advance=step)
+
+
 # =============================================================================
 # User Confirmation
 # =============================================================================
@@ -361,6 +425,7 @@ __all__ = [
     "clear_progress_line",
     "show_progress",
     "create_rich_progress",
+    "live_progress",
     # User confirmation
     "confirm_action",
     "confirm_production_operation",
