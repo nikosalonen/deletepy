@@ -22,6 +22,7 @@ from ..utils.checkpoint_utils import (
 from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.url_utils import secure_url_encode
+from ..utils.validators import SecurityValidator
 from .user_ops import delete_user, unlink_user_identity
 
 
@@ -1340,8 +1341,6 @@ def _search_batch_social_ids(
                 found_users.extend(users_found)
             else:
                 # Sanitize social ID before adding to not found list
-                from ..utils.validators import SecurityValidator
-
                 sanitized_id = SecurityValidator.sanitize_user_input(social_id)
                 if sanitized_id:
                     not_found_ids.append(sanitized_id)
@@ -1549,6 +1548,11 @@ def _check_batch_unblocked_users(
         List[str]: List of unblocked user IDs
     """
     unblocked = []
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+    }
 
     with live_progress(len(user_ids), "Checking users") as advance:
         for user_id in user_ids:
@@ -1556,11 +1560,6 @@ def _check_batch_unblocked_users(
                 break
 
             url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-            }
 
             try:
                 response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
