@@ -16,6 +16,7 @@ from ..utils.display_utils import (
     live_progress,
     shutdown_requested,
 )
+from ..utils.validators import SecurityValidator
 from .user_ops import get_user_details, get_user_id_from_email
 
 
@@ -85,58 +86,15 @@ def preview_user_operations(
             if shutdown_requested():
                 break
 
-            # Clean and sanitize the user ID
-            from ..utils.validators import SecurityValidator
-
             user_id = SecurityValidator.sanitize_user_input(user_id)
-
-            # Resolve user identifier
             resolved_user_id = _resolve_user_identifier(
                 user_id, token, base_url, result
             )
 
             if resolved_user_id:
-                try:
-                    # Get user details to check current state
-                    user_details = get_user_details(resolved_user_id, token, base_url)
-                    # Rate limiting after API call
-                    time.sleep(API_RATE_LIMIT)
-
-                    if user_details:
-                        # Check if user is already in target state
-                        if _should_skip_user(user_details, operation):
-                            result.blocked_users.append(resolved_user_id)
-                        else:
-                            result.valid_users.append(
-                                {
-                                    "user_id": resolved_user_id,
-                                    "email": user_details.get("email", ""),
-                                    "connection": _get_user_connection(user_details),
-                                    "blocked": user_details.get("blocked", False),
-                                    "last_login": user_details.get("last_login", ""),
-                                    "created_at": user_details.get("created_at", ""),
-                                }
-                            )
-                    else:
-                        result.errors.append(
-                            {
-                                "identifier": user_id,
-                                "error": "Could not fetch user details",
-                                "timestamp": datetime.utcnow().isoformat(),
-                                "operation": operation,
-                                "error_type": "user_details_fetch_failed",
-                            }
-                        )
-                except Exception as e:
-                    result.errors.append(
-                        {
-                            "identifier": user_id,
-                            "error": f"API error: {str(e)}",
-                            "timestamp": datetime.utcnow().isoformat(),
-                            "operation": operation,
-                            "error_type": "api_exception",
-                        }
-                    )
+                _process_resolved_user(
+                    user_id, resolved_user_id, token, base_url, operation, result
+                )
 
             advance()
 
@@ -144,6 +102,56 @@ def preview_user_operations(
         _display_preview_results(result)
 
     return result
+
+
+def _process_resolved_user(
+    original_id: str,
+    resolved_user_id: str,
+    token: str,
+    base_url: str,
+    operation: str,
+    result: PreviewResult,
+) -> None:
+    """Fetch user details and classify into valid, blocked, or error."""
+    try:
+        user_details = get_user_details(resolved_user_id, token, base_url)
+        time.sleep(API_RATE_LIMIT)
+
+        if not user_details:
+            result.errors.append(
+                {
+                    "identifier": original_id,
+                    "error": "Could not fetch user details",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "operation": operation,
+                    "error_type": "user_details_fetch_failed",
+                }
+            )
+            return
+
+        if _should_skip_user(user_details, operation):
+            result.blocked_users.append(resolved_user_id)
+        else:
+            result.valid_users.append(
+                {
+                    "user_id": resolved_user_id,
+                    "email": user_details.get("email", ""),
+                    "connection": _get_user_connection(user_details),
+                    "blocked": user_details.get("blocked", False),
+                    "last_login": user_details.get("last_login", ""),
+                    "created_at": user_details.get("created_at", ""),
+                }
+            )
+    except Exception as e:
+        result.errors.append(
+            {
+                "identifier": original_id,
+                "error": f"API error: {str(e)}",
+                "timestamp": datetime.utcnow().isoformat(),
+                "operation": operation,
+                "error_type": "api_exception",
+            }
+        )
 
 
 def _resolve_user_identifier(
