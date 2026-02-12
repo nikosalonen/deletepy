@@ -689,8 +689,6 @@ def _process_export_with_checkpoints(
             batch_emails, token, base_url, connection, current_batch_num
         )
 
-        user_output("")  # Clear progress line
-
         # Write batch to CSV
         mode = "w" if write_headers else "a"
         success = _write_csv_batch(
@@ -1147,8 +1145,6 @@ def _process_fetch_emails_with_checkpoints(
         batch_csv_data, batch_counters = _process_user_id_batch(
             batch_user_ids, token, base_url, current_batch_num
         )
-
-        user_output("")  # Clear progress line
 
         # Write batch to CSV
         mode = "w" if write_headers else "a"
