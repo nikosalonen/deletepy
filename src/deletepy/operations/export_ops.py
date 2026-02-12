@@ -651,11 +651,9 @@ def _process_export_with_checkpoints(
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
     batch_size = checkpoint.progress.batch_size
-    connection = checkpoint.config.connection_filter
-    output_file = checkpoint.config.output_file
 
     # Validate output_file is not None (should be guaranteed by validation)
-    if output_file is None:
+    if checkpoint.config.output_file is None:
         raise ValueError(
             "output_file should be validated during checkpoint creation/loading"
         )
@@ -664,7 +662,9 @@ def _process_export_with_checkpoints(
 
     # Determine starting batch number and write mode
     current_batch_num = checkpoint.progress.current_batch + 1
-    write_headers = current_batch_num == 1 or not Path(output_file).exists()
+    write_headers = (
+        current_batch_num == 1 or not Path(checkpoint.config.output_file).exists()
+    )
 
     # Process remaining emails in batches
     remaining_emails = checkpoint.remaining_items.copy()
@@ -682,8 +682,6 @@ def _process_export_with_checkpoints(
             batch_emails,
             token,
             base_url,
-            connection,
-            output_file,
             current_batch_num,
             checkpoint,
             checkpoint_manager,
@@ -695,7 +693,7 @@ def _process_export_with_checkpoints(
         write_headers = False
         current_batch_num += 1
 
-    _finalize_export(checkpoint, checkpoint_manager, output_file)
+    _finalize_export(checkpoint, checkpoint_manager)
     return None
 
 
@@ -703,8 +701,6 @@ def _process_single_export_batch(
     batch_emails: list[str],
     token: str,
     base_url: str,
-    connection: str | None,
-    output_file: str,
     current_batch_num: int,
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
@@ -715,6 +711,9 @@ def _process_single_export_batch(
     Returns:
         Checkpoint ID if the batch write failed, None on success.
     """
+    connection = checkpoint.config.connection_filter
+    output_file = checkpoint.config.output_file
+    assert output_file is not None  # validated by caller
     total_batches = checkpoint.progress.total_batches
     print_info(
         f"\nProcessing batch {current_batch_num}/{total_batches} "
@@ -755,9 +754,10 @@ def _process_single_export_batch(
 def _finalize_export(
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
-    output_file: str,
 ) -> None:
     """Mark export checkpoint as completed and display summary."""
+    output_file = checkpoint.config.output_file
+    assert output_file is not None  # validated by caller
     checkpoint.status = CheckpointStatus.COMPLETED
     checkpoint_manager.save_checkpoint(checkpoint)
     _generate_export_summary_from_checkpoint(checkpoint, output_file)
@@ -1139,10 +1139,9 @@ def _process_fetch_emails_with_checkpoints(
     """
 
     batch_size = checkpoint.progress.batch_size
-    output_file = checkpoint.config.output_file
 
     # Validate output_file is not None
-    if output_file is None:
+    if checkpoint.config.output_file is None:
         raise ValueError(
             "output_file should be validated during checkpoint creation/loading"
         )
@@ -1151,7 +1150,9 @@ def _process_fetch_emails_with_checkpoints(
 
     # Determine starting batch number and write mode
     current_batch_num = checkpoint.progress.current_batch + 1
-    write_headers = current_batch_num == 1 or not Path(output_file).exists()
+    write_headers = (
+        current_batch_num == 1 or not Path(checkpoint.config.output_file).exists()
+    )
 
     # Process remaining user IDs in batches
     remaining_user_ids = checkpoint.remaining_items.copy()
@@ -1171,7 +1172,6 @@ def _process_fetch_emails_with_checkpoints(
             batch_user_ids,
             token,
             base_url,
-            output_file,
             current_batch_num,
             checkpoint,
             checkpoint_manager,
@@ -1183,7 +1183,7 @@ def _process_fetch_emails_with_checkpoints(
         write_headers = False
         current_batch_num += 1
 
-    _finalize_fetch_emails(checkpoint, checkpoint_manager, output_file)
+    _finalize_fetch_emails(checkpoint, checkpoint_manager)
     return None
 
 
@@ -1191,7 +1191,6 @@ def _process_single_fetch_batch(
     batch_user_ids: list[str],
     token: str,
     base_url: str,
-    output_file: str,
     current_batch_num: int,
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
@@ -1202,6 +1201,8 @@ def _process_single_fetch_batch(
     Returns:
         Checkpoint ID if the batch write failed, None on success.
     """
+    output_file = checkpoint.config.output_file
+    assert output_file is not None  # validated by caller
     total_batches = checkpoint.progress.total_batches
     print_info(
         f"\nProcessing batch {current_batch_num}/{total_batches} "
@@ -1241,9 +1242,10 @@ def _process_single_fetch_batch(
 def _finalize_fetch_emails(
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
-    output_file: str,
 ) -> None:
     """Mark fetch-emails checkpoint as completed and display summary."""
+    output_file = checkpoint.config.output_file
+    assert output_file is not None  # validated by caller
     checkpoint.status = CheckpointStatus.COMPLETED
     checkpoint_manager.save_checkpoint(checkpoint)
     _generate_fetch_summary_from_checkpoint(checkpoint, output_file)
