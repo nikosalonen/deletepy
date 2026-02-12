@@ -93,7 +93,7 @@ def preview_user_operations(
 
             if resolved_user_id:
                 _process_resolved_user(
-                    user_id, resolved_user_id, token, base_url, operation, result
+                    user_id, resolved_user_id, token, base_url, result
                 )
 
             advance()
@@ -109,10 +109,10 @@ def _process_resolved_user(
     resolved_user_id: str,
     token: str,
     base_url: str,
-    operation: str,
     result: PreviewResult,
 ) -> None:
     """Fetch user details and classify into valid, blocked, or error."""
+    operation = result.operation
     try:
         user_details = get_user_details(resolved_user_id, token, base_url)
         time.sleep(API_RATE_LIMIT)
@@ -134,31 +134,7 @@ def _process_resolved_user(
             )
             return
 
-        email = user_details.get("email", "")
-
-        if _should_skip_user(user_details, operation):
-            print_info(
-                f"Would skip {resolved_user_id} ({email}) - already in target state",
-                user_id=resolved_user_id,
-                operation=operation,
-            )
-            result.blocked_users.append(resolved_user_id)
-        else:
-            print_info(
-                f"Would {operation} {resolved_user_id} ({email})",
-                user_id=resolved_user_id,
-                operation=operation,
-            )
-            result.valid_users.append(
-                {
-                    "user_id": resolved_user_id,
-                    "email": email,
-                    "connection": _get_user_connection(user_details),
-                    "blocked": user_details.get("blocked", False),
-                    "last_login": user_details.get("last_login", ""),
-                    "created_at": user_details.get("created_at", ""),
-                }
-            )
+        _classify_user_result(resolved_user_id, user_details, result)
     except Exception as e:
         print_error(
             f"API error for {original_id}: {e}",
@@ -172,6 +148,40 @@ def _process_resolved_user(
                 "timestamp": datetime.now(UTC).isoformat(),
                 "operation": operation,
                 "error_type": "api_exception",
+            }
+        )
+
+
+def _classify_user_result(
+    resolved_user_id: str,
+    user_details: dict[str, Any],
+    result: PreviewResult,
+) -> None:
+    """Classify a fetched user as valid or blocked and append to result."""
+    operation = result.operation
+    email = user_details.get("email", "")
+
+    if _should_skip_user(user_details, operation):
+        print_info(
+            f"Would skip {resolved_user_id} ({email}) - already in target state",
+            user_id=resolved_user_id,
+            operation=operation,
+        )
+        result.blocked_users.append(resolved_user_id)
+    else:
+        print_info(
+            f"Would {operation} {resolved_user_id} ({email})",
+            user_id=resolved_user_id,
+            operation=operation,
+        )
+        result.valid_users.append(
+            {
+                "user_id": resolved_user_id,
+                "email": email,
+                "connection": _get_user_connection(user_details),
+                "blocked": user_details.get("blocked", False),
+                "last_login": user_details.get("last_login", ""),
+                "created_at": user_details.get("created_at", ""),
             }
         )
 
