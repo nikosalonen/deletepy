@@ -4,6 +4,7 @@ import requests
 from dotenv import load_dotenv
 
 from ..utils.logging_utils import get_logger
+from .auth0_client import create_client_from_token
 from .config import get_env_config
 from .exceptions import AuthConfigError
 
@@ -116,26 +117,22 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
         if test_api:
             logger.info("  🌐 Testing API access...")
             base_url = f"https://{config['domain']}"
-            headers = {
-                "Authorization": f"Bearer {token}",
-                "Content-Type": "application/json",
-                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-            }
+            client = create_client_from_token(token, base_url, env)
 
             # Make a simple API call to test the token
-            test_url = f"{base_url}/api/v2/users"
-            response = requests.get(
-                test_url, headers=headers, timeout=API_TIMEOUT, params={"per_page": 1}
+            api_result = client.get(
+                endpoint="/api/v2/users",
+                params={"per_page": 1},
+                operation_name="doctor API test",
             )
 
-            if response.status_code == 200:
+            if api_result.success:
                 logger.info(
                     "    ✅ API access successful",
                     extra={
                         "operation": "api_test",
                         "status": "success",
-                        "status_code": response.status_code,
-                        "api_endpoint": test_url,
+                        "status_code": api_result.status_code,
                     },
                 )
                 result["api_tested"] = True
@@ -143,18 +140,17 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
                 result["details"] = "Credentials and API access are working correctly"
             else:
                 logger.warning(
-                    f"    ⚠️  API access failed with status {response.status_code}",
+                    f"    ⚠️  API access failed with status {api_result.status_code}",
                     extra={
                         "operation": "api_test",
                         "status": "failed",
-                        "status_code": response.status_code,
-                        "api_endpoint": test_url,
+                        "status_code": api_result.status_code,
                     },
                 )
                 result["api_tested"] = True
-                result["api_status"] = f"failed_{response.status_code}"
+                result["api_status"] = f"failed_{api_result.status_code}"
                 result["details"] = (
-                    f"Token obtained but API access failed with status {response.status_code}"
+                    f"Token obtained but API access failed with status {api_result.status_code}"
                 )
 
         logger.info(
