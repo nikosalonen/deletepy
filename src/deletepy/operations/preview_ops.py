@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from rich.panel import Panel
+
 from ..core.config import API_RATE_LIMIT
 from ..utils.auth_utils import validate_auth0_user_id
 from ..utils.display_utils import (
@@ -12,7 +14,7 @@ from ..utils.display_utils import (
     shutdown_requested,
 )
 from ..utils.output import print_error, print_info, print_warning
-from ..utils.rich_utils import get_console
+from ..utils.rich_utils import create_table, get_console, print_table
 from ..utils.validators import SecurityValidator
 from .user_ops import get_user_details, get_user_id_from_email
 
@@ -251,10 +253,6 @@ def _get_user_connection(user_details: dict[str, Any]) -> str:
 
 def _display_preview_results(result: PreviewResult) -> None:
     """Display detailed preview results using Rich formatting."""
-    from rich.panel import Panel
-
-    from ..utils.rich_utils import create_table, get_console, print_table
-
     console = get_console()
 
     # --- Summary panel ---
@@ -311,8 +309,6 @@ def _display_item_table(
     if not items:
         return
 
-    from ..utils.rich_utils import create_table, print_table
-
     table = create_table(title=f"{title} ({len(items)})")
     table.add_column("Identifier", style="user_id")
     for item in items[:limit]:
@@ -326,8 +322,6 @@ def _display_multiple_users(multiple_users: dict[str, list[str]]) -> None:
     """Display emails with multiple users as a table."""
     if not multiple_users:
         return
-
-    from ..utils.rich_utils import create_table, print_table
 
     table = create_table(title=f"⚠ Emails with multiple users ({len(multiple_users)})")
     table.add_column("Email")
@@ -343,8 +337,6 @@ def _display_error_table(errors: list[dict[str, Any]]) -> None:
     """Display errors as a formatted table."""
     if not errors:
         return
-
-    from ..utils.rich_utils import create_table, print_table
 
     table = create_table(title=f"✗ Errors ({len(errors)})")
     table.add_column("Identifier", style="user_id")
@@ -415,10 +407,6 @@ def preview_social_unlink_operations(
 
 def _display_social_preview_results(results: dict[str, Any]) -> None:
     """Display detailed preview results for social unlink operations."""
-    from rich.panel import Panel
-
-    from ..utils.rich_utils import get_console
-
     console = get_console()
 
     # --- Summary panel ---
@@ -460,8 +448,6 @@ def _display_social_user_table(
     """Display a list of social users as a formatted table."""
     if not user_list:
         return
-
-    from ..utils.rich_utils import create_table, print_table
 
     table = create_table(title=f"{title} ({len(user_list)})")
     table.add_column("User ID", style="user_id")
