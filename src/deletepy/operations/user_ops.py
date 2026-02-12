@@ -1002,6 +1002,9 @@ def _process_users_in_batch(
 
             # Sanitize user input first
             user_id = SecurityValidator.sanitize_user_input(user_id)
+            if not user_id:
+                advance()
+                continue
 
             # Resolve user identifier
             resolved_user_id = _resolve_user_identifier_for_batch(
