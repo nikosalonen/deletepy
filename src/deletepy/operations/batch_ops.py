@@ -470,6 +470,7 @@ def _handle_user_deletions(
                 failed_deletions += 1
 
             advance()
+            time.sleep(API_RATE_LIMIT)
     return {"deleted_count": deleted_count, "failed_deletions": failed_deletions}
 
 
@@ -740,6 +741,7 @@ def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
 
         identities = user_data.get("identities", [])
         identity_count = len(identities) if isinstance(identities, list) else 0
+        time.sleep(API_RATE_LIMIT)
 
         return identity_count
 
