@@ -1,4 +1,4 @@
-"""Request utilities for HTTP operations."""
+"""Batch processing utilities for dataset sizing and time estimation."""
 
 from ..core.config import API_RATE_LIMIT
 
