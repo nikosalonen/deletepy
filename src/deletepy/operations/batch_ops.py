@@ -540,7 +540,7 @@ def _handle_orphaned_users_cleanup(
     """
     # Check if user has no remaining identities after unlinking
     remaining_identities = _get_user_identity_count(user["user_id"], client)
-    if remaining_identities == 0:
+    if remaining_identities is not None and remaining_identities == 0:
         _delete_orphaned_user(user["user_id"], client, results)
 
     # Search for and delete separate user accounts with this social ID as primary identity
@@ -668,7 +668,7 @@ def _print_disabled_operations_notice(
     )
 
 
-def _get_user_identity_count(user_id: str, client: Auth0Client) -> int:
+def _get_user_identity_count(user_id: str, client: Auth0Client) -> int | None:
     """Get the number of identities for a user.
 
     Args:
@@ -676,7 +676,7 @@ def _get_user_identity_count(user_id: str, client: Auth0Client) -> int:
         client: Auth0 API client
 
     Returns:
-        int: Number of identities for the user
+        int: Number of identities for the user, or None on API failure
     """
     encoded_id = secure_url_encode(user_id, "user ID")
     result = client.get_user(encoded_id)
@@ -688,7 +688,7 @@ def _get_user_identity_count(user_id: str, client: Auth0Client) -> int:
             error=result.error_message or "",
             operation="get_user_identity_count",
         )
-        return 0
+        return None
 
     user_data = result.data if isinstance(result.data, dict) else {}
     identities = user_data.get("identities", [])
@@ -1408,7 +1408,13 @@ def _check_batch_unblocked_users(user_ids: list[str], client: Auth0Client) -> li
             if result.success and isinstance(result.data, dict):
                 if not result.data.get("blocked", False):
                     unblocked.append(user_id)
-            elif not result.success:
+            elif result.success:
+                print_error(
+                    f"Unexpected response format for user {user_id}: {type(result.data)}",
+                    user_id=user_id,
+                    operation="check_blocked",
+                )
+            else:
                 print_error(
                     f"Error checking user {user_id}: {result.error_message}",
                     user_id=user_id,

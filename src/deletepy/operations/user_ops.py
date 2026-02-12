@@ -320,12 +320,16 @@ def get_user_details(user_id: str, client: Auth0Client) -> dict[str, Any] | None
     return None
 
 
-def revoke_user_sessions(user_id: str, client: Auth0Client) -> None:
-    """Fetch all Auth0 sessions for a user and revoke them one by one."""
+def revoke_user_sessions(user_id: str, client: Auth0Client) -> bool:
+    """Fetch all Auth0 sessions for a user and revoke them one by one.
+
+    Returns:
+        bool: True if sessions were fetched successfully (even if empty), False on fetch failure
+    """
     # Get list of sessions for the user
     sessions = _fetch_user_sessions(user_id, client)
     if sessions is None:
-        return
+        return False
 
     if not sessions:
         print_info(
@@ -333,10 +337,11 @@ def revoke_user_sessions(user_id: str, client: Auth0Client) -> None:
             user_id=user_id,
             operation="revoke_user_sessions",
         )
-        return
+        return True
 
     # Revoke each session
     _revoke_individual_sessions(sessions, user_id, client)
+    return True
 
 
 def _fetch_user_sessions(
@@ -425,8 +430,12 @@ def _revoke_single_session(session_id: str, user_id: str, client: Auth0Client) -
         )
 
 
-def revoke_user_grants(user_id: str, client: Auth0Client) -> None:
-    """Revoke all application grants (authorized applications) for a user in one call."""
+def revoke_user_grants(user_id: str, client: Auth0Client) -> bool:
+    """Revoke all application grants (authorized applications) for a user in one call.
+
+    Returns:
+        bool: True if grants were revoked successfully, False otherwise
+    """
     # Grants endpoint uses user_id as a query parameter, not a path segment,
     # so it must NOT be URL-encoded
     result = client.delete_user_grants(user_id)
@@ -436,6 +445,7 @@ def revoke_user_grants(user_id: str, client: Auth0Client) -> None:
             user_id=user_id,
             operation="revoke_user_grants",
         )
+        return True
     else:
         print_error(
             f"Error revoking grants for user {user_id}: {result.error_message}",
@@ -443,6 +453,7 @@ def revoke_user_grants(user_id: str, client: Auth0Client) -> None:
             error=result.error_message or "",
             operation="revoke_user_grants",
         )
+        return False
 
 
 def rotate_user_password(user_id: str, client: Auth0Client) -> bool:
@@ -984,11 +995,11 @@ def _execute_user_operation(
     elif operation == "delete":
         return delete_user(user_id, client)
     elif operation == "revoke-grants-only":
-        revoke_user_sessions(user_id, client)
-        revoke_user_grants(user_id, client)
+        sessions_ok = revoke_user_sessions(user_id, client)
+        grants_ok = revoke_user_grants(user_id, client)
         if rotate_password:
             rotate_user_password(user_id, client)
-        return True
+        return sessions_ok and grants_ok
     return False
 
 
