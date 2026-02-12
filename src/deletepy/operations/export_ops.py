@@ -1209,9 +1209,7 @@ def _process_user_id_batch(
     Returns:
         Tuple[List[Dict[str, Any]], Dict[str, int]]: (csv_data, batch_counters)
     """
-    from deletepy.operations.user_ops import get_user_email
-
-    csv_data = []
+    csv_data: list[dict[str, Any]] = []
     batch_counters = {
         "processed_count": 0,
         "not_found_count": 0,
@@ -1223,48 +1221,46 @@ def _process_user_id_batch(
             if shutdown_requested():
                 break
 
-            try:
-                email = get_user_email(user_id, token, base_url)
-
-                if email:
-                    csv_row = {
-                        "user_id": user_id,
-                        "email": email,
-                        "status": "Found",
-                    }
-                    batch_counters["processed_count"] += 1
-                else:
-                    csv_row = {
-                        "user_id": user_id,
-                        "email": "",
-                        "status": "Not Found",
-                    }
-                    batch_counters["not_found_count"] += 1
-
-                csv_data.append(csv_row)
-
-            except Exception as e:
-                logger.error(
-                    "Error processing user %s: %s",
-                    user_id,
-                    str(e),
-                    extra={
-                        "user_id": user_id,
-                        "operation": "fetch_email",
-                        "error": str(e),
-                    },
-                )
-                csv_row = {
-                    "user_id": user_id,
-                    "email": "",
-                    "status": "Error",
-                }
-                csv_data.append(csv_row)
-                batch_counters["error_count"] += 1
-
+            row, counter_key = _fetch_and_build_csv_row(user_id, token, base_url)
+            csv_data.append(row)
+            batch_counters[counter_key] += 1
             advance()
 
     return csv_data, batch_counters
+
+
+def _fetch_and_build_csv_row(
+    user_id: str, token: str, base_url: str
+) -> tuple[dict[str, Any], str]:
+    """Fetch a user's email and build a CSV row.
+
+    Returns:
+        Tuple of (csv_row, counter_key) where counter_key is
+        'processed_count', 'not_found_count', or 'error_count'.
+    """
+    from deletepy.operations.user_ops import get_user_email
+
+    try:
+        email = get_user_email(user_id, token, base_url)
+        if email:
+            return {
+                "user_id": user_id,
+                "email": email,
+                "status": "Found",
+            }, "processed_count"
+        return {
+            "user_id": user_id,
+            "email": "",
+            "status": "Not Found",
+        }, "not_found_count"
+    except Exception as e:
+        logger.error(
+            "Error processing user %s: %s",
+            user_id,
+            str(e),
+            extra={"user_id": user_id, "operation": "fetch_email", "error": str(e)},
+        )
+        return {"user_id": user_id, "email": "", "status": "Error"}, "error_count"
 
 
 def _write_fetch_csv_batch(
