@@ -4,8 +4,8 @@ import secrets
 import string
 from typing import Any
 
+from ..core.auth0_client import Auth0Client
 from ..utils.output import print_error, print_warning
-from ..utils.request_utils import make_rate_limited_request
 
 
 def generate_secure_password(length: int = 16) -> str:
@@ -51,59 +51,43 @@ def generate_secure_password(length: int = 16) -> str:
     return "".join(password_chars)
 
 
-def get_user_database_connection(user_id: str, token: str, base_url: str) -> str | None:
+def get_user_database_connection(user_id: str, client: Auth0Client) -> str | None:
     """Auto-detect user's database connection from their Auth0 profile.
 
     Args:
         user_id: Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         Optional[str]: Database connection name if found, None otherwise
     """
     from .url_utils import secure_url_encode
 
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.get_user(encoded_id)
 
-    response = make_rate_limited_request("GET", url, headers)
-    if response is None:
+    if not result.success:
         print_error(
-            f"Failed to fetch user details for {user_id}",
+            f"Failed to fetch user details for {user_id}: {result.error_message}",
             user_id=user_id,
             operation="get_user_database_connection",
         )
         return None
 
-    try:
-        user_data: dict[str, Any] = response.json()
-        identities = user_data.get("identities", [])
+    user_data: dict[str, Any] = result.data if isinstance(result.data, dict) else {}
+    identities = user_data.get("identities", [])
 
-        # Look for auth0 (database) connection
-        for identity in identities:
-            if identity.get("provider") == "auth0":
-                connection = identity.get("connection")
-                if connection:
-                    return str(connection)
+    # Look for auth0 (database) connection
+    for identity in identities:
+        if identity.get("provider") == "auth0":
+            connection = identity.get("connection")
+            if connection:
+                return str(connection)
 
-        # No database connection found
-        print_warning(
-            f"User {user_id} has no database connection (social-only user)",
-            user_id=user_id,
-            operation="get_user_database_connection",
-        )
-        return None
-
-    except (ValueError, KeyError) as e:
-        print_error(
-            f"Error parsing user details for {user_id}: {e}",
-            user_id=user_id,
-            error=str(e),
-            operation="get_user_database_connection",
-        )
-        return None
+    # No database connection found
+    print_warning(
+        f"User {user_id} has no database connection (social-only user)",
+        user_id=user_id,
+        operation="get_user_database_connection",
+    )
+    return None

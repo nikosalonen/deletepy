@@ -5,11 +5,11 @@ import re
 from typing import Any, NamedTuple, TextIO, cast
 
 from ..core.auth import get_access_token
+from ..core.auth0_client import Auth0Client, create_client_from_token
 from ..core.config import get_base_url
 from ..core.exceptions import FileOperationError
 from ..operations.user_ops import get_user_details
 from ..utils.display_utils import print_error, print_info, print_warning
-from ..utils.request_utils import make_rate_limited_request
 from .auth_utils import AUTH0_USER_ID_PREFIXES, is_auth0_user_id
 from .file_utils import safe_file_read, safe_file_write
 from .validators import SecurityValidator
@@ -185,8 +185,9 @@ def _try_auth0_username_resolution(username: str, env: str) -> str | None:
         base_url = get_base_url(env)
 
         if token:
+            client = create_client_from_token(token, base_url, env)
             # Search for user by encoded username
-            user_details = _search_user_by_field(username, token, base_url)
+            user_details = _search_user_by_field(username, client)
             if user_details:
                 email = user_details.get("email")
                 if email is not None and isinstance(email, str):
@@ -792,44 +793,34 @@ def write_identifiers_to_file(
 
 
 def _search_user_by_field(
-    identifier: str, token: str, base_url: str
+    identifier: str, client: Auth0Client
 ) -> dict[str, Any] | None:
     """Search for a user in Auth0 by identifier.
 
     Args:
         identifier: User identifier (email, username, user_id)
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         User details dictionary or None if not found
     """
     if is_auth0_user_id(identifier):
         # Direct user ID lookup
-        return get_user_details(identifier, token, base_url)
+        return get_user_details(identifier, client)
     else:
         # Use search API for username lookups
-        url = f"{base_url}/api/v2/users"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        }
+        result = client.get(
+            endpoint="/api/v2/users",
+            params={"q": f'username:"{identifier}"', "search_engine": "v3"},
+            operation_name="search user by username",
+        )
 
-        # Username search
-        params = {"q": f'username:"{identifier}"', "search_engine": "v3"}
-
-        response = make_rate_limited_request("GET", url, headers, params=params)
-        if response is None:
+        if not result.success:
             return None
 
-        try:
-            users = response.json()
-            if users and isinstance(users, list) and len(users) > 0:
-                # Return the first match
-                return cast(dict[str, Any], users[0])
-        except ValueError:
-            return None
+        data = result.data
+        if data and isinstance(data, list) and len(data) > 0:
+            return cast(dict[str, Any], data[0])
 
         return None
 
@@ -892,15 +883,14 @@ def _extract_identifier_data(item: str | CsvRowData) -> tuple[str, str | None]:
 
 
 def _get_user_details_with_fallback(
-    identifier: str, fallback_user_id: str | None, token: str, base_url: str, env: str
+    identifier: str, fallback_user_id: str | None, client: Auth0Client, env: str
 ) -> dict[str, Any] | None:
     """Get user details with fallback strategy.
 
     Args:
         identifier: Original identifier
         fallback_user_id: Fallback user ID to try if primary lookup fails
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         env: Environment for Auth0 API
 
     Returns:
@@ -915,18 +905,18 @@ def _get_user_details_with_fallback(
     # Try primary lookup
     user_details = None
     if is_auth0_user_id(cleaned_identifier):
-        user_details = get_user_details(cleaned_identifier, token, base_url)
+        user_details = get_user_details(cleaned_identifier, client)
     else:
         # For encoded usernames, search by the original encoded value as username
         search_value = identifier if is_encoded_username else cleaned_identifier
-        user_details = _search_user_by_field(search_value, token, base_url)
+        user_details = _search_user_by_field(search_value, client)
 
     # Try fallback if primary lookup failed
     if not user_details and fallback_user_id and is_auth0_user_id(fallback_user_id):
         print_info(
             f"Primary lookup failed for '{identifier}', trying fallback user_id: {fallback_user_id}"
         )
-        user_details = get_user_details(fallback_user_id, token, base_url)
+        user_details = get_user_details(fallback_user_id, client)
 
     return user_details
 
@@ -958,9 +948,8 @@ def _convert_single_identifier(
     item: str | CsvRowData,
     idx: int,
     output_type: str,
+    client: Auth0Client,
     env: str,
-    token: str,
-    base_url: str,
 ) -> str:
     """Convert a single identifier to the requested output type with fallback support.
 
@@ -968,9 +957,8 @@ def _convert_single_identifier(
         item: Identifier string or CsvRowData with fallback user_id
         idx: Current index (1-based)
         output_type: Requested output type
+        client: Auth0 API client
         env: Environment for Auth0 API
-        token: Auth0 access token
-        base_url: Auth0 API base URL
 
     Returns:
         Converted identifier or original if conversion fails
@@ -979,7 +967,7 @@ def _convert_single_identifier(
         identifier, fallback_user_id = _extract_identifier_data(item)
 
         user_details = _get_user_details_with_fallback(
-            identifier, fallback_user_id, token, base_url, env
+            identifier, fallback_user_id, client, env
         )
 
         return _handle_conversion_result(user_details, output_type, identifier, item)
@@ -1004,10 +992,11 @@ def _convert_to_output_type(
     """
     print_info(f"Fetching {output_type} data from Auth0 API...")
 
-    # Get Auth0 credentials
+    # Get Auth0 credentials and create client
     try:
         token = get_access_token(env)
         base_url = get_base_url(env)
+        client = create_client_from_token(token, base_url, env)
     except Exception as e:
         print_error(f"Error getting Auth0 credentials: {e}")
         return [
@@ -1020,7 +1009,7 @@ def _convert_to_output_type(
 
     for idx, item in enumerate(identifiers, 1):
         converted_identifier = _convert_single_identifier(
-            item, idx, output_type, env, token, base_url
+            item, idx, output_type, client, env
         )
         converted.append(converted_identifier)
 
