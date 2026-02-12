@@ -152,6 +152,11 @@ def test_doctor_with_api_test_success():
 
         result = doctor("prod", test_api=True)
 
+        mock_client.get.assert_called_once_with(
+            endpoint="/api/v2/users",
+            params={"per_page": 1},
+            operation_name="doctor API test",
+        )
         assert result["success"] is True
         assert result["environment"] == "prod"
         assert result["token_obtained"] is True
@@ -189,6 +194,11 @@ def test_doctor_with_api_test_failure():
 
         result = doctor("dev", test_api=True)
 
+        mock_client.get.assert_called_once_with(
+            endpoint="/api/v2/users",
+            params={"per_page": 1},
+            operation_name="doctor API test",
+        )
         assert result["success"] is True
         assert result["environment"] == "dev"
         assert result["token_obtained"] is True

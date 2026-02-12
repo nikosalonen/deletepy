@@ -809,18 +809,15 @@ def _search_user_by_field(
         return get_user_details(identifier, client)
     else:
         # Use search API for username lookups
-        result = client.get(
-            endpoint="/api/v2/users",
-            params={"q": f'username:"{identifier}"', "search_engine": "v3"},
-            operation_name="search user by username",
-        )
+        result = client.search_users(f'username:"{identifier}"')
 
         if not result.success:
             return None
 
-        data = result.data
-        if data and isinstance(data, list) and len(data) > 0:
-            return cast(dict[str, Any], data[0])
+        data = result.data if isinstance(result.data, dict) else {}
+        users = data.get("users", [])
+        if users and isinstance(users, list) and len(users) > 0:
+            return cast(dict[str, Any], users[0])
 
         return None
 

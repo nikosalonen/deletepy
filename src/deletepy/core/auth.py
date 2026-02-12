@@ -116,8 +116,7 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
 
         if test_api:
             logger.info("  🌐 Testing API access...")
-            base_url = f"https://{config['domain']}"
-            client = create_client_from_token(token, base_url, env)
+            client = create_client_from_token(token, config["base_url"], env)
 
             # Make a simple API call to test the token
             api_result = client.get(

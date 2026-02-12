@@ -1135,7 +1135,7 @@ def _handle_social_search_completion(
     not_found_ids = results_accumulator["not_found_ids"]
 
     _process_final_social_search_results(
-        found_users, not_found_ids, checkpoint, client, env, auto_delete
+        found_users, not_found_ids, checkpoint, client, auto_delete
     )
 
 
@@ -1193,7 +1193,6 @@ def _process_final_social_search_results(
     not_found_ids: list[str],
     checkpoint: Checkpoint,
     client: Auth0Client,
-    env: str,
     auto_delete: bool,
 ) -> None:
     """Process final social search results and perform operations.
@@ -1203,7 +1202,6 @@ def _process_final_social_search_results(
         not_found_ids: Social IDs that were not found
         checkpoint: Current checkpoint
         client: Auth0 API client
-        env: Environment
         auto_delete: Whether to auto-delete users
     """
     total_processed = len(checkpoint.processed_items) + len(checkpoint.remaining_items)
@@ -1229,7 +1227,7 @@ def _process_final_social_search_results(
         users_to_delete,
         identities_to_unlink,
         client,
-        env,
+        client.context.env,
         auto_delete,
     )
 

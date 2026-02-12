@@ -219,6 +219,31 @@ class TestSocialUnlinkPreview:
         assert result["identities_to_unlink"] == 0
         assert result["auth0_main_protected"] == 0
 
+    @patch("src.deletepy.operations.batch_ops.categorize_users")
+    @patch("src.deletepy.operations.batch_ops.search_batch_social_ids")
+    @patch("src.deletepy.operations.preview_ops.get_console")
+    def test_social_unlink_preview_no_users_found(
+        self, mock_console, mock_search, mock_categorize
+    ):
+        """Test social unlink preview when no users are found."""
+        mock_search.return_value = ([], ["social_id1", "social_id2"])
+        mock_categorize.return_value = ([], [], [])
+
+        client = MagicMock()
+
+        result = preview_social_unlink_operations(
+            ["social_id1", "social_id2"],
+            client,
+            show_details=False,
+        )
+
+        assert result["total_social_ids"] == 2
+        assert result["found_users"] == 0
+        assert result["not_found_ids"] == 2
+        assert result["users_to_delete"] == 0
+        assert result["identities_to_unlink"] == 0
+        assert result["auth0_main_protected"] == 0
+
 
 class TestHelperFunctions:
     """Test helper functions."""

@@ -142,39 +142,7 @@ def _fetch_users_by_email(
         return None
 
     data = result.data
-    if data is None:
-        logger.info(
-            f"No users found for email {email}",
-            extra={
-                "email": email,
-                "operation": "get_user_id_from_email",
-                "user_count": 0,
-            },
-        )
-        return []
-
-    if isinstance(data, list):
-        if data:
-            logger.info(
-                f"Found {len(data)} user(s) for email {email}",
-                extra={
-                    "email": email,
-                    "operation": "get_user_id_from_email",
-                    "user_count": len(data),
-                },
-            )
-            return cast(list[dict[str, Any]], data)
-        else:
-            logger.info(
-                f"No users found for email {email}",
-                extra={
-                    "email": email,
-                    "operation": "get_user_id_from_email",
-                    "user_count": 0,
-                },
-            )
-            return []  # Return empty list instead of None for consistency
-    else:
+    if not isinstance(data, list):
         logger.warning(
             f"Unexpected response format for email {email}: expected list, got {type(data)}",
             extra={
@@ -184,6 +152,19 @@ def _fetch_users_by_email(
             },
         )
         return []
+
+    user_count = len(data)
+    log_extra = {
+        "email": email,
+        "operation": "get_user_id_from_email",
+        "user_count": user_count,
+    }
+    if user_count > 0:
+        logger.info(f"Found {user_count} user(s) for email {email}", extra=log_extra)
+        return cast(list[dict[str, Any]], data)
+
+    logger.info(f"No users found for email {email}", extra=log_extra)
+    return []
 
 
 def _extract_user_ids_from_response(

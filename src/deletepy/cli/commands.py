@@ -55,6 +55,17 @@ class OperationHandler:
     def __init__(self) -> None:
         """Initialize the operation handler."""
 
+    def _create_client_for_env(self, env: str) -> Auth0Client:
+        """Create an Auth0Client for the given environment.
+
+        Args:
+            env: Environment ('dev' or 'prod')
+
+        Returns:
+            Auth0Client: Authenticated client
+        """
+        return create_client_from_token(get_access_token(env), get_base_url(env), env)
+
     def _setup_auth_and_files(
         self, input_file: Path, env: str
     ) -> tuple[Auth0Client, list[str]]:
@@ -70,9 +81,7 @@ class OperationHandler:
         Raises:
             Exception: If setup fails
         """
-        base_url = get_base_url(env)
-        token = get_access_token(env)
-        client = create_client_from_token(token, base_url, env)
+        client = self._create_client_for_env(env)
         user_ids = list(read_user_ids_generator(str(input_file)))
         return client, user_ids
 
@@ -1002,7 +1011,7 @@ class OperationHandler:
                 f"{YELLOW}Warning: Checkpoint missing output_file, using: {output_file}{RESET}"
             )
 
-        client = create_client_from_token(get_access_token(env), get_base_url(env), env)
+        client = self._create_client_for_env(env)
         config = ExportWithCheckpointsConfig(
             client=client,
             output_file=output_file,
@@ -1043,7 +1052,7 @@ class OperationHandler:
                 f"{YELLOW}Warning: Checkpoint missing output_file, using: {output_file}{RESET}"
             )
 
-        client = create_client_from_token(get_access_token(env), get_base_url(env), env)
+        client = self._create_client_for_env(env)
         config = FetchEmailsConfig(
             client=client,
             output_file=output_file,
@@ -1070,7 +1079,7 @@ class OperationHandler:
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
 
-        client = create_client_from_token(get_access_token(env), get_base_url(env), env)
+        client = self._create_client_for_env(env)
         config = CheckpointOperationConfig(
             client=client,
             env=env,
@@ -1094,7 +1103,7 @@ class OperationHandler:
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
 
-        client = create_client_from_token(get_access_token(env), get_base_url(env), env)
+        client = self._create_client_for_env(env)
         config = CheckpointOperationConfig(
             client=client,
             env=env,
@@ -1126,7 +1135,7 @@ class OperationHandler:
             OperationType.BATCH_BLOCK: "block",
             OperationType.BATCH_REVOKE_GRANTS: "revoke-grants-only",
         }
-        client = create_client_from_token(get_access_token(env), get_base_url(env), env)
+        client = self._create_client_for_env(env)
         batch_user_operations_with_checkpoints(
             user_ids=checkpoint.remaining_items,
             client=client,
