@@ -678,62 +678,94 @@ def _process_export_with_checkpoints(
         batch_end = min(batch_start + batch_size, len(remaining_emails))
         batch_emails = remaining_emails[batch_start:batch_end]
 
-        total_batches = checkpoint.progress.total_batches
-
-        print_info(
-            f"\nProcessing batch {current_batch_num}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_emails)} remaining)"
+        result = _process_single_export_batch(
+            batch_emails,
+            token,
+            base_url,
+            connection,
+            output_file,
+            current_batch_num,
+            checkpoint,
+            checkpoint_manager,
+            write_headers,
         )
+        if result is not None:
+            return result
 
-        # Process this batch
-        batch_csv_data, batch_counters = _process_email_batch(
-            batch_emails, token, base_url, connection, current_batch_num
-        )
-
-        # Write batch to CSV
-        mode = "w" if write_headers else "a"
-        success = _write_csv_batch(
-            batch_csv_data, output_file, current_batch_num, mode, write_headers
-        )
-
-        if not success:
-            error_msg = f"Failed to write CSV batch {current_batch_num}"
-            checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
-            checkpoint_manager.save_checkpoint(checkpoint)
-            return checkpoint.checkpoint_id
-
-        # Update checkpoint progress
-        results_update = {
-            "processed_count": batch_counters.get("processed_count", 0),
-            "not_found_count": batch_counters.get("not_found_count", 0),
-            "multiple_users_count": batch_counters.get("multiple_users_count", 0),
-            "error_count": batch_counters.get("error_count", 0),
-        }
-
-        checkpoint_manager.update_checkpoint_progress(
-            checkpoint=checkpoint,
-            processed_items=batch_emails,
-            results_update=results_update,
-        )
-
-        # Save checkpoint after each batch
-        checkpoint_manager.save_checkpoint(checkpoint)
-
-        write_headers = False  # Only write headers for first batch
+        write_headers = False
         current_batch_num += 1
 
-    # Mark checkpoint as completed
+    _finalize_export(checkpoint, checkpoint_manager, output_file)
+    return None
+
+
+def _process_single_export_batch(
+    batch_emails: list[str],
+    token: str,
+    base_url: str,
+    connection: str | None,
+    output_file: str,
+    current_batch_num: int,
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    write_headers: bool,
+) -> str | None:
+    """Process a single export batch: fetch, write CSV, and update checkpoint.
+
+    Returns:
+        Checkpoint ID if the batch write failed, None on success.
+    """
+    total_batches = checkpoint.progress.total_batches
+    print_info(
+        f"\nProcessing batch {current_batch_num}/{total_batches} "
+        f"({len(batch_emails)} emails)"
+    )
+
+    batch_csv_data, batch_counters = _process_email_batch(
+        batch_emails, token, base_url, connection, current_batch_num
+    )
+
+    mode = "w" if write_headers else "a"
+    success = _write_csv_batch(
+        batch_csv_data, output_file, current_batch_num, mode, write_headers
+    )
+
+    if not success:
+        error_msg = f"Failed to write CSV batch {current_batch_num}"
+        checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
+        checkpoint_manager.save_checkpoint(checkpoint)
+        return checkpoint.checkpoint_id
+
+    results_update = {
+        "processed_count": batch_counters.get("processed_count", 0),
+        "not_found_count": batch_counters.get("not_found_count", 0),
+        "multiple_users_count": batch_counters.get("multiple_users_count", 0),
+        "error_count": batch_counters.get("error_count", 0),
+    }
+
+    checkpoint_manager.update_checkpoint_progress(
+        checkpoint=checkpoint,
+        processed_items=batch_emails,
+        results_update=results_update,
+    )
+    checkpoint_manager.save_checkpoint(checkpoint)
+    return None
+
+
+def _finalize_export(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    output_file: str,
+) -> None:
+    """Mark export checkpoint as completed and display summary."""
     checkpoint.status = CheckpointStatus.COMPLETED
     checkpoint_manager.save_checkpoint(checkpoint)
-
-    # Generate final summary
     _generate_export_summary_from_checkpoint(checkpoint, output_file)
-
     print_success(
         f"Export completed! Checkpoint: {checkpoint.checkpoint_id}",
         operation="export_complete",
         checkpoint_id=checkpoint.checkpoint_id,
     )
-    return None  # Operation completed successfully
 
 
 def _generate_export_summary_from_checkpoint(
@@ -1135,61 +1167,91 @@ def _process_fetch_emails_with_checkpoints(
         batch_end = min(batch_start + batch_size, len(remaining_user_ids))
         batch_user_ids = remaining_user_ids[batch_start:batch_end]
 
-        total_batches = checkpoint.progress.total_batches
-
-        print_info(
-            f"\nProcessing batch {current_batch_num}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)"
+        result = _process_single_fetch_batch(
+            batch_user_ids,
+            token,
+            base_url,
+            output_file,
+            current_batch_num,
+            checkpoint,
+            checkpoint_manager,
+            write_headers,
         )
+        if result is not None:
+            return result
 
-        # Process this batch
-        batch_csv_data, batch_counters = _process_user_id_batch(
-            batch_user_ids, token, base_url, current_batch_num
-        )
-
-        # Write batch to CSV
-        mode = "w" if write_headers else "a"
-        success = _write_fetch_csv_batch(
-            batch_csv_data, output_file, current_batch_num, mode, write_headers
-        )
-
-        if not success:
-            error_msg = f"Failed to write CSV batch {current_batch_num}"
-            checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
-            checkpoint_manager.save_checkpoint(checkpoint)
-            return checkpoint.checkpoint_id
-
-        # Update checkpoint progress
-        results_update = {
-            "processed_count": batch_counters.get("processed_count", 0),
-            "not_found_count": batch_counters.get("not_found_count", 0),
-            "error_count": batch_counters.get("error_count", 0),
-        }
-
-        checkpoint_manager.update_checkpoint_progress(
-            checkpoint=checkpoint,
-            processed_items=batch_user_ids,
-            results_update=results_update,
-        )
-
-        # Save checkpoint after each batch
-        checkpoint_manager.save_checkpoint(checkpoint)
-
-        write_headers = False  # Only write headers for first batch
+        write_headers = False
         current_batch_num += 1
 
-    # Mark checkpoint as completed
+    _finalize_fetch_emails(checkpoint, checkpoint_manager, output_file)
+    return None
+
+
+def _process_single_fetch_batch(
+    batch_user_ids: list[str],
+    token: str,
+    base_url: str,
+    output_file: str,
+    current_batch_num: int,
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    write_headers: bool,
+) -> str | None:
+    """Process a single fetch-emails batch: fetch, write CSV, and update checkpoint.
+
+    Returns:
+        Checkpoint ID if the batch write failed, None on success.
+    """
+    total_batches = checkpoint.progress.total_batches
+    print_info(
+        f"\nProcessing batch {current_batch_num}/{total_batches} "
+        f"({len(batch_user_ids)} user IDs)"
+    )
+
+    batch_csv_data, batch_counters = _process_user_id_batch(
+        batch_user_ids, token, base_url, current_batch_num
+    )
+
+    mode = "w" if write_headers else "a"
+    success = _write_fetch_csv_batch(
+        batch_csv_data, output_file, current_batch_num, mode, write_headers
+    )
+
+    if not success:
+        error_msg = f"Failed to write CSV batch {current_batch_num}"
+        checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
+        checkpoint_manager.save_checkpoint(checkpoint)
+        return checkpoint.checkpoint_id
+
+    results_update = {
+        "processed_count": batch_counters.get("processed_count", 0),
+        "not_found_count": batch_counters.get("not_found_count", 0),
+        "error_count": batch_counters.get("error_count", 0),
+    }
+
+    checkpoint_manager.update_checkpoint_progress(
+        checkpoint=checkpoint,
+        processed_items=batch_user_ids,
+        results_update=results_update,
+    )
+    checkpoint_manager.save_checkpoint(checkpoint)
+    return None
+
+
+def _finalize_fetch_emails(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    output_file: str,
+) -> None:
+    """Mark fetch-emails checkpoint as completed and display summary."""
     checkpoint.status = CheckpointStatus.COMPLETED
     checkpoint_manager.save_checkpoint(checkpoint)
-
-    # Generate final summary
     _generate_fetch_summary_from_checkpoint(checkpoint, output_file)
-
     print_success(
         f"Fetch emails completed! Checkpoint: {checkpoint.checkpoint_id}",
         operation="fetch_emails_complete",
         checkpoint_id=checkpoint.checkpoint_id,
     )
-    return None  # Operation completed successfully
 
 
 def _process_user_id_batch(
