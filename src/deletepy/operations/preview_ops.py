@@ -16,6 +16,7 @@ from ..utils.display_utils import (
     live_progress,
     shutdown_requested,
 )
+from ..utils.output import print_error, print_info, print_warning
 from ..utils.validators import SecurityValidator
 from .user_ops import get_user_details, get_user_id_from_email
 
@@ -118,6 +119,11 @@ def _process_resolved_user(
         time.sleep(API_RATE_LIMIT)
 
         if not user_details:
+            print_warning(
+                f"Could not fetch details for {resolved_user_id}",
+                user_id=resolved_user_id,
+                operation=operation,
+            )
             result.errors.append(
                 {
                     "identifier": original_id,
@@ -129,13 +135,25 @@ def _process_resolved_user(
             )
             return
 
+        email = user_details.get("email", "")
+
         if _should_skip_user(user_details, operation):
+            print_info(
+                f"Would skip {resolved_user_id} ({email}) - already in target state",
+                user_id=resolved_user_id,
+                operation=operation,
+            )
             result.blocked_users.append(resolved_user_id)
         else:
+            print_info(
+                f"Would {operation} {resolved_user_id} ({email})",
+                user_id=resolved_user_id,
+                operation=operation,
+            )
             result.valid_users.append(
                 {
                     "user_id": resolved_user_id,
-                    "email": user_details.get("email", ""),
+                    "email": email,
                     "connection": _get_user_connection(user_details),
                     "blocked": user_details.get("blocked", False),
                     "last_login": user_details.get("last_login", ""),
@@ -143,6 +161,11 @@ def _process_resolved_user(
                 }
             )
     except Exception as e:
+        print_error(
+            f"API error for {original_id}: {e}",
+            user_id=original_id,
+            operation=operation,
+        )
         result.errors.append(
             {
                 "identifier": original_id,
