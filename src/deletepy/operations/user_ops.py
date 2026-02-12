@@ -11,6 +11,7 @@ from ..models.checkpoint import (
     CheckpointStatus,
     OperationType,
 )
+from ..utils.auth_utils import validate_auth0_user_id
 from ..utils.checkpoint_manager import CheckpointManager
 from ..utils.checkpoint_utils import (
     CheckpointConfig,
@@ -1076,8 +1077,6 @@ def _resolve_user_identifier_for_batch(
     Returns:
         Optional[str]: Valid user ID if found, None if should skip
     """
-    from ..utils.auth_utils import validate_auth0_user_id
-
     # If input is an email, resolve to user_id
     if "@" in user_id and user_id.count("@") == 1 and len(user_id.split("@")[1]) > 0:
         resolved_ids = get_user_id_from_email(user_id, token, base_url)
