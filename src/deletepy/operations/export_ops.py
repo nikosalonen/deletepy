@@ -1261,7 +1261,7 @@ def _process_user_id_batch(
                 csv_row = {
                     "user_id": user_id,
                     "email": "",
-                    "status": f"Error: {str(e)}",
+                    "status": "Error",
                 }
                 csv_data.append(csv_row)
                 batch_counters["error_count"] += 1
