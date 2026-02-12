@@ -378,7 +378,7 @@ def preview_social_unlink_operations(
     Returns:
         dict: Preview results for social unlink operations
     """
-    from .batch_ops import _categorize_users, _search_batch_social_ids
+    from .batch_ops import categorize_users, search_batch_social_ids
 
     console = get_console()
     console.print(
@@ -387,10 +387,10 @@ def preview_social_unlink_operations(
     )
 
     # Search for users with each social ID
-    found_users, not_found_ids = _search_batch_social_ids(social_ids, token, base_url)
+    found_users, not_found_ids = search_batch_social_ids(social_ids, token, base_url)
 
     # Categorize users
-    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
+    users_to_delete, identities_to_unlink, auth0_main_protected = categorize_users(
         found_users, auto_delete=True
     )
 

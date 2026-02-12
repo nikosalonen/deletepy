@@ -87,7 +87,7 @@ class ExecuteCheckpointConfig:
     processing_config: ProcessingConfig | None = None
 
 
-def _categorize_users(
+def categorize_users(
     found_users: list[dict[str, Any]], auto_delete: bool = True
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Categorize users based on their identity configuration.
@@ -1164,7 +1164,7 @@ def _process_social_search_batch(
     Returns:
         Dict[str, int]: Batch processing results
     """
-    found_users, not_found_ids = _search_batch_social_ids(
+    found_users, not_found_ids = search_batch_social_ids(
         batch_social_ids, token, base_url
     )
     accumulator["found_users"].extend(found_users)
@@ -1285,7 +1285,7 @@ def _process_final_social_search_results(
     total_processed = len(checkpoint.processed_items) + len(checkpoint.remaining_items)
 
     # Categorize users based on their identity configuration
-    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
+    users_to_delete, identities_to_unlink, auth0_main_protected = categorize_users(
         found_users, auto_delete
     )
 
@@ -1311,7 +1311,7 @@ def _process_final_social_search_results(
     )
 
 
-def _search_batch_social_ids(
+def search_batch_social_ids(
     social_ids: list[str], token: str, base_url: str
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Search for users with a batch of social media IDs.
