@@ -20,6 +20,7 @@ deletepy/
 │       │   └── validators.py    # Argument validation
 │       ├── core/                # Core functionality
 │       │   ├── auth.py          # Auth0 authentication
+│       │   ├── auth0_client.py  # Unified Auth0 API client
 │       │   ├── config.py        # Configuration management
 │       │   └── exceptions.py    # Custom exceptions
 │       ├── operations/          # Business operations
@@ -30,7 +31,7 @@ deletepy/
 │       ├── utils/               # Utilities
 │       │   ├── file_utils.py    # File operations
 │       │   ├── display_utils.py # Progress/output formatting
-│       │   ├── request_utils.py # HTTP request utilities
+│       │   ├── request_utils.py # Batch processing utilities
 │       │   └── auth_utils.py    # Authentication utilities
 │       └── models/              # Data models
 ├── tests/                       # Test suite
@@ -162,9 +163,9 @@ make check-all
 ### Testing
 
 - Tests use pytest with fixtures for mock objects
-- `conftest.py` provides automatic module-based request mocking
+- `conftest.py` provides `mock_client` fixture (`MagicMock(spec=Auth0Client)`) and `mock_requests` for auth bootstrap tests
 - Each module has corresponding test files following `test_*.py` naming
-- Tests cover both success and error scenarios for Auth0 API interactions
+- Tests mock `Auth0Client` methods and assert on `APIResponse` return values
 - Test coverage should be maintained at 100%
 
 ### Function Complexity Guidelines

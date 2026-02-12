@@ -2,6 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.deletepy.core.auth0_client import Auth0Client
+
 
 @pytest.fixture
 def mock_response():
@@ -14,28 +16,34 @@ def mock_response():
 
 
 @pytest.fixture
+def mock_client():
+    """Create a mock Auth0Client for testing.
+
+    Returns a MagicMock with spec=Auth0Client and pre-configured context attributes.
+    Individual tests should configure return values on specific methods.
+    """
+    client = MagicMock(spec=Auth0Client)
+    client.context.token = "test_token"
+    client.context.base_url = "https://test.auth0.com"
+    client.context.env = "dev"
+    return client
+
+
+@pytest.fixture
 def mock_requests(request):
     """Create a mock requests module.
 
-    This fixture automatically determines which module(s) to patch based on the test module name.
-    For example, test_auth.py will patch src.deletepy.core.auth.requests.
-    For test_user_operations.py, patches multiple modules since functions are spread across them.
+    This fixture patches the `requests` module for test files that still
+    use direct HTTP calls (e.g., auth.py for token acquisition).
     """
     # Extract the test file name and map to new module structure
     test_file = request.module.__file__
     test_name = test_file.split("test_")[-1].replace(".py", "")
 
     # Map test files to their corresponding module paths
-    # Some test files need multiple modules patched
     module_mapping = {
         "auth": ["src.deletepy.core.auth"],
-        "user_operations": [
-            "src.deletepy.operations.user_ops",
-            "src.deletepy.operations.batch_ops",
-            "src.deletepy.utils.request_utils",
-        ],
         "utils": ["src.deletepy.utils.file_utils"],
-        "cleanup_csv": ["src.deletepy.utils.csv_utils"],
     }
 
     module_paths = module_mapping.get(test_name, [f"src.deletepy.{test_name}"])

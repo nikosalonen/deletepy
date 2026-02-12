@@ -515,7 +515,7 @@ class Auth0Client:
         """Delete all grants for a user.
 
         Args:
-            user_id: URL-encoded Auth0 user ID
+            user_id: Raw Auth0 user ID (not URL-encoded, passed as query param)
 
         Returns:
             APIResponse: Response indicating success/failure

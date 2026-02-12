@@ -1,6 +1,6 @@
 """Tests for dry-run preview operations."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.deletepy.operations.preview_ops import (
     PreviewResult,
@@ -52,14 +52,12 @@ class TestPreviewUserOperations:
 
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
     @patch("src.deletepy.operations.preview_ops.live_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("src.deletepy.operations.preview_ops.get_console")
     def test_preview_with_valid_user_ids(
-        self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
+        self, mock_console, mock_progress, mock_get_email, mock_get_details
     ):
         """Test preview with valid Auth0 user IDs."""
-        # Setup mocks
         mock_get_details.return_value = {
             "user_id": "auth0|123456789",
             "email": "test@example.com",
@@ -67,11 +65,10 @@ class TestPreviewUserOperations:
             "identities": [{"connection": "auth0"}],
         }
 
+        client = MagicMock()
         user_ids = ["auth0|123456789", "auth0|987654321"]
 
-        result = preview_user_operations(
-            user_ids, "token", "https://test.auth0.com", "delete", show_details=False
-        )
+        result = preview_user_operations(user_ids, client, "delete", show_details=False)
 
         assert result.operation == "delete"
         assert result.total_users == 2
@@ -81,14 +78,12 @@ class TestPreviewUserOperations:
 
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
     @patch("src.deletepy.operations.preview_ops.live_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("src.deletepy.operations.preview_ops.get_console")
     def test_preview_with_emails(
-        self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
+        self, mock_console, mock_progress, mock_get_email, mock_get_details
     ):
         """Test preview with email addresses."""
-        # Setup mocks
         mock_get_email.return_value = ["auth0|123456789"]
         mock_get_details.return_value = {
             "user_id": "auth0|123456789",
@@ -97,11 +92,10 @@ class TestPreviewUserOperations:
             "identities": [{"connection": "auth0"}],
         }
 
+        client = MagicMock()
         user_ids = ["test@example.com"]
 
-        result = preview_user_operations(
-            user_ids, "token", "https://test.auth0.com", "delete", show_details=False
-        )
+        result = preview_user_operations(user_ids, client, "delete", show_details=False)
 
         assert result.success_count == 1
         assert len(result.valid_users) == 1
@@ -109,18 +103,16 @@ class TestPreviewUserOperations:
 
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
     @patch("src.deletepy.operations.preview_ops.live_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("src.deletepy.operations.preview_ops.get_console")
     def test_preview_with_invalid_user_ids(
-        self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
+        self, mock_console, mock_progress, mock_get_email, mock_get_details
     ):
         """Test preview with invalid user IDs."""
+        client = MagicMock()
         user_ids = ["invalid-id", "another-invalid"]
 
-        result = preview_user_operations(
-            user_ids, "token", "https://test.auth0.com", "delete", show_details=False
-        )
+        result = preview_user_operations(user_ids, client, "delete", show_details=False)
 
         assert result.success_count == 0
         assert result.skip_count == 2
@@ -128,20 +120,18 @@ class TestPreviewUserOperations:
 
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
     @patch("src.deletepy.operations.preview_ops.live_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("src.deletepy.operations.preview_ops.get_console")
     def test_preview_with_not_found_emails(
-        self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
+        self, mock_console, mock_progress, mock_get_email, mock_get_details
     ):
         """Test preview with emails that don't exist."""
         mock_get_email.return_value = []
 
+        client = MagicMock()
         user_ids = ["notfound@example.com"]
 
-        result = preview_user_operations(
-            user_ids, "token", "https://test.auth0.com", "delete", show_details=False
-        )
+        result = preview_user_operations(user_ids, client, "delete", show_details=False)
 
         assert result.success_count == 0
         assert len(result.not_found_users) == 1
@@ -149,20 +139,18 @@ class TestPreviewUserOperations:
 
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
     @patch("src.deletepy.operations.preview_ops.live_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("src.deletepy.operations.preview_ops.get_console")
     def test_preview_with_multiple_users(
-        self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
+        self, mock_console, mock_progress, mock_get_email, mock_get_details
     ):
         """Test preview with email that has multiple users."""
         mock_get_email.return_value = ["auth0|123456789", "google-oauth2|987654321"]
 
+        client = MagicMock()
         user_ids = ["shared@example.com"]
 
-        result = preview_user_operations(
-            user_ids, "token", "https://test.auth0.com", "delete", show_details=False
-        )
+        result = preview_user_operations(user_ids, client, "delete", show_details=False)
 
         assert result.success_count == 0
         assert len(result.multiple_users) == 1
@@ -170,11 +158,10 @@ class TestPreviewUserOperations:
 
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
     @patch("src.deletepy.operations.preview_ops.live_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("src.deletepy.operations.preview_ops.get_console")
     def test_preview_block_operation_with_blocked_user(
-        self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
+        self, mock_console, mock_progress, mock_get_email, mock_get_details
     ):
         """Test preview block operation with already blocked user."""
         mock_get_details.return_value = {
@@ -184,11 +171,10 @@ class TestPreviewUserOperations:
             "identities": [{"connection": "auth0"}],
         }
 
+        client = MagicMock()
         user_ids = ["auth0|123456789"]
 
-        result = preview_user_operations(
-            user_ids, "token", "https://test.auth0.com", "block", show_details=False
-        )
+        result = preview_user_operations(user_ids, client, "block", show_details=False)
 
         assert result.success_count == 0
         assert len(result.blocked_users) == 1
@@ -197,12 +183,11 @@ class TestPreviewUserOperations:
 class TestSocialUnlinkPreview:
     """Test preview_social_unlink_operations function."""
 
-    @patch("src.deletepy.operations.batch_ops.search_batch_social_ids")
     @patch("src.deletepy.operations.batch_ops.categorize_users")
-    @patch("src.deletepy.operations.preview_ops.print")
-    def test_social_unlink_preview(self, mock_print, mock_categorize, mock_search):
+    @patch("src.deletepy.operations.batch_ops.search_batch_social_ids")
+    @patch("src.deletepy.operations.preview_ops.get_console")
+    def test_social_unlink_preview(self, mock_console, mock_search, mock_categorize):
         """Test social unlink preview."""
-        # Setup mocks
         mock_search.return_value = (
             [{"user_id": "auth0|123", "email": "test@example.com"}],
             ["not_found_id"],
@@ -219,10 +204,11 @@ class TestSocialUnlinkPreview:
             [],
         )
 
+        client = MagicMock()
+
         result = preview_social_unlink_operations(
             ["social_id1", "social_id2"],
-            "token",
-            "https://test.auth0.com",
+            client,
             show_details=False,
         )
 
@@ -233,6 +219,31 @@ class TestSocialUnlinkPreview:
         assert result["identities_to_unlink"] == 0
         assert result["auth0_main_protected"] == 0
 
+    @patch("src.deletepy.operations.batch_ops.categorize_users")
+    @patch("src.deletepy.operations.batch_ops.search_batch_social_ids")
+    @patch("src.deletepy.operations.preview_ops.get_console")
+    def test_social_unlink_preview_no_users_found(
+        self, mock_console, mock_search, mock_categorize
+    ):
+        """Test social unlink preview when no users are found."""
+        mock_search.return_value = ([], ["social_id1", "social_id2"])
+        mock_categorize.return_value = ([], [], [])
+
+        client = MagicMock()
+
+        result = preview_social_unlink_operations(
+            ["social_id1", "social_id2"],
+            client,
+            show_details=False,
+        )
+
+        assert result["total_social_ids"] == 2
+        assert result["found_users"] == 0
+        assert result["not_found_ids"] == 2
+        assert result["users_to_delete"] == 0
+        assert result["identities_to_unlink"] == 0
+        assert result["auth0_main_protected"] == 0
+
 
 class TestHelperFunctions:
     """Test helper functions."""
@@ -240,10 +251,9 @@ class TestHelperFunctions:
     def test_resolve_user_identifier_valid_user_id(self):
         """Test resolving valid user ID."""
         result = PreviewResult(operation="delete", total_users=1)
+        client = MagicMock()
 
-        resolved = _resolve_user_identifier(
-            "auth0|123456789", "token", "https://test.auth0.com", result
-        )
+        resolved = _resolve_user_identifier("auth0|123456789", client, result)
 
         assert resolved == "auth0|123456789"
         assert len(result.invalid_user_ids) == 0
@@ -251,10 +261,9 @@ class TestHelperFunctions:
     def test_resolve_user_identifier_invalid_user_id(self):
         """Test resolving invalid user ID."""
         result = PreviewResult(operation="delete", total_users=1)
+        client = MagicMock()
 
-        resolved = _resolve_user_identifier(
-            "invalid-id", "token", "https://test.auth0.com", result
-        )
+        resolved = _resolve_user_identifier("invalid-id", client, result)
 
         assert resolved is None
         assert len(result.invalid_user_ids) == 1
@@ -264,10 +273,9 @@ class TestHelperFunctions:
         """Test resolving email to user ID."""
         mock_get_email.return_value = ["auth0|123456789"]
         result = PreviewResult(operation="delete", total_users=1)
+        client = MagicMock()
 
-        resolved = _resolve_user_identifier(
-            "test@example.com", "token", "https://test.auth0.com", result
-        )
+        resolved = _resolve_user_identifier("test@example.com", client, result)
 
         assert resolved == "auth0|123456789"
         assert len(result.not_found_users) == 0
@@ -277,10 +285,9 @@ class TestHelperFunctions:
         """Test resolving email that doesn't exist."""
         mock_get_email.return_value = []
         result = PreviewResult(operation="delete", total_users=1)
+        client = MagicMock()
 
-        resolved = _resolve_user_identifier(
-            "notfound@example.com", "token", "https://test.auth0.com", result
-        )
+        resolved = _resolve_user_identifier("notfound@example.com", client, result)
 
         assert resolved is None
         assert len(result.not_found_users) == 1
@@ -317,14 +324,12 @@ class TestIntegration:
 
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
-    @patch("src.deletepy.operations.preview_ops.time.sleep")
     @patch("src.deletepy.operations.preview_ops.live_progress")
-    @patch("src.deletepy.operations.preview_ops.print")
+    @patch("src.deletepy.operations.preview_ops.get_console")
     def test_mixed_input_types(
-        self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
+        self, mock_console, mock_progress, mock_get_email, mock_get_details
     ):
         """Test preview with mixed input types."""
-        # Setup mocks
         mock_get_email.return_value = ["auth0|email_resolved"]
         mock_get_details.side_effect = [
             {
@@ -341,11 +346,10 @@ class TestIntegration:
             },
         ]
 
+        client = MagicMock()
         user_ids = ["auth0|123456789", "resolved@example.com", "invalid-id"]
 
-        result = preview_user_operations(
-            user_ids, "token", "https://test.auth0.com", "delete", show_details=False
-        )
+        result = preview_user_operations(user_ids, client, "delete", show_details=False)
 
         assert result.total_users == 3
         assert result.success_count == 2

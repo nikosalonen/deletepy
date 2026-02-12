@@ -8,6 +8,7 @@ from typing import Any, cast
 import click
 
 from ..core.auth import get_access_token
+from ..core.auth0_client import Auth0Client, create_client_from_token
 from ..core.config import get_base_url
 from ..models.checkpoint import Checkpoint, CheckpointStatus, OperationType
 from ..operations.batch_ops import (
@@ -26,8 +27,6 @@ from ..operations.preview_ops import (
 )
 from ..operations.user_ops import (
     batch_user_operations_with_checkpoints,
-    block_user,
-    delete_user,
     get_user_email,
     get_user_id_from_email,
 )
@@ -54,9 +53,20 @@ class OperationHandler:
     def __init__(self) -> None:
         """Initialize the operation handler."""
 
+    def _create_client_for_env(self, env: str) -> Auth0Client:
+        """Create an Auth0Client for the given environment.
+
+        Args:
+            env: Environment ('dev' or 'prod')
+
+        Returns:
+            Auth0Client: Authenticated client
+        """
+        return create_client_from_token(get_access_token(env), get_base_url(env), env)
+
     def _setup_auth_and_files(
         self, input_file: Path, env: str
-    ) -> tuple[str, str, list[str]]:
+    ) -> tuple[Auth0Client, list[str]]:
         """Setup authentication and read user files.
 
         Args:
@@ -64,15 +74,14 @@ class OperationHandler:
             env: Environment ('dev' or 'prod')
 
         Returns:
-            tuple: (base_url, token, user_ids)
+            tuple: (client, user_ids)
 
         Raises:
             Exception: If setup fails
         """
-        base_url = get_base_url(env)
-        token = get_access_token(env)
+        client = self._create_client_for_env(env)
         user_ids = list(read_user_ids_generator(str(input_file)))
-        return base_url, token, user_ids
+        return client, user_ids
 
     def _handle_operation_error(self, error: Exception, operation_name: str) -> None:
         """Handle operation errors with consistent formatting.
@@ -84,15 +93,12 @@ class OperationHandler:
         click.echo(f"{RED}{operation_name} failed: {error}{RESET}", err=True)
         sys.exit(1)
 
-    def _fetch_user_emails(
-        self, user_ids: list[str], token: str, base_url: str
-    ) -> list[str]:
+    def _fetch_user_emails(self, user_ids: list[str], client: Auth0Client) -> list[str]:
         """Fetch email addresses for a list of user IDs.
 
         Args:
             user_ids: List of Auth0 user IDs
-            token: Auth0 access token
-            base_url: Auth0 API base URL
+            client: Auth0 API client
 
         Returns:
             list: Email addresses found
@@ -101,7 +107,7 @@ class OperationHandler:
         emails = []
         with live_progress(len(user_ids), "Fetching emails") as advance:
             for user_id in user_ids:
-                email = get_user_email(user_id, token, base_url)
+                email = get_user_email(user_id, client)
                 if email:
                     emails.append(email)
                 advance()
@@ -184,86 +190,10 @@ class OperationHandler:
 
         return confirm_production_operation(operation, total_users, rotate_password)
 
-    def _initialize_processing_state(self) -> dict[str, Any]:
-        """Initialize the processing state tracking variables.
-
-        Returns:
-            dict: Initial processing state with counters and lists
-        """
-        return {
-            "multiple_users": {},
-            "not_found_users": [],
-            "invalid_user_ids": [],
-            "processed_count": 0,
-            "skipped_count": 0,
-        }
-
-    def _process_single_user(
-        self,
-        user_id: str,
-        token: str,
-        base_url: str,
-        operation: str,
-        state: dict[str, Any],
-    ) -> None:
-        """Process a single user identifier.
-
-        Args:
-            user_id: User identifier to process
-            token: Auth0 access token
-            base_url: Auth0 API base URL
-            operation: Operation to perform
-            state: Processing state to update
-        """
-        from ..utils.validators import SecurityValidator
-
-        # Sanitize user input first
-        user_id = SecurityValidator.sanitize_user_input(user_id)
-
-        if not user_id:
-            state["skipped_count"] += 1
-            return
-
-        # Resolve email to user ID if needed
-        resolved_user_id = self._resolve_user_identifier(
-            user_id,
-            token,
-            base_url,
-            state["multiple_users"],
-            state["not_found_users"],
-            state["invalid_user_ids"],
-        )
-
-        if resolved_user_id is None:
-            state["skipped_count"] += 1
-            return
-
-        # Perform the operation
-        self._execute_user_operation(operation, resolved_user_id, token, base_url)
-        state["processed_count"] += 1
-
-    def _create_processing_results(self, state: dict[str, Any]) -> dict[str, Any]:
-        """Create the final processing results dictionary.
-
-        Args:
-            state: Processing state with counters and lists
-
-        Returns:
-            Dict[str, Any]: Processing results
-        """
-        return {
-            "processed_count": state["processed_count"],
-            "skipped_count": state["skipped_count"],
-            "not_found_users": state["not_found_users"],
-            "invalid_user_ids": state["invalid_user_ids"],
-            "multiple_users": state["multiple_users"],
-        }
-
     def _resolve_user_identifier(
         self,
         user_id: str,
-        token: str,
-        base_url: str,
+        client: Auth0Client,
         multiple_users: dict[str, list[str]],
         not_found_users: list[str],
         invalid_user_ids: list[str],
@@ -272,8 +202,7 @@ class OperationHandler:
 
         Args:
             user_id: User identifier (email or Auth0 user ID)
-            token: Auth0 access token
-            base_url: Auth0 API base URL
+            client: Auth0 API client
             multiple_users: Dict to store emails with multiple users
             not_found_users: List to store emails that weren't found
             invalid_user_ids: List to store invalid user IDs
@@ -300,7 +229,7 @@ class OperationHandler:
                 for warning in email_result.warnings:
                     print_warning(f"Email validation warning for {user_id}: {warning}")
 
-            resolved_ids = get_user_id_from_email(user_id, token, base_url)
+            resolved_ids = get_user_id_from_email(user_id, client)
             if not resolved_ids:
                 not_found_users.append(user_id)
                 return None
@@ -328,27 +257,6 @@ class OperationHandler:
                     )
 
             return user_id
-
-    def _execute_user_operation(
-        self, operation: str, user_id: str, token: str, base_url: str
-    ) -> None:
-        """Execute the specified operation on a user.
-
-        Args:
-            operation: Operation to perform
-            user_id: Auth0 user ID
-            token: Auth0 access token
-            base_url: Auth0 API base URL
-        """
-        if operation == "block":
-            block_user(user_id, token, base_url)
-        elif operation == "delete":
-            delete_user(user_id, token, base_url)
-        elif operation == "revoke-grants-only":
-            from ..operations.user_ops import revoke_user_grants, revoke_user_sessions
-
-            revoke_user_sessions(user_id, token, base_url)
-            revoke_user_grants(user_id, token, base_url)
 
     def handle_doctor(self, env: str, test_api: bool = False) -> bool:
         """Handle doctor operation for testing Auth0 credentials.
@@ -382,15 +290,14 @@ class OperationHandler:
     def handle_check_unblocked(self, input_file: Path, env: str) -> None:
         """Handle check unblocked users operation."""
         try:
-            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+            client, user_ids = self._setup_auth_and_files(input_file, env)
             click.echo(
                 f"\n{CYAN}Checking {len(user_ids)} users for blocked status...{RESET}"
             )
 
             # Use checkpoint-enabled operation
             config = CheckpointOperationConfig(
-                token=token,
-                base_url=base_url,
+                client=client,
                 env=env,
             )
 
@@ -413,8 +320,8 @@ class OperationHandler:
     def handle_check_domains(self, input_file: Path, env: str) -> None:
         """Handle check domains operation."""
         try:
-            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
-            emails = self._fetch_user_emails(user_ids, token, base_url)
+            client, user_ids = self._setup_auth_and_files(input_file, env)
+            emails = self._fetch_user_emails(user_ids, client)
 
             if not emails:
                 click.echo("No valid emails found to check.")
@@ -432,7 +339,7 @@ class OperationHandler:
     ) -> None:
         """Handle export last login operation."""
         try:
-            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+            client, user_ids = self._setup_auth_and_files(input_file, env)
 
             # For export operation, treat input as emails directly with validation
             from ..utils.validators import InputValidator, SecurityValidator
@@ -479,8 +386,7 @@ class OperationHandler:
 
             # Use checkpoint-enabled operation
             config = ExportWithCheckpointsConfig(
-                token=token,
-                base_url=base_url,
+                client=client,
                 env=env,
                 connection=connection,
                 output_file=output_file,
@@ -504,7 +410,7 @@ class OperationHandler:
     def handle_fetch_emails(self, input_file: Path, env: str) -> None:
         """Handle fetch emails operation."""
         try:
-            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+            client, user_ids = self._setup_auth_and_files(input_file, env)
 
             # For fetch emails operation, treat input as user IDs with validation
             from ..utils.validators import InputValidator, SecurityValidator
@@ -550,8 +456,7 @@ class OperationHandler:
             )
 
             config = FetchEmailsConfig(
-                token=token,
-                base_url=base_url,
+                client=client,
                 env=env,
                 output_file=output_file,
             )
@@ -580,7 +485,7 @@ class OperationHandler:
     ) -> None:
         """Handle user operations (block, delete, revoke-grants-only)."""
         try:
-            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+            client, user_ids = self._setup_auth_and_files(input_file, env)
             total_users = len(user_ids)
 
             # Get operation display name
@@ -588,7 +493,7 @@ class OperationHandler:
 
             if dry_run:
                 # Run dry-run preview
-                self._handle_dry_run_preview(user_ids, token, base_url, operation)
+                self._handle_dry_run_preview(user_ids, client, operation)
                 return
 
             # Request confirmation for production environment
@@ -603,8 +508,7 @@ class OperationHandler:
             # Use checkpoint-enabled batch operation
             checkpoint_id = batch_user_operations_with_checkpoints(
                 user_ids=user_ids,
-                token=token,
-                base_url=base_url,
+                client=client,
                 operation=operation,
                 env=env,
                 rotate_password=rotate_password,
@@ -622,7 +526,7 @@ class OperationHandler:
     ) -> None:
         """Handle unlink social IDs operation."""
         try:
-            base_url, token, user_ids = self._setup_auth_and_files(input_file, env)
+            client, user_ids = self._setup_auth_and_files(input_file, env)
 
             # For social media ID search, treat input as social media IDs with validation
             from ..utils.validators import SecurityValidator
@@ -639,13 +543,12 @@ class OperationHandler:
 
             if dry_run:
                 # Run dry-run preview for social unlink
-                self._handle_social_dry_run_preview(social_ids, token, base_url, env)
+                self._handle_social_dry_run_preview(social_ids, client, env)
                 return
 
             # Use checkpoint-enabled operation
             config = CheckpointOperationConfig(
-                token=token,
-                base_url=base_url,
+                client=client,
                 env=env,
             )
 
@@ -664,12 +567,12 @@ class OperationHandler:
             self._handle_operation_error(e, "Find social IDs")
 
     def _handle_dry_run_preview(
-        self, user_ids: list[str], token: str, base_url: str, operation: str
+        self, user_ids: list[str], client: Auth0Client, operation: str
     ) -> None:
         """Handle dry-run preview for user operations."""
         try:
             result = preview_user_operations(
-                user_ids, token, base_url, operation, show_details=True
+                user_ids, client, operation, show_details=True
             )
 
             # Ask for confirmation to proceed with actual operation
@@ -683,7 +586,7 @@ class OperationHandler:
                         f"\n{CYAN}Proceeding with actual {operation} operation...{RESET}"
                     )
                     # Remove dry_run flag and call the actual operation
-                    self._execute_actual_operation(user_ids, token, base_url, operation)
+                    self._execute_actual_operation(user_ids, client, operation)
                 else:
                     click.echo("Operation cancelled by user.")
             else:
@@ -695,12 +598,12 @@ class OperationHandler:
             click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
 
     def _handle_social_dry_run_preview(
-        self, social_ids: list[str], token: str, base_url: str, env: str
+        self, social_ids: list[str], client: Auth0Client, env: str
     ) -> None:
         """Handle dry-run preview for social unlink operations."""
         try:
             results = preview_social_unlink_operations(
-                social_ids, token, base_url, show_details=True
+                social_ids, client, show_details=True
             )
 
             total_operations = (
@@ -719,8 +622,7 @@ class OperationHandler:
                     )
                     # Execute the actual operation with checkpoints
                     config = CheckpointOperationConfig(
-                        token=token,
-                        base_url=base_url,
+                        client=client,
                         env=env,
                     )
 
@@ -744,17 +646,15 @@ class OperationHandler:
             click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
 
     def _execute_actual_operation(
-        self, user_ids: list[str], token: str, base_url: str, operation: str
+        self, user_ids: list[str], client: Auth0Client, operation: str
     ) -> None:
         """Execute the actual operation after dry-run preview."""
-        # Determine environment from base_url (simple heuristic)
-        env = "prod" if "prod" in base_url or "p." in base_url else "dev"
+        env = client.context.env
 
         # Use checkpoint-enabled batch operation
         checkpoint_id = batch_user_operations_with_checkpoints(
             user_ids=user_ids,
-            token=token,
-            base_url=base_url,
+            client=client,
             operation=operation,
             env=env,
         )
@@ -802,46 +702,6 @@ class OperationHandler:
             click.echo(f"\nErrors checking domains ({len(error)}):")
             for email in error:
                 click.echo(f"  {email}")
-
-    def _print_operation_summary(
-        self,
-        processed_count: int,
-        skipped_count: int,
-        not_found_users: list[str],
-        invalid_user_ids: list[str],
-        multiple_users: dict[str, list[str]],
-        token: str,
-        base_url: str,
-    ) -> None:
-        """Print summary of operation results.
-
-        Args:
-            processed_count: Number of users processed
-            skipped_count: Number of users skipped
-            not_found_users: List of users not found
-            invalid_user_ids: List of invalid user IDs
-            multiple_users: Dictionary of emails with multiple users
-            token: Auth0 access token
-            base_url: Auth0 API base URL
-        """
-        click.echo(f"\n{CYAN}Operation Summary:{RESET}")
-        click.echo(f"Processed: {processed_count}")
-        click.echo(f"Skipped: {skipped_count}")
-
-        if not_found_users:
-            click.echo(f"Not found: {len(not_found_users)}")
-            for user in not_found_users:
-                click.echo(f"  - {user}")
-
-        if invalid_user_ids:
-            click.echo(f"Invalid user IDs: {len(invalid_user_ids)}")
-            for user_id in invalid_user_ids:
-                click.echo(f"  - {user_id}")
-
-        if multiple_users:
-            click.echo(f"Multiple users found: {len(multiple_users)}")
-            for email, user_ids in multiple_users.items():
-                click.echo(f"  - {email}: {len(user_ids)} users")
 
     def _parse_operation_type(self, operation_type: str | None) -> OperationType | None:
         """Parse operation type string to enum.
@@ -1021,9 +881,9 @@ class OperationHandler:
                 f"{YELLOW}Warning: Checkpoint missing output_file, using: {output_file}{RESET}"
             )
 
+        client = self._create_client_for_env(env)
         config = ExportWithCheckpointsConfig(
-            token=get_access_token(env),
-            base_url=get_base_url(env),
+            client=client,
             output_file=output_file,
             connection=checkpoint.config.connection_filter,
             env=env,
@@ -1062,9 +922,9 @@ class OperationHandler:
                 f"{YELLOW}Warning: Checkpoint missing output_file, using: {output_file}{RESET}"
             )
 
+        client = self._create_client_for_env(env)
         config = FetchEmailsConfig(
-            token=get_access_token(env),
-            base_url=get_base_url(env),
+            client=client,
             output_file=output_file,
             env=env,
             resume_checkpoint_id=checkpoint_id,
@@ -1089,9 +949,9 @@ class OperationHandler:
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
 
+        client = self._create_client_for_env(env)
         config = CheckpointOperationConfig(
-            token=get_access_token(env),
-            base_url=get_base_url(env),
+            client=client,
             env=env,
             resume_checkpoint_id=checkpoint_id,
             checkpoint_manager=checkpoint_manager,
@@ -1113,9 +973,9 @@ class OperationHandler:
         env = checkpoint.config.environment
         checkpoint_id = checkpoint.checkpoint_id
 
+        client = self._create_client_for_env(env)
         config = CheckpointOperationConfig(
-            token=get_access_token(env),
-            base_url=get_base_url(env),
+            client=client,
             env=env,
             resume_checkpoint_id=checkpoint_id,
             checkpoint_manager=checkpoint_manager,
@@ -1145,10 +1005,10 @@ class OperationHandler:
             OperationType.BATCH_BLOCK: "block",
             OperationType.BATCH_REVOKE_GRANTS: "revoke-grants-only",
         }
+        client = self._create_client_for_env(env)
         batch_user_operations_with_checkpoints(
             user_ids=checkpoint.remaining_items,
-            token=get_access_token(env),
-            base_url=get_base_url(env),
+            client=client,
             operation=operation_map[operation_type],
             env=env,
             resume_checkpoint_id=checkpoint_id,

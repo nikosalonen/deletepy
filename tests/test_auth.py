@@ -128,7 +128,7 @@ def test_doctor_with_api_test_success():
     with (
         patch("src.deletepy.core.config.get_env_config") as mock_get_config,
         patch("src.deletepy.core.auth.get_access_token") as mock_get_token,
-        patch("src.deletepy.core.auth.requests.get") as mock_get,
+        patch("src.deletepy.core.auth.create_client_from_token") as mock_create_client,
     ):
         # Mock successful configuration
         mock_get_config.return_value = {
@@ -141,13 +141,22 @@ def test_doctor_with_api_test_success():
         # Mock successful token retrieval
         mock_get_token.return_value = "test_token"
 
-        # Mock successful API response
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_get.return_value = mock_response
+        # Mock successful API response via Auth0Client
+        mock_api_response = MagicMock()
+        mock_api_response.success = True
+        mock_api_response.status_code = 200
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_api_response
+        mock_create_client.return_value = mock_client
 
         result = doctor("prod", test_api=True)
 
+        mock_client.get.assert_called_once_with(
+            endpoint="/api/v2/users",
+            params={"per_page": 1},
+            operation_name="doctor API test",
+        )
         assert result["success"] is True
         assert result["environment"] == "prod"
         assert result["token_obtained"] is True
@@ -161,7 +170,7 @@ def test_doctor_with_api_test_failure():
     with (
         patch("src.deletepy.core.config.get_env_config") as mock_get_config,
         patch("src.deletepy.core.auth.get_access_token") as mock_get_token,
-        patch("src.deletepy.core.auth.requests.get") as mock_get,
+        patch("src.deletepy.core.auth.create_client_from_token") as mock_create_client,
     ):
         # Mock successful configuration
         mock_get_config.return_value = {
@@ -174,13 +183,22 @@ def test_doctor_with_api_test_failure():
         # Mock successful token retrieval
         mock_get_token.return_value = "test_token"
 
-        # Mock failed API response
-        mock_response = MagicMock()
-        mock_response.status_code = 403
-        mock_get.return_value = mock_response
+        # Mock failed API response via Auth0Client
+        mock_api_response = MagicMock()
+        mock_api_response.success = False
+        mock_api_response.status_code = 403
+
+        mock_client = MagicMock()
+        mock_client.get.return_value = mock_api_response
+        mock_create_client.return_value = mock_client
 
         result = doctor("dev", test_api=True)
 
+        mock_client.get.assert_called_once_with(
+            endpoint="/api/v2/users",
+            params={"per_page": 1},
+            operation_name="doctor API test",
+        )
         assert result["success"] is True
         assert result["environment"] == "dev"
         assert result["token_obtained"] is True

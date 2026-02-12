@@ -1,13 +1,12 @@
 """Preview operations for dry-run mode - shows what would happen without executing."""
 
-import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
 from rich.panel import Panel
 
-from ..core.config import API_RATE_LIMIT
+from ..core.auth0_client import Auth0Client
 from ..utils.auth_utils import validate_auth0_user_id
 from ..utils.display_utils import (
     live_progress,
@@ -58,8 +57,7 @@ class PreviewResult:
 
 def preview_user_operations(
     user_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     operation: str,
     show_details: bool = True,
 ) -> PreviewResult:
@@ -67,8 +65,7 @@ def preview_user_operations(
 
     Args:
         user_ids: List of user IDs/emails to preview
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         operation: Operation type ('delete', 'block', 'revoke-grants-only')
         show_details: Whether to show detailed preview information
 
@@ -93,14 +90,10 @@ def preview_user_operations(
                 advance()
                 continue
 
-            resolved_user_id = _resolve_user_identifier(
-                user_id, token, base_url, result
-            )
+            resolved_user_id = _resolve_user_identifier(user_id, client, result)
 
             if resolved_user_id:
-                _process_resolved_user(
-                    user_id, resolved_user_id, token, base_url, result
-                )
+                _process_resolved_user(user_id, resolved_user_id, client, result)
 
             advance()
 
@@ -113,15 +106,13 @@ def preview_user_operations(
 def _process_resolved_user(
     original_id: str,
     resolved_user_id: str,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     result: PreviewResult,
 ) -> None:
     """Fetch user details and classify into valid, blocked, or error."""
     operation = result.operation
     try:
-        user_details = get_user_details(resolved_user_id, token, base_url)
-        time.sleep(API_RATE_LIMIT)
+        user_details = get_user_details(resolved_user_id, client)
 
         if not user_details:
             print_warning(
@@ -194,17 +185,14 @@ def _classify_user_result(
 
 def _resolve_user_identifier(
     user_id: str,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     result: PreviewResult,
 ) -> str | None:
     """Resolve user identifier (email or user ID) to a valid user ID."""
     # If input is an email, resolve to user_id
     if "@" in user_id and user_id.count("@") == 1 and len(user_id.split("@")[1]) > 0:
         try:
-            resolved_ids = get_user_id_from_email(user_id, token, base_url)
-            # Rate limiting after API call
-            time.sleep(API_RATE_LIMIT)
+            resolved_ids = get_user_id_from_email(user_id, client)
 
             if not resolved_ids:
                 result.not_found_users.append(user_id)
@@ -357,16 +345,14 @@ def _display_error_table(errors: list[dict[str, Any]]) -> None:
 
 def preview_social_unlink_operations(
     social_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     show_details: bool = True,
 ) -> dict[str, Any]:
     """Preview what would happen during social identity unlink operations.
 
     Args:
         social_ids: List of social media IDs to preview
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         show_details: Whether to show detailed preview information
 
     Returns:
@@ -381,7 +367,7 @@ def preview_social_unlink_operations(
     )
 
     # Search for users with each social ID
-    found_users, not_found_ids = search_batch_social_ids(social_ids, token, base_url)
+    found_users, not_found_ids = search_batch_social_ids(social_ids, client)
 
     # Categorize users
     users_to_delete, identities_to_unlink, auth0_main_protected = categorize_users(
