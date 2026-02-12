@@ -396,7 +396,7 @@ def _build_csv_data_dict(
 
     if user_details is None:
         return {
-            "email": display_email if "@" in email else display_email,
+            "email": display_email,
             "user_id": user_id,
             "connection": "",
             "last_login": "",
