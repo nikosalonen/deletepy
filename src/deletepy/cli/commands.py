@@ -258,26 +258,6 @@ class OperationHandler:
 
             return user_id
 
-    def _execute_user_operation(
-        self, operation: str, user_id: str, client: Auth0Client
-    ) -> None:
-        """Execute the specified operation on a user.
-
-        Args:
-            operation: Operation to perform
-            user_id: Auth0 user ID
-            client: Auth0 API client
-        """
-        if operation == "block":
-            block_user(user_id, client)
-        elif operation == "delete":
-            delete_user(user_id, client)
-        elif operation == "revoke-grants-only":
-            from ..operations.user_ops import revoke_user_grants, revoke_user_sessions
-
-            revoke_user_sessions(user_id, client)
-            revoke_user_grants(user_id, client)
-
     def handle_doctor(self, env: str, test_api: bool = False) -> bool:
         """Handle doctor operation for testing Auth0 credentials.
 
