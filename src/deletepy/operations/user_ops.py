@@ -1023,7 +1023,7 @@ def _process_users_in_batch(
                 )
                 results["processed_count"] += 1
             except Exception as e:
-                print_error(f"\nFailed to {operation} user {resolved_user_id}: {e}")
+                print_error(f"Failed to {operation} user {resolved_user_id}: {e}")
                 results["skipped_count"] += 1
 
             advance()
