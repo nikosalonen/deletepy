@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..core.auth0_client import Auth0Client
 from ..models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
@@ -37,8 +38,7 @@ class ExportWithCheckpointsConfig:
     """Configuration for export operations with checkpoint support."""
 
     # Auth0/API configuration
-    token: str
-    base_url: str
+    client: Auth0Client
     env: str = "dev"
     connection: str | None = None
 
@@ -112,7 +112,7 @@ def _validate_and_setup_export(
 
 
 def _fetch_user_data(
-    email: str, token: str, base_url: str, connection: str | None
+    email: str, client: Auth0Client, connection: str | None
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Fetch user data for a single identifier.
 
@@ -125,8 +125,7 @@ def _fetch_user_data(
 
     Args:
         email: Email address or Auth0 user ID to fetch data for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         connection: Optional connection filter (only used for email lookups)
 
     Returns:
@@ -148,7 +147,7 @@ def _fetch_user_data(
 
         if looks_like_user_id and "@" not in email:
             # Direct user ID lookup - single API call
-            user_details = get_user_details(email, token, base_url)
+            user_details = get_user_details(email, client)
             if user_details:
                 counters["processed_count"] += 1
                 return [user_details], counters
@@ -157,8 +156,7 @@ def _fetch_user_data(
                 return [], counters
 
         # Email lookup - use get_users_by_email to get full user data in one call
-        # This avoids the redundant second API call that get_user_id_from_email + get_user_details would make
-        users = get_users_by_email(email, token, base_url, connection)
+        users = get_users_by_email(email, client, connection)
 
         if users is None:
             # Request failed
@@ -171,7 +169,6 @@ def _fetch_user_data(
 
         if len(users) > 1:
             counters["multiple_users_count"] += 1
-            # For multiple users, we'll include all of them in the export
 
         counters["processed_count"] += 1
         return users, counters
@@ -189,8 +186,7 @@ def _fetch_user_data(
 
 def _process_email_batch(
     batch_emails: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     connection: str | None,
     batch_number: int,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
@@ -198,8 +194,7 @@ def _process_email_batch(
 
     Args:
         batch_emails: List of email addresses to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         connection: Optional connection filter
         batch_number: Batch number for display
 
@@ -219,9 +214,7 @@ def _process_email_batch(
             if shutdown_requested():
                 break
 
-            user_data_list, email_counters = _fetch_user_data(
-                email, token, base_url, connection
-            )
+            user_data_list, email_counters = _fetch_user_data(email, client, connection)
 
             # Update batch counters
             for key in batch_counters:
@@ -464,8 +457,7 @@ def export_users_last_login_to_csv_with_checkpoints(
     try:
         return _process_export_with_checkpoints(
             checkpoint=checkpoint,
-            token=config.token,
-            base_url=config.base_url,
+            client=config.client,
             checkpoint_manager=checkpoint_manager,
         )
     except KeyboardInterrupt:
@@ -635,16 +627,14 @@ def _handle_export_error(
 
 def _process_export_with_checkpoints(
     checkpoint: Checkpoint,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     checkpoint_manager: CheckpointManager,
 ) -> str | None:
     """Process export operation with checkpointing support.
 
     Args:
         checkpoint: Checkpoint to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         checkpoint_manager: Checkpoint manager instance
 
     Returns:
@@ -680,8 +670,7 @@ def _process_export_with_checkpoints(
 
         result = _process_single_export_batch(
             batch_emails,
-            token,
-            base_url,
+            client,
             current_batch_num,
             checkpoint,
             checkpoint_manager,
@@ -699,8 +688,7 @@ def _process_export_with_checkpoints(
 
 def _process_single_export_batch(
     batch_emails: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     current_batch_num: int,
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
@@ -721,7 +709,7 @@ def _process_single_export_batch(
     )
 
     batch_csv_data, batch_counters = _process_email_batch(
-        batch_emails, token, base_url, connection, current_batch_num
+        batch_emails, client, connection, current_batch_num
     )
 
     mode = "w" if write_headers else "a"
@@ -868,8 +856,7 @@ class FetchEmailsConfig:
     """Configuration for fetch emails operations with checkpoint support."""
 
     # Auth0/API configuration
-    token: str
-    base_url: str
+    client: Auth0Client
     env: str = "dev"
 
     # Export configuration
@@ -915,8 +902,7 @@ def fetch_emails_with_checkpoints(
     try:
         return _process_fetch_emails_with_checkpoints(
             checkpoint=checkpoint,
-            token=config.token,
-            base_url=config.base_url,
+            client=config.client,
             checkpoint_manager=checkpoint_manager,
         )
     except KeyboardInterrupt:
@@ -1122,16 +1108,14 @@ def _handle_fetch_error(
 
 def _process_fetch_emails_with_checkpoints(
     checkpoint: Checkpoint,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     checkpoint_manager: CheckpointManager,
 ) -> str | None:
     """Process fetch emails operation with checkpointing support.
 
     Args:
         checkpoint: Checkpoint to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         checkpoint_manager: Checkpoint manager instance
 
     Returns:
@@ -1170,8 +1154,7 @@ def _process_fetch_emails_with_checkpoints(
 
         result = _process_single_fetch_batch(
             batch_user_ids,
-            token,
-            base_url,
+            client,
             current_batch_num,
             checkpoint,
             checkpoint_manager,
@@ -1189,8 +1172,7 @@ def _process_fetch_emails_with_checkpoints(
 
 def _process_single_fetch_batch(
     batch_user_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     current_batch_num: int,
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
@@ -1210,7 +1192,7 @@ def _process_single_fetch_batch(
     )
 
     batch_csv_data, batch_counters = _process_user_id_batch(
-        batch_user_ids, token, base_url, current_batch_num
+        batch_user_ids, client, current_batch_num
     )
 
     mode = "w" if write_headers else "a"
@@ -1258,16 +1240,14 @@ def _finalize_fetch_emails(
 
 def _process_user_id_batch(
     batch_user_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     batch_number: int,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Process a batch of user IDs to fetch emails.
 
     Args:
         batch_user_ids: List of user IDs to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         batch_number: Batch number for display
 
     Returns:
@@ -1285,7 +1265,7 @@ def _process_user_id_batch(
             if shutdown_requested():
                 break
 
-            row, counter_key = _fetch_and_build_csv_row(user_id, token, base_url)
+            row, counter_key = _fetch_and_build_csv_row(user_id, client)
             csv_data.append(row)
             batch_counters[counter_key] += 1
             advance()
@@ -1294,7 +1274,7 @@ def _process_user_id_batch(
 
 
 def _fetch_and_build_csv_row(
-    user_id: str, token: str, base_url: str
+    user_id: str, client: Auth0Client
 ) -> tuple[dict[str, Any], str]:
     """Fetch a user's email and build a CSV row.
 
@@ -1303,7 +1283,7 @@ def _fetch_and_build_csv_row(
         'processed_count', 'not_found_count', or 'error_count'.
     """
     try:
-        email = get_user_email(user_id, token, base_url)
+        email = get_user_email(user_id, client)
         if email:
             return {
                 "user_id": user_id,
