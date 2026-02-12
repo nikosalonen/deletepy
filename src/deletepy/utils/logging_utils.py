@@ -184,17 +184,9 @@ def setup_logging(
         and _RICH_AVAILABLE
         and not disable_colors
     ):
-        # Import Console for custom configuration
-        from rich.console import Console
+        from .rich_utils import get_stderr_console
 
-        # Create a Console that doesn't wrap text to prevent formatting issues
-        # when combined with progress bars. Use force_terminal=True to ensure
-        # proper ANSI output even when stderr might not be detected as a tty.
-        rich_console = Console(
-            stderr=True,
-            soft_wrap=True,  # Don't wrap long lines
-            force_terminal=sys.stderr.isatty(),
-        )
+        rich_console = get_stderr_console()
         # Prefer RichHandler for beautiful console logs when explicitly requested
         console_handler: logging.Handler = RichHandler(
             console=rich_console,
