@@ -89,6 +89,10 @@ def preview_user_operations(
                 break
 
             user_id = SecurityValidator.sanitize_user_input(user_id)
+            if not user_id:
+                advance()
+                continue
+
             resolved_user_id = _resolve_user_identifier(
                 user_id, token, base_url, result
             )
