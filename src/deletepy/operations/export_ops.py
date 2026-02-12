@@ -1322,7 +1322,11 @@ def _fetch_and_build_csv_row(
             str(e),
             extra={"user_id": user_id, "operation": "fetch_email", "error": str(e)},
         )
-        return {"user_id": user_id, "email": "", "status": "Error"}, "error_count"
+        return {
+            "user_id": user_id,
+            "email": "",
+            "status": "Error (see logs)",
+        }, "error_count"
 
 
 def _write_fetch_csv_batch(

@@ -28,7 +28,6 @@ from .display_utils import (
     print_warning,
     safe_file_write,
     setup_shutdown_handler,
-    show_progress,
     shutdown_requested,
 )
 from .file_utils import (
@@ -91,7 +90,6 @@ __all__ = [
     "print_warning",
     "setup_shutdown_handler",
     "shutdown_requested",
-    "show_progress",
     "live_progress",
     # File utilities
     "check_shutdown_requested",

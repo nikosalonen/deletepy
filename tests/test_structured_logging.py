@@ -161,6 +161,17 @@ class TestLoggingSetup:
         logger = setup_logging(level="INFO", log_format="json")
         assert isinstance(logger.handlers[0].formatter, StructuredFormatter)
 
+    def test_setup_logging_rich_uses_shared_stderr_console(self):
+        """Test that RichHandler uses the shared stderr console singleton."""
+        from rich.logging import RichHandler
+
+        from src.deletepy.utils.rich_utils import get_stderr_console
+
+        logger = setup_logging(level="INFO", log_format="rich")
+        rich_handlers = [h for h in logger.handlers if isinstance(h, RichHandler)]
+        assert len(rich_handlers) == 1
+        assert rich_handlers[0].console is get_stderr_console()
+
     def test_setup_logging_with_file(self):
         """Test setup with file output."""
         with tempfile.NamedTemporaryFile(delete=False) as tmp:

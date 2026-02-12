@@ -158,42 +158,6 @@ def show_progress(current: int, total: int, operation: str = "Processing") -> No
         print()  # New line when complete
 
 
-def create_rich_progress(operation: str = "Processing") -> "Progress | None":
-    """Create a Rich Progress instance for tracking long operations.
-
-    Args:
-        operation: Description of the operation being performed
-
-    Returns:
-        Rich Progress instance if available, None otherwise
-
-    Example:
-        progress = create_rich_progress("Deleting users")
-        if progress:
-            with progress:
-                task = progress.add_task("", total=len(users))
-                for user in users:
-                    delete_user(user)
-                    progress.advance(task)
-        else:
-            # Fallback to simple progress
-            for i, user in enumerate(users, 1):
-                delete_user(user)
-                show_progress(i, len(users), "Deleting users")
-    """
-    if not _RICH_PROGRESS_AVAILABLE:
-        return None
-
-    return Progress(
-        SpinnerColumn(),
-        TextColumn(f"[bold blue]{operation}"),
-        BarColumn(bar_width=30),
-        TaskProgressColumn(),
-        MofNCompleteColumn(),
-        TimeRemainingColumn(),
-    )
-
-
 class _AdvanceCallable(Protocol):
     def __call__(self, step: int = 1) -> None: ...
 
@@ -423,9 +387,6 @@ __all__ = [
     "setup_shutdown_handler",
     "shutdown_requested",
     # Progress display
-    "clear_progress_line",
-    "show_progress",
-    "create_rich_progress",
     "live_progress",
     # User confirmation
     "confirm_action",
