@@ -27,8 +27,6 @@ from ..operations.preview_ops import (
 )
 from ..operations.user_ops import (
     batch_user_operations_with_checkpoints,
-    block_user,
-    delete_user,
     get_user_email,
     get_user_id_from_email,
 )
