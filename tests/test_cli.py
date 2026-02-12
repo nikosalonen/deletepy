@@ -151,12 +151,17 @@ class TestOperationHandler:
         handler = OperationHandler()
         assert handler is not None
 
+    @patch("src.deletepy.cli.commands.create_client_from_token")
     @patch("src.deletepy.cli.commands.get_access_token")
     @patch("src.deletepy.cli.commands.get_base_url")
-    def test_setup_auth_and_files(self, mock_get_base_url, mock_get_token):
+    def test_setup_auth_and_files(
+        self, mock_get_base_url, mock_get_token, mock_create_client
+    ):
         """Test _setup_auth_and_files helper method."""
         mock_get_base_url.return_value = "https://test.auth0.com"
         mock_get_token.return_value = "test_token"
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
 
         # Create temporary file
         with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp:
@@ -165,12 +170,14 @@ class TestOperationHandler:
 
         try:
             handler = OperationHandler()
-            base_url, token, user_ids = handler._setup_auth_and_files(temp_path, "dev")
+            client, user_ids = handler._setup_auth_and_files(temp_path, "dev")
 
-            assert base_url == "https://test.auth0.com"
-            assert token == "test_token"
+            assert client is mock_client
             assert len(user_ids) == 3
             assert user_ids == ["user1", "user2", "user3"]
+            mock_create_client.assert_called_once_with(
+                "test_token", "https://test.auth0.com", "dev"
+            )
         finally:
             os.unlink(temp_path)
 
@@ -206,11 +213,12 @@ class TestOperationHandler:
             None,  # User without email
         ]
 
+        mock_client = MagicMock()
+
         handler = OperationHandler()
         emails = handler._fetch_user_emails(
             ["auth0|123", "auth0|456", "auth0|789"],
-            "test_token",
-            "https://test.auth0.com",
+            mock_client,
         )
 
         assert len(emails) == 2
@@ -248,6 +256,8 @@ class TestOperationHandler:
         mock_validate_email.return_value = ValidationResult(is_valid=True)
         mock_get_user_id.return_value = ["auth0|123"]
 
+        mock_client = MagicMock()
+
         handler = OperationHandler()
         multiple_users = {}
         not_found_users = []
@@ -255,8 +265,7 @@ class TestOperationHandler:
 
         result = handler._resolve_user_identifier(
             "user@example.com",
-            "test_token",
-            "https://test.auth0.com",
+            mock_client,
             multiple_users,
             not_found_users,
             invalid_user_ids,
@@ -276,6 +285,8 @@ class TestOperationHandler:
             is_valid=False, error_message="Invalid email format"
         )
 
+        mock_client = MagicMock()
+
         handler = OperationHandler()
         multiple_users = {}
         not_found_users = []
@@ -283,8 +294,7 @@ class TestOperationHandler:
 
         result = handler._resolve_user_identifier(
             "invalid@email",
-            "test_token",
-            "https://test.auth0.com",
+            mock_client,
             multiple_users,
             not_found_users,
             invalid_user_ids,
@@ -306,6 +316,8 @@ class TestOperationHandler:
         mock_validate_email.return_value = ValidationResult(is_valid=True)
         mock_get_user_id.return_value = ["auth0|123", "google-oauth2|456"]
 
+        mock_client = MagicMock()
+
         handler = OperationHandler()
         multiple_users = {}
         not_found_users = []
@@ -313,8 +325,7 @@ class TestOperationHandler:
 
         result = handler._resolve_user_identifier(
             "user@example.com",
-            "test_token",
-            "https://test.auth0.com",
+            mock_client,
             multiple_users,
             not_found_users,
             invalid_user_ids,
@@ -333,6 +344,8 @@ class TestOperationHandler:
 
         mock_validate_user_id.return_value = ValidationResult(is_valid=True)
 
+        mock_client = MagicMock()
+
         handler = OperationHandler()
         multiple_users = {}
         not_found_users = []
@@ -340,8 +353,7 @@ class TestOperationHandler:
 
         result = handler._resolve_user_identifier(
             "auth0|123456",
-            "test_token",
-            "https://test.auth0.com",
+            mock_client,
             multiple_users,
             not_found_users,
             invalid_user_ids,
@@ -361,6 +373,8 @@ class TestOperationHandler:
             is_valid=False, error_message="Invalid format"
         )
 
+        mock_client = MagicMock()
+
         handler = OperationHandler()
         multiple_users = {}
         not_found_users = []
@@ -368,8 +382,7 @@ class TestOperationHandler:
 
         result = handler._resolve_user_identifier(
             "invalid_id",
-            "test_token",
-            "https://test.auth0.com",
+            mock_client,
             multiple_users,
             not_found_users,
             invalid_user_ids,
@@ -383,28 +396,22 @@ class TestOperationHandler:
     @patch("src.deletepy.cli.commands.block_user")
     def test_execute_user_operation_block(self, mock_block):
         """Test _execute_user_operation for block operation."""
+        mock_client = MagicMock()
         handler = OperationHandler()
 
-        handler._execute_user_operation(
-            "block", "auth0|123", "test_token", "https://test.auth0.com"
-        )
+        handler._execute_user_operation("block", "auth0|123", mock_client)
 
-        mock_block.assert_called_once_with(
-            "auth0|123", "test_token", "https://test.auth0.com"
-        )
+        mock_block.assert_called_once_with("auth0|123", mock_client)
 
     @patch("src.deletepy.cli.commands.delete_user")
     def test_execute_user_operation_delete(self, mock_delete):
         """Test _execute_user_operation for delete operation."""
+        mock_client = MagicMock()
         handler = OperationHandler()
 
-        handler._execute_user_operation(
-            "delete", "auth0|123", "test_token", "https://test.auth0.com"
-        )
+        handler._execute_user_operation("delete", "auth0|123", mock_client)
 
-        mock_delete.assert_called_once_with(
-            "auth0|123", "test_token", "https://test.auth0.com"
-        )
+        mock_delete.assert_called_once_with("auth0|123", mock_client)
 
     @patch("src.deletepy.operations.user_ops.revoke_user_sessions")
     @patch("src.deletepy.operations.user_ops.revoke_user_grants")
@@ -412,18 +419,13 @@ class TestOperationHandler:
         self, mock_revoke_grants, mock_revoke_sessions
     ):
         """Test _execute_user_operation for revoke-grants-only operation."""
+        mock_client = MagicMock()
         handler = OperationHandler()
 
-        handler._execute_user_operation(
-            "revoke-grants-only", "auth0|123", "test_token", "https://test.auth0.com"
-        )
+        handler._execute_user_operation("revoke-grants-only", "auth0|123", mock_client)
 
-        mock_revoke_sessions.assert_called_once_with(
-            "auth0|123", "test_token", "https://test.auth0.com"
-        )
-        mock_revoke_grants.assert_called_once_with(
-            "auth0|123", "test_token", "https://test.auth0.com"
-        )
+        mock_revoke_sessions.assert_called_once_with("auth0|123", mock_client)
+        mock_revoke_grants.assert_called_once_with("auth0|123", mock_client)
 
 
 class TestCLIErrorHandling:
@@ -481,15 +483,22 @@ class TestCLIIntegration:
         mock_check_env.assert_called_once()
         mock_doctor.assert_called_once_with("dev", False)
 
+    @patch("deletepy.cli.commands.create_client_from_token")
     @patch("deletepy.cli.commands.get_access_token")
     @patch("deletepy.cli.commands.get_base_url")
     @patch("deletepy.cli.commands.check_unblocked_users_with_checkpoints")
     def test_check_unblocked_integration(
-        self, mock_check_unblocked, mock_get_base_url, mock_get_token
+        self,
+        mock_check_unblocked,
+        mock_get_base_url,
+        mock_get_token,
+        mock_create_client,
     ):
         """Test check-unblocked command integration."""
         mock_get_base_url.return_value = "https://test.auth0.com"
         mock_get_token.return_value = "test_token"
+        mock_client = MagicMock()
+        mock_create_client.return_value = mock_client
         mock_check_unblocked.return_value = None  # Completed operation
 
         # Create temporary file

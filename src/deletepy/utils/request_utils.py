@@ -1,69 +1,6 @@
 """Request utilities for HTTP operations."""
 
-from typing import Any, cast
-
-import requests
-
 from ..core.config import API_RATE_LIMIT
-from .logging_utils import get_logger
-
-logger = get_logger(__name__)
-
-
-def validate_response(response: requests.Response, expected_status: int = 200) -> bool:
-    """Validate HTTP response.
-
-    Args:
-        response: HTTP response to validate
-        expected_status: Expected status code (default: 200)
-
-    Returns:
-        bool: True if response is valid, False otherwise
-    """
-    if response.status_code != expected_status:
-        logger.warning(
-            "Unexpected status code: %d (expected %d)",
-            response.status_code,
-            expected_status,
-            extra={
-                "status_code": response.status_code,
-                "expected_status": expected_status,
-                "operation": "validate_response",
-            },
-        )
-        return False
-
-    try:
-        response.json()  # Test if response is valid JSON
-        return True
-    except ValueError:
-        logger.warning(
-            "Response is not valid JSON",
-            extra={"operation": "validate_response", "error": "invalid_json"},
-        )
-        return False
-
-
-def get_json_response(response: requests.Response) -> dict[str, Any] | None:
-    """Safely extract JSON from response.
-
-    Args:
-        response: HTTP response
-
-    Returns:
-        Optional[Dict[str, Any]]: JSON data or None if invalid
-    """
-    try:
-        json_data = response.json()
-        return cast(dict[str, Any], json_data)
-    except ValueError as e:
-        logger.error(
-            "Error parsing JSON response: %s",
-            str(e),
-            extra={"operation": "parse_json", "error": str(e)},
-        )
-        return None
-
 
 # Batch processing configuration
 DEFAULT_BATCH_SIZE = 50
