@@ -703,42 +703,6 @@ class OperationHandler:
             for email in error:
                 click.echo(f"  {email}")
 
-    def _print_operation_summary(
-        self,
-        processed_count: int,
-        skipped_count: int,
-        not_found_users: list[str],
-        invalid_user_ids: list[str],
-        multiple_users: dict[str, list[str]],
-    ) -> None:
-        """Print summary of operation results.
-
-        Args:
-            processed_count: Number of users processed
-            skipped_count: Number of users skipped
-            not_found_users: List of users not found
-            invalid_user_ids: List of invalid user IDs
-            multiple_users: Dictionary of emails with multiple users
-        """
-        click.echo(f"\n{CYAN}Operation Summary:{RESET}")
-        click.echo(f"Processed: {processed_count}")
-        click.echo(f"Skipped: {skipped_count}")
-
-        if not_found_users:
-            click.echo(f"Not found: {len(not_found_users)}")
-            for user in not_found_users:
-                click.echo(f"  - {user}")
-
-        if invalid_user_ids:
-            click.echo(f"Invalid user IDs: {len(invalid_user_ids)}")
-            for user_id in invalid_user_ids:
-                click.echo(f"  - {user_id}")
-
-        if multiple_users:
-            click.echo(f"Multiple users found: {len(multiple_users)}")
-            for email, user_ids in multiple_users.items():
-                click.echo(f"  - {email}: {len(user_ids)} users")
-
     def _parse_operation_type(self, operation_type: str | None) -> OperationType | None:
         """Parse operation type string to enum.
 
