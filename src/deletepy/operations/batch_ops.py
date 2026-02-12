@@ -1207,19 +1207,12 @@ def _process_social_search_with_checkpoints(
     env: str,
     auto_delete: bool,
     checkpoint_manager: CheckpointManager,
-    dry_run: bool = False,  # Processing config parameter
-    batch_timeout: int | None = None,  # Processing config parameter
-    connection_filter: str | None = None,  # Processing config parameter
-    include_inactive: bool = False,  # Processing config parameter
-    verify_results: bool = True,  # Processing config parameter
-    **custom_params: Any,  # Custom parameters from ProcessingConfig
+    **_kwargs: Any,
 ) -> str | None:
     """Process social search operation with checkpointing support.
 
-    This function is part of a generic interface system where all process functions
-    receive the same set of parameters from ProcessingConfig via _execute_with_checkpoints.
-    Only the first six parameters are used by this specific operation; the remaining
-    parameters are kept for interface consistency but are not used in the function body.
+    Called via _execute_with_checkpoints which unpacks ProcessingConfig params
+    as keyword arguments. Unused params are absorbed by **_kwargs.
 
     Args:
         checkpoint: Checkpoint to process
@@ -1228,12 +1221,7 @@ def _process_social_search_with_checkpoints(
         env: Environment
         auto_delete: Whether to auto-delete users
         checkpoint_manager: Checkpoint manager instance
-        dry_run: Processing config parameter (unused - kept for interface consistency)
-        batch_timeout: Processing config parameter (unused - kept for interface consistency)
-        connection_filter: Processing config parameter (unused - kept for interface consistency)
-        include_inactive: Processing config parameter (unused - kept for interface consistency)
-        verify_results: Processing config parameter (unused - kept for interface consistency)
-        **custom_params: Custom parameters from ProcessingConfig (unused - kept for interface consistency)
+        **_kwargs: Additional params from ProcessingConfig (unused by this operation)
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
@@ -1465,35 +1453,19 @@ def _process_check_unblocked_with_checkpoints(
     token: str,
     base_url: str,
     checkpoint_manager: CheckpointManager,
-    env: str | None = None,  # Ignored for check operations
-    auto_delete: bool | None = None,  # Ignored for check operations
-    dry_run: bool = False,  # Processing config parameter
-    batch_timeout: int | None = None,  # Processing config parameter
-    connection_filter: str | None = None,  # Processing config parameter
-    include_inactive: bool = False,  # Processing config parameter
-    verify_results: bool = True,  # Processing config parameter
-    **custom_params: Any,  # Custom parameters from ProcessingConfig
+    **_kwargs: Any,
 ) -> str | None:
     """Process check unblocked users with checkpoints.
 
-    This function is part of a generic interface system where all process functions
-    receive the same set of parameters from ProcessingConfig via _execute_with_checkpoints.
-    Only the first four parameters are used by this specific operation; the remaining
-    parameters are kept for interface consistency but are not used in the function body.
+    Called via _execute_with_checkpoints which unpacks ProcessingConfig params
+    as keyword arguments. Unused params are absorbed by **_kwargs.
 
     Args:
         checkpoint: Checkpoint to process
         token: Auth0 access token
         base_url: Auth0 API base URL
         checkpoint_manager: Checkpoint manager instance
-        env: Environment (unused - kept for interface consistency)
-        auto_delete: Auto-delete flag (unused - kept for interface consistency)
-        dry_run: Processing config parameter (unused - kept for interface consistency)
-        batch_timeout: Processing config parameter (unused - kept for interface consistency)
-        connection_filter: Processing config parameter (unused - kept for interface consistency)
-        include_inactive: Processing config parameter (unused - kept for interface consistency)
-        verify_results: Processing config parameter (unused - kept for interface consistency)
-        **custom_params: Custom parameters from ProcessingConfig (unused - kept for interface consistency)
+        **_kwargs: Additional params from ProcessingConfig (unused by this operation)
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
