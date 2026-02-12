@@ -26,6 +26,7 @@ from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.request_utils import make_rate_limited_request
 from ..utils.url_utils import secure_url_encode
+from ..utils.validators import SecurityValidator
 
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
@@ -999,8 +1000,6 @@ def _process_users_in_batch(
                 break
 
             # Sanitize user input first
-            from ..utils.validators import SecurityValidator
-
             user_id = SecurityValidator.sanitize_user_input(user_id)
 
             # Resolve user identifier
