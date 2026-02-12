@@ -993,9 +993,6 @@ def _process_users_in_batch(
     Returns:
         dict: Updated results dictionary
     """
-    from ..utils.display_utils import shutdown_requested
-    from ..utils.output import print_error
-
     with live_progress(len(user_ids), f"Processing {operation}") as advance:
         for user_id in user_ids:
             if shutdown_requested():
