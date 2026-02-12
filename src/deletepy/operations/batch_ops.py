@@ -463,14 +463,13 @@ def _handle_user_deletions(
                 deleted_count += 1
             except Exception as e:
                 print_error(
-                    f"\nFailed to delete user {user['user_id']}: {e}",
+                    f"Failed to delete user {user['user_id']}: {e}",
                     user_id=user["user_id"],
                     operation="delete_user",
                 )
                 failed_deletions += 1
 
             advance()
-            time.sleep(API_RATE_LIMIT)
     return {"deleted_count": deleted_count, "failed_deletions": failed_deletions}
 
 
