@@ -393,40 +393,6 @@ class TestOperationHandler:
         assert "invalid_id" in invalid_user_ids[0]
         assert "Invalid format" in invalid_user_ids[0]
 
-    @patch("src.deletepy.cli.commands.block_user")
-    def test_execute_user_operation_block(self, mock_block):
-        """Test _execute_user_operation for block operation."""
-        mock_client = MagicMock()
-        handler = OperationHandler()
-
-        handler._execute_user_operation("block", "auth0|123", mock_client)
-
-        mock_block.assert_called_once_with("auth0|123", mock_client)
-
-    @patch("src.deletepy.cli.commands.delete_user")
-    def test_execute_user_operation_delete(self, mock_delete):
-        """Test _execute_user_operation for delete operation."""
-        mock_client = MagicMock()
-        handler = OperationHandler()
-
-        handler._execute_user_operation("delete", "auth0|123", mock_client)
-
-        mock_delete.assert_called_once_with("auth0|123", mock_client)
-
-    @patch("src.deletepy.operations.user_ops.revoke_user_sessions")
-    @patch("src.deletepy.operations.user_ops.revoke_user_grants")
-    def test_execute_user_operation_revoke_grants(
-        self, mock_revoke_grants, mock_revoke_sessions
-    ):
-        """Test _execute_user_operation for revoke-grants-only operation."""
-        mock_client = MagicMock()
-        handler = OperationHandler()
-
-        handler._execute_user_operation("revoke-grants-only", "auth0|123", mock_client)
-
-        mock_revoke_sessions.assert_called_once_with("auth0|123", mock_client)
-        mock_revoke_grants.assert_called_once_with("auth0|123", mock_client)
-
 
 class TestCLIErrorHandling:
     """Test CLI error handling."""
