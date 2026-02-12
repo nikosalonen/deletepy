@@ -1,11 +1,8 @@
 """Core user operations for Auth0 user management."""
 
-import time
 from typing import Any, cast
 
-import requests
-
-from ..core.config import API_RATE_LIMIT, API_TIMEOUT
+from ..core.auth0_client import Auth0Client
 from ..models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
@@ -25,104 +22,84 @@ from ..utils.checkpoint_utils import (
 )
 from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_error, print_info, print_success, print_warning
-from ..utils.request_utils import make_rate_limited_request
 from ..utils.url_utils import secure_url_encode
 from ..utils.validators import SecurityValidator
 
 
-def delete_user(user_id: str, token: str, base_url: str) -> None:
+def delete_user(user_id: str, client: Auth0Client) -> None:
     """Delete user from Auth0."""
     print_info(f"Deleting user: {user_id}", user_id=user_id, operation="delete_user")
 
     # First revoke all sessions
-    revoke_user_sessions(user_id, token, base_url)
+    revoke_user_sessions(user_id, client)
 
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    try:
-        response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.delete_user(encoded_id)
+    if result.success:
         print_success(
             f"Successfully deleted user {user_id}",
             user_id=user_id,
             operation="delete_user",
         )
-        time.sleep(API_RATE_LIMIT)
-    except requests.exceptions.RequestException as e:
+    else:
         print_error(
-            f"Error deleting user {user_id}: {e}",
+            f"Error deleting user {user_id}: {result.error_message}",
             user_id=user_id,
             operation="delete_user",
         )
 
 
 def block_user(
-    user_id: str, token: str, base_url: str, rotate_password: bool = False
+    user_id: str, client: Auth0Client, rotate_password: bool = False
 ) -> None:
     """Block user in Auth0.
 
     Args:
         user_id: Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         rotate_password: If True, rotate user's password before blocking
     """
     print_info(f"Blocking user: {user_id}", user_id=user_id, operation="block_user")
 
     # First revoke all sessions and grants
-    revoke_user_sessions(user_id, token, base_url)
-    revoke_user_grants(user_id, token, base_url)
+    revoke_user_sessions(user_id, client)
+    revoke_user_grants(user_id, client)
 
     # Rotate password if requested
     if rotate_password:
-        rotate_user_password(user_id, token, base_url)
+        rotate_user_password(user_id, client)
 
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    payload = {"blocked": True}
-    try:
-        response = requests.patch(
-            url, headers=headers, json=payload, timeout=API_TIMEOUT
-        )
-        response.raise_for_status()
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.block_user(encoded_id)
+    if result.success:
         print_success(
             f"Successfully blocked user {user_id}",
             user_id=user_id,
             operation="block_user",
         )
-        time.sleep(API_RATE_LIMIT)
-    except requests.exceptions.RequestException as e:
+    else:
         print_error(
-            f"Error blocking user {user_id}: {e}",
+            f"Error blocking user {user_id}: {result.error_message}",
             user_id=user_id,
             operation="block_user",
         )
 
 
 def get_user_id_from_email(
-    email: str, token: str, base_url: str, connection: str | None = None
+    email: str, client: Auth0Client, connection: str | None = None
 ) -> list[str] | None:
     """Fetch user_ids from Auth0 using email address. Returns list of user_ids or None if not found.
 
     Args:
         email: Email address to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         connection: Optional connection filter (e.g., "google-oauth2", "auth0", "facebook")
 
     Returns:
         Optional[List[str]]: List of user IDs matching the email and connection filter
     """
     # Fetch users by email
-    users = _fetch_users_by_email(email, token, base_url)
+    users = _fetch_users_by_email(email, client)
     if users is None:
         return None
 
@@ -137,14 +114,13 @@ def get_user_id_from_email(
 
 
 def _fetch_users_by_email(
-    email: str, token: str, base_url: str
+    email: str, client: Auth0Client
 ) -> list[dict[str, Any]] | None:
     """Fetch users from Auth0 API by email address.
 
     Args:
         email: Email address to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         Optional[List[Dict[str, Any]]]: List of user objects or None if request failed
@@ -152,72 +128,62 @@ def _fetch_users_by_email(
     from ..utils.logging_utils import get_logger
 
     logger = get_logger(__name__)
-    url = f"{base_url}/api/v2/users-by-email"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    params = {"email": email}
 
-    response = make_rate_limited_request("GET", url, headers, params=params)
-    if response is None:
+    result = client.get_users_by_email(email)
+    if not result.success:
         logger.error(
-            f"Error fetching user_id for email {email}: Request failed after retries",
+            f"Error fetching user_id for email {email}: {result.error_message}",
             extra={
                 "email": email,
                 "operation": "get_user_id_from_email",
-                "api_endpoint": url,
                 "error_type": "request_failed",
             },
         )
         return None
 
-    try:
-        users = response.json()
-        if isinstance(users, list):
-            if users:
-                logger.info(
-                    f"Found {len(users)} user(s) for email {email}",
-                    extra={
-                        "email": email,
-                        "operation": "get_user_id_from_email",
-                        "user_count": len(users),
-                    },
-                )
-                return cast(list[dict[str, Any]], users)
-            else:
-                logger.info(
-                    f"No users found for email {email}",
-                    extra={
-                        "email": email,
-                        "operation": "get_user_id_from_email",
-                        "user_count": 0,
-                    },
-                )
-                return []  # Return empty list instead of None for consistency
-        else:
-            logger.warning(
-                f"Unexpected response format for email {email}: expected list, got {type(users)}",
+    data = result.data
+    if data is None:
+        logger.info(
+            f"No users found for email {email}",
+            extra={
+                "email": email,
+                "operation": "get_user_id_from_email",
+                "user_count": 0,
+            },
+        )
+        return []
+
+    if isinstance(data, list):
+        if data:
+            logger.info(
+                f"Found {len(data)} user(s) for email {email}",
                 extra={
                     "email": email,
                     "operation": "get_user_id_from_email",
-                    "response_type": str(type(users)),
+                    "user_count": len(data),
                 },
             )
-            return []
-    except ValueError as e:
-        logger.error(
-            f"Error parsing response for email {email}: {e}",
+            return cast(list[dict[str, Any]], data)
+        else:
+            logger.info(
+                f"No users found for email {email}",
+                extra={
+                    "email": email,
+                    "operation": "get_user_id_from_email",
+                    "user_count": 0,
+                },
+            )
+            return []  # Return empty list instead of None for consistency
+    else:
+        logger.warning(
+            f"Unexpected response format for email {email}: expected list, got {type(data)}",
             extra={
                 "email": email,
-                "error": str(e),
                 "operation": "get_user_id_from_email",
-                "error_type": "json_parse_error",
+                "response_type": str(type(data)),
             },
-            exc_info=True,
         )
-        return None
+        return []
 
 
 def _extract_user_ids_from_response(
@@ -276,7 +242,7 @@ def _user_matches_connection(user: dict[str, Any], connection: str, email: str) 
 
 
 def get_users_by_email(
-    email: str, token: str, base_url: str, connection: str | None = None
+    email: str, client: Auth0Client, connection: str | None = None
 ) -> list[dict[str, Any]] | None:
     """Fetch full user data from Auth0 using email address.
 
@@ -285,8 +251,7 @@ def get_users_by_email(
 
     Args:
         email: Email address to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         connection: Optional connection filter (e.g., "google-oauth2", "auth0")
 
     Returns:
@@ -294,7 +259,7 @@ def get_users_by_email(
         and connection filter, or None if request failed
     """
     # Fetch users by email
-    users = _fetch_users_by_email(email, token, base_url)
+    users = _fetch_users_by_email(email, client)
     if users is None:
         return None
 
@@ -312,83 +277,57 @@ def get_users_by_email(
     return users
 
 
-def get_user_email(user_id: str, token: str, base_url: str) -> str | None:
+def get_user_email(user_id: str, client: Auth0Client) -> str | None:
     """Fetch user's email address from Auth0.
 
     Args:
         user_id: The Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         Optional[str]: User's email address if found, None otherwise
     """
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    try:
-        response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
-        user_data: dict[str, Any] = response.json()
-        time.sleep(API_RATE_LIMIT)
-        return user_data.get("email")
-    except requests.exceptions.RequestException as e:
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.get_user(encoded_id)
+    if result.success and result.data and isinstance(result.data, dict):
+        return result.data.get("email")
+    if not result.success:
         print_error(
-            f"Error fetching email for user {user_id}: {e}",
+            f"Error fetching email for user {user_id}: {result.error_message}",
             user_id=user_id,
-            error=str(e),
+            error=result.error_message or "",
             operation="get_user_email",
         )
-        return None
+    return None
 
 
-def get_user_details(user_id: str, token: str, base_url: str) -> dict[str, Any] | None:
+def get_user_details(user_id: str, client: Auth0Client) -> dict[str, Any] | None:
     """Fetch user details from Auth0 including connection information.
 
     Args:
         user_id: The Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         Optional[Dict[str, Any]]: User details if found, None otherwise
     """
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-
-    response = make_rate_limited_request("GET", url, headers)
-    if response is None:
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.get_user(encoded_id)
+    if result.success and result.data and isinstance(result.data, dict):
+        return result.data
+    if not result.success:
         print_error(
-            f"Error fetching details for user {user_id}: Request failed after retries",
+            f"Error fetching details for user {user_id}: {result.error_message}",
             user_id=user_id,
             operation="get_user_details",
         )
-        return None
-
-    try:
-        user_data: dict[str, Any] = response.json()
-        return user_data
-    except ValueError as e:
-        print_error(
-            f"Error parsing response for user {user_id}: {e}",
-            user_id=user_id,
-            error=str(e),
-            operation="get_user_details",
-        )
-        return None
+    return None
 
 
-def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
+def revoke_user_sessions(user_id: str, client: Auth0Client) -> None:
     """Fetch all Auth0 sessions for a user and revoke them one by one."""
     # Get list of sessions for the user
-    sessions = _fetch_user_sessions(user_id, token, base_url)
+    sessions = _fetch_user_sessions(user_id, client)
     if sessions is None:
         return
 
@@ -401,158 +340,120 @@ def revoke_user_sessions(user_id: str, token: str, base_url: str) -> None:
         return
 
     # Revoke each session
-    _revoke_individual_sessions(sessions, user_id, token, base_url)
+    _revoke_individual_sessions(sessions, user_id, client)
 
 
 def _fetch_user_sessions(
-    user_id: str, token: str, base_url: str
+    user_id: str, client: Auth0Client
 ) -> list[dict[str, Any]] | None:
     """Fetch the list of sessions for a user.
 
     Args:
         user_id: Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         Optional[List[Dict[str, Any]]]: List of sessions or None if request failed
     """
-    list_url = (
-        f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}/sessions"
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.get_user_sessions(encoded_id)
+    if result.success:
+        if result.data and isinstance(result.data, dict):
+            return cast(list[dict[str, Any]], result.data.get("sessions", []))
+        return []
+    print_error(
+        f"Error fetching sessions for user {user_id}: {result.error_message}",
+        user_id=user_id,
+        error=result.error_message or "",
+        operation="revoke_user_sessions",
     )
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-
-    try:
-        response = requests.get(list_url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
-        return cast(list[dict[str, Any]], response.json().get("sessions", []))
-    except requests.exceptions.RequestException as e:
-        print_error(
-            f"Error fetching sessions for user {user_id}: {e}",
-            user_id=user_id,
-            error=str(e),
-            operation="revoke_user_sessions",
-        )
-        return None
+    return None
 
 
 def _revoke_individual_sessions(
-    sessions: list[dict[str, Any]], user_id: str, token: str, base_url: str
+    sessions: list[dict[str, Any]], user_id: str, client: Auth0Client
 ) -> None:
     """Revoke individual sessions for a user.
 
     Args:
         sessions: List of session objects
         user_id: Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
     """
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-
-    _process_session_revocations(sessions, user_id, token, base_url, headers)
+    _process_session_revocations(sessions, user_id, client)
 
 
 def _process_session_revocations(
     sessions: list[dict[str, Any]],
     user_id: str,
-    token: str,
-    base_url: str,
-    headers: dict[str, str],
+    client: Auth0Client,
 ) -> None:
     """Process the revocation of individual sessions.
 
     Args:
         sessions: List of session objects
         user_id: Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-        headers: HTTP headers for the request
+        client: Auth0 API client
     """
     for session in sessions:
         session_id = session.get("id")
         if not session_id:
             continue
 
-        _revoke_single_session(session_id, user_id, token, base_url, headers)
+        _revoke_single_session(session_id, user_id, client)
 
 
-def _revoke_single_session(
-    session_id: str, user_id: str, token: str, base_url: str, headers: dict[str, str]
-) -> None:
+def _revoke_single_session(session_id: str, user_id: str, client: Auth0Client) -> None:
     """Revoke a single session.
 
     Args:
         session_id: Session ID to revoke
         user_id: Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
-        headers: HTTP headers for the request
+        client: Auth0 API client
     """
-    del_url = f"{base_url}/api/v2/sessions/{session_id}"
-    del_resp = requests.delete(del_url, headers=headers, timeout=API_TIMEOUT)
-    time.sleep(API_RATE_LIMIT)
-
-    try:
-        del_resp.raise_for_status()
+    result = client.delete_session(session_id)
+    if result.success:
         print_success(
             f"Revoked session {session_id} for user {user_id}",
             user_id=user_id,
             session_id=session_id,
             operation="revoke_user_sessions",
         )
-    except requests.exceptions.RequestException as e:
+    else:
         print_warning(
-            f"Failed to revoke session {session_id} for user {user_id}: {e}",
+            f"Failed to revoke session {session_id} for user {user_id}: {result.error_message}",
             user_id=user_id,
             session_id=session_id,
-            error=str(e),
+            error=result.error_message or "",
             operation="revoke_user_sessions",
         )
 
 
-def revoke_user_grants(user_id: str, token: str, base_url: str) -> None:
+def revoke_user_grants(user_id: str, client: Auth0Client) -> None:
     """Revoke all application grants (authorized applications) for a user in one call."""
-    grants_url = (
-        f"{base_url}/api/v2/grants?user_id={secure_url_encode(user_id, 'user ID')}"
-    )
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    try:
-        response = requests.delete(grants_url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.delete_user_grants(encoded_id)
+    if result.success:
         print_success(
             f"Revoked all application grants for user {user_id}",
             user_id=user_id,
             operation="revoke_user_grants",
         )
-        time.sleep(API_RATE_LIMIT)
-    except requests.exceptions.RequestException as e:
+    else:
         print_error(
-            f"Error revoking grants for user {user_id}: {e}",
+            f"Error revoking grants for user {user_id}: {result.error_message}",
             user_id=user_id,
-            error=str(e),
+            error=result.error_message or "",
             operation="revoke_user_grants",
         )
 
 
-def rotate_user_password(user_id: str, token: str, base_url: str) -> bool:
+def rotate_user_password(user_id: str, client: Auth0Client) -> bool:
     """Rotate user's password to a secure randomly-generated password.
 
     Args:
         user_id: The Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         bool: True if successful, False otherwise
@@ -563,7 +464,7 @@ def rotate_user_password(user_id: str, token: str, base_url: str) -> bool:
     )
 
     # Auto-detect user's database connection
-    connection = get_user_database_connection(user_id, token, base_url)
+    connection = get_user_database_connection(user_id, client)
     if connection is None:
         print_warning(
             f"Skipping password rotation for {user_id} (no database connection)",
@@ -581,38 +482,29 @@ def rotate_user_password(user_id: str, token: str, base_url: str) -> bool:
     # Generate secure random password
     new_password = generate_secure_password(length=16)
 
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    payload = {"password": new_password, "connection": connection}
-
-    try:
-        response = requests.patch(
-            url, headers=headers, json=payload, timeout=API_TIMEOUT
-        )
-        response.raise_for_status()
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.update_user(
+        encoded_id, {"password": new_password, "connection": connection}
+    )
+    if result.success:
         print_success(
             f"Successfully rotated password for user {user_id}",
             user_id=user_id,
             operation="rotate_user_password",
         )
-        time.sleep(API_RATE_LIMIT)
         return True
-    except requests.exceptions.RequestException as e:
+    else:
         print_error(
-            f"Error rotating password for user {user_id}: {e}",
+            f"Error rotating password for user {user_id}: {result.error_message}",
             user_id=user_id,
-            error=str(e),
+            error=result.error_message or "",
             operation="rotate_user_password",
         )
         return False
 
 
 def unlink_user_identity(
-    user_id: str, provider: str, user_identity_id: str, token: str, base_url: str
+    user_id: str, provider: str, user_identity_id: str, client: Auth0Client
 ) -> bool:
     """Unlink a social identity from a user.
 
@@ -620,21 +512,14 @@ def unlink_user_identity(
         user_id: The Auth0 user ID
         provider: The identity provider (e.g., "google-oauth2", "facebook")
         user_identity_id: The identity ID to unlink
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         bool: True if successful, False otherwise
     """
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}/identities/{provider}/{user_identity_id}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
-    try:
-        response = requests.delete(url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.unlink_identity(encoded_id, provider, user_identity_id)
+    if result.success:
         print_success(
             f"Successfully unlinked {provider} identity {user_identity_id} from user {user_id}",
             user_id=user_id,
@@ -642,15 +527,14 @@ def unlink_user_identity(
             user_identity_id=user_identity_id,
             operation="unlink_user_identity",
         )
-        time.sleep(API_RATE_LIMIT)
         return True
-    except requests.exceptions.RequestException as e:
+    else:
         print_error(
-            f"Error unlinking {provider} identity {user_identity_id} from user {user_id}: {e}",
+            f"Error unlinking {provider} identity {user_identity_id} from user {user_id}: {result.error_message}",
             user_id=user_id,
             provider=provider,
             user_identity_id=user_identity_id,
-            error=str(e),
+            error=result.error_message or "",
             operation="unlink_user_identity",
         )
         return False
@@ -658,8 +542,7 @@ def unlink_user_identity(
 
 def batch_user_operations_with_checkpoints(
     user_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     operation: str,
     env: str = "dev",
     resume_checkpoint_id: str | None = None,
@@ -670,8 +553,7 @@ def batch_user_operations_with_checkpoints(
 
     Args:
         user_ids: List of user IDs/emails to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         operation: Operation to perform ('delete', 'block', 'revoke-grants-only')
         env: Environment (dev/prod)
         resume_checkpoint_id: Optional checkpoint ID to resume from
@@ -727,8 +609,7 @@ def batch_user_operations_with_checkpoints(
     try:
         return _process_batch_user_operations_with_checkpoints(
             checkpoint=checkpoint,
-            token=token,
-            base_url=base_url,
+            client=client,
             operation=operation,
             checkpoint_manager=checkpoint_manager,
             rotate_password=rotate_password,
@@ -745,8 +626,7 @@ def batch_user_operations_with_checkpoints(
 
 def _process_batch_user_operations_with_checkpoints(
     checkpoint: Checkpoint,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     operation: str,
     checkpoint_manager: CheckpointManager,
     rotate_password: bool = False,
@@ -755,8 +635,7 @@ def _process_batch_user_operations_with_checkpoints(
 
     Args:
         checkpoint: Checkpoint to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         operation: Operation to perform
         checkpoint_manager: Checkpoint manager instance
         rotate_password: If True, rotate user passwords during operation
@@ -779,8 +658,7 @@ def _process_batch_user_operations_with_checkpoints(
         batch_size,
         checkpoint,
         checkpoint_manager,
-        token,
-        base_url,
+        client,
         operation,
         tracking_state,
         rotate_password,
@@ -791,7 +669,7 @@ def _process_batch_user_operations_with_checkpoints(
 
     # Finalize processing
     _finalize_batch_processing(
-        checkpoint, checkpoint_manager, operation, tracking_state, token, base_url
+        checkpoint, checkpoint_manager, operation, tracking_state, client
     )
 
     return None  # Operation completed successfully
@@ -831,8 +709,7 @@ def _process_batch_loop(
     batch_size: int,
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     operation: str,
     tracking_state: dict[str, Any],
     rotate_password: bool = False,
@@ -844,8 +721,7 @@ def _process_batch_loop(
         batch_size: Size of each batch
         checkpoint: Checkpoint object
         checkpoint_manager: Checkpoint manager instance
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         operation: Operation to perform
         tracking_state: State tracking dictionary
         rotate_password: If True, rotate user passwords during operation
@@ -875,8 +751,7 @@ def _process_batch_loop(
             batch_user_ids,
             checkpoint,
             checkpoint_manager,
-            token,
-            base_url,
+            client,
             operation,
             tracking_state,
             rotate_password,
@@ -889,8 +764,7 @@ def _process_and_update_batch(
     batch_user_ids: list[str],
     checkpoint: Checkpoint,
     checkpoint_manager: CheckpointManager,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     operation: str,
     tracking_state: dict[str, Any],
     rotate_password: bool = False,
@@ -901,15 +775,14 @@ def _process_and_update_batch(
         batch_user_ids: User IDs in this batch
         checkpoint: Checkpoint object
         checkpoint_manager: Checkpoint manager instance
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         operation: Operation to perform
         tracking_state: State tracking dictionary
         rotate_password: If True, rotate user passwords during operation
     """
     # Process users in this batch
     batch_results = _process_user_batch(
-        batch_user_ids, token, base_url, operation, rotate_password
+        batch_user_ids, client, operation, rotate_password
     )
 
     # Update tracking lists
@@ -941,8 +814,7 @@ def _finalize_batch_processing(
     checkpoint_manager: CheckpointManager,
     operation: str,
     tracking_state: dict[str, Any],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
 ) -> None:
     """Finalize batch processing with summary and completion.
 
@@ -951,8 +823,7 @@ def _finalize_batch_processing(
         checkpoint_manager: Checkpoint manager instance
         operation: Operation that was performed
         tracking_state: State tracking dictionary
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
     """
     # Display operation summary
     _print_user_operation_summary(
@@ -961,8 +832,7 @@ def _finalize_batch_processing(
         tracking_state["not_found_users"],
         tracking_state["invalid_user_ids"],
         tracking_state["multiple_users"],
-        token,
-        base_url,
+        client,
     )
 
     # Mark checkpoint as completed
@@ -976,8 +846,7 @@ def _finalize_batch_processing(
 
 def _process_users_in_batch(
     user_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     operation: str,
     results: dict[str, Any],
     rotate_password: bool = False,
@@ -986,8 +855,7 @@ def _process_users_in_batch(
 
     Args:
         user_ids: List of user IDs to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         operation: Operation to perform
         results: Results dictionary to update
         rotate_password: If True, rotate user passwords during operation
@@ -1008,7 +876,7 @@ def _process_users_in_batch(
 
             # Resolve user identifier
             resolved_user_id = _resolve_user_identifier_for_batch(
-                user_id, token, base_url, results
+                user_id, client, results
             )
 
             if resolved_user_id is None:
@@ -1019,7 +887,7 @@ def _process_users_in_batch(
             # Perform the operation
             try:
                 _execute_user_operation(
-                    operation, resolved_user_id, token, base_url, rotate_password
+                    operation, resolved_user_id, client, rotate_password
                 )
                 results["processed_count"] += 1
             except Exception as e:
@@ -1033,8 +901,7 @@ def _process_users_in_batch(
 
 def _process_user_batch(
     user_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     operation: str,
     rotate_password: bool = False,
 ) -> dict[str, Any]:
@@ -1042,8 +909,7 @@ def _process_user_batch(
 
     Args:
         user_ids: List of user IDs to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         operation: Operation to perform
         rotate_password: If True, rotate user passwords during operation
 
@@ -1060,21 +926,20 @@ def _process_user_batch(
 
     # Process users using the extracted helper function
     results = _process_users_in_batch(
-        user_ids, token, base_url, operation, results, rotate_password
+        user_ids, client, operation, results, rotate_password
     )
 
     return results
 
 
 def _resolve_user_identifier_for_batch(
-    user_id: str, token: str, base_url: str, results: dict[str, Any]
+    user_id: str, client: Auth0Client, results: dict[str, Any]
 ) -> str | None:
     """Resolve user identifier (email or user ID) to a valid user ID for batch processing.
 
     Args:
         user_id: User identifier (email or Auth0 user ID)
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         results: Results dictionary to update
 
     Returns:
@@ -1082,7 +947,7 @@ def _resolve_user_identifier_for_batch(
     """
     # If input is an email, resolve to user_id
     if "@" in user_id and user_id.count("@") == 1 and len(user_id.split("@")[1]) > 0:
-        resolved_ids = get_user_id_from_email(user_id, token, base_url)
+        resolved_ids = get_user_id_from_email(user_id, client)
         if not resolved_ids:
             results["not_found_users"].append(user_id)
             return None
@@ -1104,8 +969,7 @@ def _resolve_user_identifier_for_batch(
 def _execute_user_operation(
     operation: str,
     user_id: str,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     rotate_password: bool = False,
 ) -> None:
     """Execute the specified operation on a user.
@@ -1113,33 +977,30 @@ def _execute_user_operation(
     Args:
         operation: Operation to perform
         user_id: Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         rotate_password: If True, rotate user password during operation
     """
     if operation == "block":
-        block_user(user_id, token, base_url, rotate_password)
+        block_user(user_id, client, rotate_password)
     elif operation == "delete":
-        delete_user(user_id, token, base_url)
+        delete_user(user_id, client)
     elif operation == "revoke-grants-only":
-        revoke_user_sessions(user_id, token, base_url)
-        revoke_user_grants(user_id, token, base_url)
+        revoke_user_sessions(user_id, client)
+        revoke_user_grants(user_id, client)
         if rotate_password:
-            rotate_user_password(user_id, token, base_url)
+            rotate_user_password(user_id, client)
 
 
 def _display_multiple_users_details(
     multiple_users: dict[str, list[str]],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     fetch_details: bool = True,
 ) -> None:
     """Display details for multiple users found for each email.
 
     Args:
         multiple_users: Dict of emails with multiple users
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         fetch_details: Whether to fetch user details via API calls
     """
     from ..utils.display_utils import CYAN, RESET
@@ -1152,7 +1013,7 @@ def _display_multiple_users_details(
         print_info(f"\n  {CYAN}{email}{RESET}:")
         for uid in user_ids:
             if fetch_details:
-                user_details = get_user_details(uid, token, base_url)
+                user_details = get_user_details(uid, client)
                 if (
                     user_details
                     and user_details.get("identities")
@@ -1174,8 +1035,7 @@ def _print_user_operation_summary(
     not_found_users: list[str],
     invalid_user_ids: list[str],
     multiple_users: dict[str, list[str]],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
 ) -> None:
     """Print operation summary for user operations.
 
@@ -1185,8 +1045,7 @@ def _print_user_operation_summary(
         not_found_users: List of emails not found
         invalid_user_ids: List of invalid user IDs
         multiple_users: Dict of emails with multiple users
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
     """
     from ..utils.display_utils import CYAN, RESET
 
@@ -1205,4 +1064,4 @@ def _print_user_operation_summary(
             print_info(f"  {CYAN}{user_id}{RESET}")
 
     # Display multiple users using the extracted helper function
-    _display_multiple_users_details(multiple_users, token, base_url, fetch_details=True)
+    _display_multiple_users_details(multiple_users, client, fetch_details=True)
