@@ -153,9 +153,9 @@ def doctor(env: str = "dev", test_api: bool = False) -> dict[str, Any]:
                 )
                 result["api_tested"] = True
                 result["api_status"] = f"failed_{response.status_code}"
-                result[
-                    "details"
-                ] = f"Token obtained but API access failed with status {response.status_code}"
+                result["details"] = (
+                    f"Token obtained but API access failed with status {response.status_code}"
+                )
 
         logger.info(
             "✅ Doctor check completed successfully!",
