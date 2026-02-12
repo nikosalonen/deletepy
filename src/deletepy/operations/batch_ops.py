@@ -1,13 +1,10 @@
 """Batch processing operations for Auth0 user management."""
 
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-import requests
-
-from ..core.config import API_RATE_LIMIT, API_TIMEOUT
+from ..core.auth0_client import Auth0Client
 from ..models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
@@ -30,8 +27,7 @@ from .user_ops import delete_user, unlink_user_identity
 class CheckpointOperationConfig:
     """Configuration for checkpoint-enabled operations."""
 
-    token: str
-    base_url: str
+    client: Auth0Client
     env: str = "dev"
     resume_checkpoint_id: str | None = None
     checkpoint_manager: CheckpointManager | None = None
@@ -360,8 +356,7 @@ def _print_user_list(header: str, user_list: list[dict[str, Any]], action: str) 
 def _handle_auto_delete_operations(
     users_to_delete: list[dict[str, Any]],
     identities_to_unlink: list[dict[str, Any]],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     env: str = "dev",
     auto_delete: bool = True,
 ) -> None:
@@ -370,8 +365,7 @@ def _handle_auto_delete_operations(
     Args:
         users_to_delete: Users that should be deleted
         identities_to_unlink: Users where identities should be unlinked
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         env: Environment (dev/prod) for confirmation prompts
         auto_delete: Whether to perform automatic operations
     """
@@ -385,10 +379,8 @@ def _handle_auto_delete_operations(
         if not _confirm_production_operations(env, total_operations):
             return
 
-        deletion_results = _handle_user_deletions(users_to_delete, token, base_url)
-        unlinking_results = _handle_identity_unlinking(
-            identities_to_unlink, token, base_url
-        )
+        deletion_results = _handle_user_deletions(users_to_delete, client)
+        unlinking_results = _handle_identity_unlinking(identities_to_unlink, client)
 
         _print_operations_summary(
             deletion_results, unlinking_results, users_to_delete, identities_to_unlink
@@ -429,14 +421,13 @@ def _confirm_production_operations(env: str, total_operations: int) -> bool:
 
 
 def _handle_user_deletions(
-    users_to_delete: list[dict[str, Any]], token: str, base_url: str
+    users_to_delete: list[dict[str, Any]], client: Auth0Client
 ) -> dict[str, int]:
     """Handle deletion of users marked for deletion.
 
     Args:
         users_to_delete: List of users to delete
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         dict: Results with deleted_count and failed_deletions
@@ -459,7 +450,7 @@ def _handle_user_deletions(
                 break
 
             try:
-                delete_user(user["user_id"], token, base_url)
+                delete_user(user["user_id"], client)
                 deleted_count += 1
             except Exception as e:
                 print_error(
@@ -474,14 +465,13 @@ def _handle_user_deletions(
 
 
 def _handle_identity_unlinking(
-    identities_to_unlink: list[dict[str, Any]], token: str, base_url: str
+    identities_to_unlink: list[dict[str, Any]], client: Auth0Client
 ) -> dict[str, int]:
     """Handle unlinking of identities and cleanup of orphaned users.
 
     Args:
         identities_to_unlink: List of identities to unlink
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         dict: Results with counts for various operations
@@ -507,20 +497,19 @@ def _handle_identity_unlinking(
             if shutdown_requested():
                 break
 
-            _process_single_identity_unlink(user, token, base_url, results)
+            _process_single_identity_unlink(user, client, results)
             advance()
     return results
 
 
 def _process_single_identity_unlink(
-    user: dict[str, Any], token: str, base_url: str, results: dict[str, int]
+    user: dict[str, Any], client: Auth0Client, results: dict[str, int]
 ) -> None:
     """Process unlinking of a single identity and handle orphaned users.
 
     Args:
         user: User data with identity information
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         results: Results dictionary to update
     """
     try:
@@ -528,12 +517,11 @@ def _process_single_identity_unlink(
             user["user_id"],
             user["matching_connection"],
             user["social_id"],
-            token,
-            base_url,
+            client,
         )
         if success:
             results["unlinked_count"] += 1
-            _handle_orphaned_users_cleanup(user, token, base_url, results)
+            _handle_orphaned_users_cleanup(user, client, results)
         else:
             results["failed_unlinks"] += 1
     except Exception as e:
@@ -547,40 +535,36 @@ def _process_single_identity_unlink(
 
 
 def _handle_orphaned_users_cleanup(
-    user: dict[str, Any], token: str, base_url: str, results: dict[str, int]
+    user: dict[str, Any], client: Auth0Client, results: dict[str, int]
 ) -> None:
     """Handle cleanup of orphaned users after identity unlinking.
 
     Args:
         user: User data with identity information
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         results: Results dictionary to update
     """
     # Check if user has no remaining identities after unlinking
-    remaining_identities = _get_user_identity_count(user["user_id"], token, base_url)
+    remaining_identities = _get_user_identity_count(user["user_id"], client)
     if remaining_identities == 0:
-        _delete_orphaned_user(user["user_id"], token, base_url, results)
+        _delete_orphaned_user(user["user_id"], client, results)
 
     # Search for and delete separate user accounts with this social ID as primary identity
     detached_users = _find_users_with_primary_social_id(
-        user["social_id"], user["matching_connection"], token, base_url
+        user["social_id"], user["matching_connection"], client
     )
     for detached_user in detached_users:
-        _delete_detached_social_user(
-            detached_user, user["social_id"], token, base_url, results
-        )
+        _delete_detached_social_user(detached_user, user["social_id"], client, results)
 
 
 def _delete_orphaned_user(
-    user_id: str, token: str, base_url: str, results: dict[str, int]
+    user_id: str, client: Auth0Client, results: dict[str, int]
 ) -> None:
     """Delete a user that has no remaining identities.
 
     Args:
         user_id: User ID to delete
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         results: Results dictionary to update
     """
     print_warning(
@@ -589,7 +573,7 @@ def _delete_orphaned_user(
         operation="delete_orphaned_user",
     )
     try:
-        delete_user(user_id, token, base_url)
+        delete_user(user_id, client)
         results["orphaned_users_deleted"] += 1
         print_success(
             f"Successfully deleted orphaned user {user_id}",
@@ -608,8 +592,7 @@ def _delete_orphaned_user(
 def _delete_detached_social_user(
     detached_user: dict[str, Any],
     social_id: str,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     results: dict[str, int],
 ) -> None:
     """Delete a detached social user account.
@@ -617,12 +600,11 @@ def _delete_detached_social_user(
     Args:
         detached_user: Detached user data
         social_id: Social media ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         results: Results dictionary to update
     """
     try:
-        delete_user(detached_user["user_id"], token, base_url)
+        delete_user(detached_user["user_id"], client)
         results["orphaned_users_deleted"] += 1
         print_success(
             f"Successfully deleted detached social user {detached_user['user_id']} with identity {social_id}",
@@ -715,43 +697,31 @@ def _print_disabled_operations_notice(
     )
 
 
-def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
+def _get_user_identity_count(user_id: str, client: Auth0Client) -> int:
     """Get the number of identities for a user.
 
     Args:
         user_id: Auth0 user ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         int: Number of identities for the user
     """
-    url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.get_user(encoded_id)
 
-    try:
-        response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-        response.raise_for_status()
-        user_data = response.json()
-
-        identities = user_data.get("identities", [])
-        identity_count = len(identities) if isinstance(identities, list) else 0
-        time.sleep(API_RATE_LIMIT)
-
-        return identity_count
-
-    except requests.exceptions.RequestException as e:
+    if not result.success:
         print_error(
-            f"Error getting user identity count for {user_id}: {e}",
+            f"Error getting user identity count for {user_id}: {result.error_message}",
             user_id=user_id,
-            error=str(e),
+            error=result.error_message or "",
             operation="get_user_identity_count",
         )
         return 0
+
+    user_data = result.data if isinstance(result.data, dict) else {}
+    identities = user_data.get("identities", [])
+    return len(identities) if isinstance(identities, list) else 0
 
 
 def _has_social_id_as_primary_identity(
@@ -784,66 +754,43 @@ def _has_social_id_as_primary_identity(
 def _find_users_with_primary_social_id(
     social_id: str,
     connection: str,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
 ) -> list[dict[str, Any]]:
     """Find users with a specific social media ID as their primary identity.
 
     Args:
         social_id: The social media ID to search for
         connection: The connection name for the social ID
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         List[Dict[str, Any]]: List of users found with this social ID as primary identity
     """
-    url = f"{base_url}/api/v2/users"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    query = f'identities.user_id:"{social_id}" AND identities.connection:"{connection}"'
+    result = client.search_users(query)
 
-    # Search for users with this social ID as their primary identity
-    params = {
-        "q": f'identities.user_id:"{social_id}" AND identities.connection:"{connection}"',
-        "search_engine": "v3",
-        "include_totals": "true",
-        "page": "0",
-        "per_page": "100",
-    }
+    found_users: list[dict[str, Any]] = []
 
-    found_users = []
-
-    try:
-        response = requests.get(
-            url, headers=headers, params=params, timeout=API_TIMEOUT
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        if "users" in data:
-            for user in data["users"]:
-                # Only include users where this social ID is their primary/main identity
-                if _has_social_id_as_primary_identity(user, social_id, connection):
-                    # This user has the social ID as their primary identity
-                    found_users.append(user)
-                    print_info(
-                        f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
-                        user_id=user.get("user_id", "unknown"),
-                        social_id=social_id,
-                        operation="find_detached_social_user",
-                    )
-
-        time.sleep(API_RATE_LIMIT)
-
-    except requests.exceptions.RequestException as e:
+    if not result.success:
         print_error(
-            f"Error searching for social ID {social_id}: {e}",
+            f"Error searching for social ID {social_id}: {result.error_message}",
             social_id=social_id,
             operation="social_search",
         )
+        return found_users
+
+    data = result.data if isinstance(result.data, dict) else {}
+    if "users" in data:
+        for user in data["users"]:
+            # Only include users where this social ID is their primary/main identity
+            if _has_social_id_as_primary_identity(user, social_id, connection):
+                found_users.append(user)
+                print_info(
+                    f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
+                    user_id=user.get("user_id", "unknown"),
+                    social_id=social_id,
+                    operation="find_detached_social_user",
+                )
 
     return found_users
 
@@ -1025,8 +972,7 @@ def _prepare_process_parameters(
     """
     process_params = {
         "checkpoint": checkpoint,
-        "token": exec_config.config.token,
-        "base_url": exec_config.config.base_url,
+        "client": exec_config.config.client,
         "env": env,
         "auto_delete": auto_delete,
         "checkpoint_manager": checkpoint_manager,
@@ -1150,24 +1096,20 @@ def find_users_by_social_media_ids_with_checkpoints(
 
 def _process_social_search_batch(
     batch_social_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     accumulator: dict[str, list[Any]],
 ) -> dict[str, int]:
     """Process a batch of social IDs and update accumulator.
 
     Args:
         batch_social_ids: Batch of social IDs to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         accumulator: Results accumulator to update
 
     Returns:
         Dict[str, int]: Batch processing results
     """
-    found_users, not_found_ids = search_batch_social_ids(
-        batch_social_ids, token, base_url
-    )
+    found_users, not_found_ids = search_batch_social_ids(batch_social_ids, client)
     accumulator["found_users"].extend(found_users)
     accumulator["not_found_ids"].extend(not_found_ids)
     return {"processed_count": len(batch_social_ids)}
@@ -1176,8 +1118,7 @@ def _process_social_search_batch(
 def _handle_social_search_completion(
     results_accumulator: dict[str, list[Any]],
     checkpoint: Checkpoint,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     env: str,
     auto_delete: bool,
 ) -> None:
@@ -1186,8 +1127,7 @@ def _handle_social_search_completion(
     Args:
         results_accumulator: Accumulated search results
         checkpoint: Checkpoint being processed
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         env: Environment name
         auto_delete: Whether auto-delete is enabled
     """
@@ -1195,14 +1135,13 @@ def _handle_social_search_completion(
     not_found_ids = results_accumulator["not_found_ids"]
 
     _process_final_social_search_results(
-        found_users, not_found_ids, checkpoint, token, base_url, env, auto_delete
+        found_users, not_found_ids, checkpoint, client, env, auto_delete
     )
 
 
 def _process_social_search_with_checkpoints(
     checkpoint: Checkpoint,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     env: str,
     auto_delete: bool,
     checkpoint_manager: CheckpointManager,
@@ -1215,8 +1154,7 @@ def _process_social_search_with_checkpoints(
 
     Args:
         checkpoint: Checkpoint to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         env: Environment
         auto_delete: Whether to auto-delete users
         checkpoint_manager: Checkpoint manager instance
@@ -1234,8 +1172,7 @@ def _process_social_search_with_checkpoints(
         checkpoint_manager,
         _process_social_search_batch,
         "Social search",
-        token,
-        base_url,
+        client,
         results_accumulator,
     )
 
@@ -1245,7 +1182,7 @@ def _process_social_search_with_checkpoints(
 
     # Handle completion by processing final results
     _handle_social_search_completion(
-        results_accumulator, checkpoint, token, base_url, env, auto_delete
+        results_accumulator, checkpoint, client, env, auto_delete
     )
 
     return None  # Operation completed successfully
@@ -1255,8 +1192,7 @@ def _process_final_social_search_results(
     found_users: list[dict[str, Any]],
     not_found_ids: list[str],
     checkpoint: Checkpoint,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     env: str,
     auto_delete: bool,
 ) -> None:
@@ -1266,8 +1202,7 @@ def _process_final_social_search_results(
         found_users: All users found during search
         not_found_ids: Social IDs that were not found
         checkpoint: Current checkpoint
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         env: Environment
         auto_delete: Whether to auto-delete users
     """
@@ -1293,22 +1228,20 @@ def _process_final_social_search_results(
     _handle_auto_delete_operations(
         users_to_delete,
         identities_to_unlink,
-        token,
-        base_url,
+        client,
         env,
         auto_delete,
     )
 
 
 def search_batch_social_ids(
-    social_ids: list[str], token: str, base_url: str
+    social_ids: list[str], client: Auth0Client
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Search for users with a batch of social media IDs.
 
     Args:
         social_ids: List of social media IDs to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         Tuple of (found_users, not_found_ids)
@@ -1327,7 +1260,7 @@ def search_batch_social_ids(
                 continue
 
             # Search for users with this social ID
-            users_found = _search_single_social_id(social_id, token, base_url)
+            users_found = _search_single_social_id(social_id, client)
             if users_found:
                 # Add social_id to each user for later processing
                 for user in users_found:
@@ -1341,60 +1274,39 @@ def search_batch_social_ids(
 
 
 def _search_single_social_id(
-    social_id: str, token: str, base_url: str
+    social_id: str, client: Auth0Client
 ) -> list[dict[str, Any]]:
     """Search for users with a specific social media ID.
 
     Args:
         social_id: The social media ID to search for
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         List[Dict[str, Any]]: List of users found with this social ID
     """
-    url = f"{base_url}/api/v2/users"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
+    query = f'identities.user_id:"{social_id}"'
+    result = client.search_users(query)
 
-    # Search for users with this social ID in their identities
-    params = {
-        "q": f'identities.user_id:"{social_id}"',
-        "search_engine": "v3",
-        "include_totals": "true",
-        "page": "0",
-        "per_page": "100",
-    }
+    found_users: list[dict[str, Any]] = []
 
-    found_users = []
-
-    try:
-        response = requests.get(
-            url, headers=headers, params=params, timeout=API_TIMEOUT
-        )
-        response.raise_for_status()
-        data = response.json()
-
-        if "users" in data:
-            for user in data["users"]:
-                # Verify this user actually has the social ID
-                if "identities" in user and isinstance(user["identities"], list):
-                    for identity in user["identities"]:
-                        if identity.get("user_id") == social_id:
-                            found_users.append(user)
-                            break
-
-        time.sleep(API_RATE_LIMIT)
-
-    except requests.exceptions.RequestException as e:
+    if not result.success:
         print_error(
-            f"Error searching for social ID {social_id}: {e}",
+            f"Error searching for social ID {social_id}: {result.error_message}",
             social_id=social_id,
             operation="social_search",
         )
+        return found_users
+
+    data = result.data if isinstance(result.data, dict) else {}
+    if "users" in data:
+        for user in data["users"]:
+            # Verify this user actually has the social ID
+            if "identities" in user and isinstance(user["identities"], list):
+                for identity in user["identities"]:
+                    if identity.get("user_id") == social_id:
+                        found_users.append(user)
+                        break
 
     return found_users
 
@@ -1425,22 +1337,20 @@ def check_unblocked_users_with_checkpoints(
 
 def _process_check_unblocked_batch(
     batch_user_ids: list[str],
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     accumulator: dict[str, list[str]],
 ) -> dict[str, int]:
     """Process a batch of user IDs to check for unblocked status.
 
     Args:
         batch_user_ids: List of user IDs to check
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         accumulator: Dictionary to accumulate unblocked users
 
     Returns:
         dict: Batch processing results for checkpoint update
     """
-    batch_unblocked = _check_batch_unblocked_users(batch_user_ids, token, base_url)
+    batch_unblocked = _check_batch_unblocked_users(batch_user_ids, client)
 
     accumulator["unblocked_users"].extend(batch_unblocked)
 
@@ -1449,8 +1359,7 @@ def _process_check_unblocked_batch(
 
 def _process_check_unblocked_with_checkpoints(
     checkpoint: Checkpoint,
-    token: str,
-    base_url: str,
+    client: Auth0Client,
     checkpoint_manager: CheckpointManager,
     **_kwargs: Any,
 ) -> str | None:
@@ -1461,8 +1370,7 @@ def _process_check_unblocked_with_checkpoints(
 
     Args:
         checkpoint: Checkpoint to process
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
         checkpoint_manager: Checkpoint manager instance
         **_kwargs: Additional params from ProcessingConfig (unused by this operation)
 
@@ -1478,8 +1386,7 @@ def _process_check_unblocked_with_checkpoints(
         checkpoint_manager,
         _process_check_unblocked_batch,
         "check_unblocked_users",
-        token,
-        base_url,
+        client,
         results_accumulator,
     )
 
@@ -1509,43 +1416,32 @@ def _display_check_unblocked_results(unblocked_users: list[str]) -> None:
         print_info("All users are blocked.", operation="check_unblocked")
 
 
-def _check_batch_unblocked_users(
-    user_ids: list[str], token: str, base_url: str
-) -> list[str]:
+def _check_batch_unblocked_users(user_ids: list[str], client: Auth0Client) -> list[str]:
     """Check a batch of users for unblocked status.
 
     Args:
         user_ids: List of Auth0 user IDs to check
-        token: Auth0 access token
-        base_url: Auth0 API base URL
+        client: Auth0 API client
 
     Returns:
         List[str]: List of unblocked user IDs
     """
     unblocked = []
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-    }
 
     with live_progress(len(user_ids), "Checking users") as advance:
         for user_id in user_ids:
             if shutdown_requested():
                 break
 
-            url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
+            encoded_id = secure_url_encode(user_id, "user ID")
+            result = client.get_user(encoded_id)
 
-            try:
-                response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-                response.raise_for_status()
-                user_data = response.json()
-                if not user_data.get("blocked", False):
+            if result.success and isinstance(result.data, dict):
+                if not result.data.get("blocked", False):
                     unblocked.append(user_id)
-                time.sleep(API_RATE_LIMIT)
-            except requests.exceptions.RequestException as e:
+            elif not result.success:
                 print_error(
-                    f"Error checking user {user_id}: {e}",
+                    f"Error checking user {user_id}: {result.error_message}",
                     user_id=user_id,
                     operation="check_blocked",
                 )
