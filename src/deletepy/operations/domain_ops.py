@@ -3,7 +3,7 @@
 from typing import Any
 
 from ..utils.display_utils import (
-    show_progress,
+    live_progress,
     shutdown_requested,
 )
 from ..utils.logging_utils import user_output
@@ -33,63 +33,62 @@ def check_email_domains(
         "total_checked": 0,
     }
 
-    total_emails = len(emails)
+    with live_progress(len(emails), "Checking domains") as advance:
+        for email in emails:
+            if shutdown_requested():
+                break
 
-    for idx, email in enumerate(emails, 1):
-        if shutdown_requested():
-            break
+            try:
+                # Validate email format first
+                validation_result = InputValidator.validate_email_comprehensive(email)
+                if not validation_result.is_valid:
+                    results["errors"].append(
+                        {
+                            "email": email,
+                            "reason": f"Invalid email format: {validation_result.error_message}",
+                        }
+                    )
+                    advance()
+                    continue
 
-        show_progress(idx, total_emails, "Checking domains")
+                # Extract domain from email
+                domain = email.split("@")[-1].lower() if "@" in email else ""
 
-        try:
-            # Validate email format first
-            validation_result = InputValidator.validate_email_comprehensive(email)
-            if not validation_result.is_valid:
+                if not domain:
+                    results["errors"].append(
+                        {"email": email, "reason": "Invalid email format"}
+                    )
+                    advance()
+                    continue
+
+                # Check against domain lists
+                if blocked_domains and domain in blocked_domains:
+                    results["blocked"].append(
+                        {
+                            "email": email,
+                            "domain": domain,
+                            "reason": "Domain in blocked list",
+                        }
+                    )
+                elif allowed_domains and domain not in allowed_domains:
+                    results["blocked"].append(
+                        {
+                            "email": email,
+                            "domain": domain,
+                            "reason": "Domain not in allowed list",
+                        }
+                    )
+                else:
+                    results["allowed"].append({"email": email, "domain": domain})
+
+                results["total_checked"] += 1
+
+            except Exception as e:
                 results["errors"].append(
-                    {
-                        "email": email,
-                        "reason": f"Invalid email format: {validation_result.error_message}",
-                    }
+                    {"email": email, "reason": f"Error processing: {str(e)}"}
                 )
-                continue
 
-            # Extract domain from email
-            domain = email.split("@")[-1].lower() if "@" in email else ""
-
-            if not domain:
-                results["errors"].append(
-                    {"email": email, "reason": "Invalid email format"}
-                )
-                continue
-
-            # Check against domain lists
-            if blocked_domains and domain in blocked_domains:
-                results["blocked"].append(
-                    {
-                        "email": email,
-                        "domain": domain,
-                        "reason": "Domain in blocked list",
-                    }
-                )
-            elif allowed_domains and domain not in allowed_domains:
-                results["blocked"].append(
-                    {
-                        "email": email,
-                        "domain": domain,
-                        "reason": "Domain not in allowed list",
-                    }
-                )
-            else:
-                results["allowed"].append({"email": email, "domain": domain})
-
-            results["total_checked"] += 1
-
-        except Exception as e:
-            results["errors"].append(
-                {"email": email, "reason": f"Error processing: {str(e)}"}
-            )
-
-    user_output("")  # Clear progress line
+            advance()
 
     # Display results
     _display_domain_check_results(results, allowed_domains, blocked_domains)

@@ -23,10 +23,7 @@ from ..utils.checkpoint_utils import (
 from ..utils.checkpoint_utils import (
     try_load_checkpoint,
 )
-from ..utils.display_utils import (
-    show_progress,
-    shutdown_requested,
-)
+from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.logging_utils import get_logger, user_output, user_output_config
 from ..utils.output import print_info, print_success, print_warning
 from ..utils.validators import InputValidator
@@ -219,31 +216,32 @@ def _process_email_batch(
         "error_count": 0,
     }
 
-    for idx, email in enumerate(batch_emails, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(batch_emails), f"Batch {batch_number}") as advance:
+        for email in batch_emails:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(batch_emails), f"Batch {batch_number}")
-
-        user_data_list, email_counters = _fetch_user_data(
-            email, token, base_url, connection
-        )
-
-        # Update batch counters
-        for key in batch_counters:
-            batch_counters[key] += email_counters[key]
-
-        # Build CSV data for each user found
-        for user_details in user_data_list:
-            csv_row = _build_csv_data_dict(
-                email, user_details.get("user_id", ""), user_details, "Found"
+            user_data_list, email_counters = _fetch_user_data(
+                email, token, base_url, connection
             )
-            csv_data.append(csv_row)
 
-        # If no users found, add a row with "Not Found" status
-        if not user_data_list and email_counters["not_found_count"] > 0:
-            csv_row = _build_csv_data_dict(email, "", None, "Not Found")
-            csv_data.append(csv_row)
+            # Update batch counters
+            for key in batch_counters:
+                batch_counters[key] += email_counters[key]
+
+            # Build CSV data for each user found
+            for user_details in user_data_list:
+                csv_row = _build_csv_data_dict(
+                    email, user_details.get("user_id", ""), user_details, "Found"
+                )
+                csv_data.append(csv_row)
+
+            # If no users found, add a row with "Not Found" status
+            if not user_data_list and email_counters["not_found_count"] > 0:
+                csv_row = _build_csv_data_dict(email, "", None, "Not Found")
+                csv_data.append(csv_row)
+
+            advance()
 
     return csv_data, batch_counters
 
@@ -1228,46 +1226,51 @@ def _process_user_id_batch(
         "error_count": 0,
     }
 
-    for idx, user_id in enumerate(batch_user_ids, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(batch_user_ids), f"Batch {batch_number}") as advance:
+        for user_id in batch_user_ids:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(batch_user_ids), f"Batch {batch_number}")
+            try:
+                email = get_user_email(user_id, token, base_url)
 
-        try:
-            email = get_user_email(user_id, token, base_url)
+                if email:
+                    csv_row = {
+                        "user_id": user_id,
+                        "email": email,
+                        "status": "Found",
+                    }
+                    batch_counters["processed_count"] += 1
+                else:
+                    csv_row = {
+                        "user_id": user_id,
+                        "email": "",
+                        "status": "Not Found",
+                    }
+                    batch_counters["not_found_count"] += 1
 
-            if email:
-                csv_row = {
-                    "user_id": user_id,
-                    "email": email,
-                    "status": "Found",
-                }
-                batch_counters["processed_count"] += 1
-            else:
+                csv_data.append(csv_row)
+
+            except Exception as e:
+                logger.error(
+                    "Error processing user %s: %s",
+                    user_id,
+                    str(e),
+                    extra={
+                        "user_id": user_id,
+                        "operation": "fetch_email",
+                        "error": str(e),
+                    },
+                )
                 csv_row = {
                     "user_id": user_id,
                     "email": "",
-                    "status": "Not Found",
+                    "status": f"Error: {str(e)}",
                 }
-                batch_counters["not_found_count"] += 1
+                csv_data.append(csv_row)
+                batch_counters["error_count"] += 1
 
-            csv_data.append(csv_row)
-
-        except Exception as e:
-            logger.error(
-                "Error processing user %s: %s",
-                user_id,
-                str(e),
-                extra={"user_id": user_id, "operation": "fetch_email", "error": str(e)},
-            )
-            csv_row = {
-                "user_id": user_id,
-                "email": "",
-                "status": f"Error: {str(e)}",
-            }
-            csv_data.append(csv_row)
-            batch_counters["error_count"] += 1
+            advance()
 
     return csv_data, batch_counters
 

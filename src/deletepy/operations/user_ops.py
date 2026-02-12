@@ -22,7 +22,7 @@ from ..utils.checkpoint_utils import (
 from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _checkpoint_interruption_handler,
 )
-from ..utils.display_utils import clear_progress_line, show_progress, shutdown_requested
+from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.request_utils import make_rate_limited_request
 from ..utils.url_utils import secure_url_encode
@@ -996,35 +996,37 @@ def _process_users_in_batch(
     from ..utils.display_utils import shutdown_requested
     from ..utils.output import print_error
 
-    for idx, user_id in enumerate(user_ids, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(user_ids), f"Processing {operation}") as advance:
+        for user_id in user_ids:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(user_ids), f"Processing {operation}")
+            # Sanitize user input first
+            from ..utils.validators import SecurityValidator
 
-        # Sanitize user input first
-        from ..utils.validators import SecurityValidator
+            user_id = SecurityValidator.sanitize_user_input(user_id)
 
-        user_id = SecurityValidator.sanitize_user_input(user_id)
-
-        # Resolve user identifier
-        resolved_user_id = _resolve_user_identifier_for_batch(
-            user_id, token, base_url, results
-        )
-
-        if resolved_user_id is None:
-            results["skipped_count"] += 1
-            continue
-
-        # Perform the operation
-        try:
-            _execute_user_operation(
-                operation, resolved_user_id, token, base_url, rotate_password
+            # Resolve user identifier
+            resolved_user_id = _resolve_user_identifier_for_batch(
+                user_id, token, base_url, results
             )
-            results["processed_count"] += 1
-        except Exception as e:
-            print_error(f"\nFailed to {operation} user {resolved_user_id}: {e}")
-            results["skipped_count"] += 1
+
+            if resolved_user_id is None:
+                results["skipped_count"] += 1
+                advance()
+                continue
+
+            # Perform the operation
+            try:
+                _execute_user_operation(
+                    operation, resolved_user_id, token, base_url, rotate_password
+                )
+                results["processed_count"] += 1
+            except Exception as e:
+                print_error(f"\nFailed to {operation} user {resolved_user_id}: {e}")
+                results["skipped_count"] += 1
+
+            advance()
 
     return results
 
@@ -1061,7 +1063,6 @@ def _process_user_batch(
         user_ids, token, base_url, operation, results, rotate_password
     )
 
-    clear_progress_line()
     return results
 
 

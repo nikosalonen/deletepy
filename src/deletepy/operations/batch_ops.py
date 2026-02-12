@@ -19,7 +19,7 @@ from ..utils.checkpoint_utils import handle_checkpoint_error as _handle_checkpoi
 from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _handle_checkpoint_interruption,
 )
-from ..utils.display_utils import clear_progress_line, show_progress, shutdown_requested
+from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.url_utils import secure_url_encode
 from .user_ops import delete_user, unlink_user_identity
@@ -452,24 +452,23 @@ def _handle_user_deletions(
         operation="delete_users",
     )
 
-    for idx, user in enumerate(users_to_delete, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(users_to_delete), "Deleting users") as advance:
+        for user in users_to_delete:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(users_to_delete), "Deleting users")
+            try:
+                delete_user(user["user_id"], token, base_url)
+                deleted_count += 1
+            except Exception as e:
+                print_error(
+                    f"\nFailed to delete user {user['user_id']}: {e}",
+                    user_id=user["user_id"],
+                    operation="delete_user",
+                )
+                failed_deletions += 1
 
-        try:
-            delete_user(user["user_id"], token, base_url)
-            deleted_count += 1
-        except Exception as e:
-            print_error(
-                f"\nFailed to delete user {user['user_id']}: {e}",
-                user_id=user["user_id"],
-                operation="delete_user",
-            )
-            failed_deletions += 1
-
-    clear_progress_line()
+            advance()
     return {"deleted_count": deleted_count, "failed_deletions": failed_deletions}
 
 
@@ -502,14 +501,13 @@ def _handle_identity_unlinking(
         operation="unlink_identities",
     )
 
-    for idx, user in enumerate(identities_to_unlink, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(identities_to_unlink), "Unlinking identities") as advance:
+        for user in identities_to_unlink:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(identities_to_unlink), "Unlinking identities")
-        _process_single_identity_unlink(user, token, base_url, results)
-
-    clear_progress_line()
+            _process_single_identity_unlink(user, token, base_url, results)
+            advance()
     return results
 
 
@@ -1328,28 +1326,27 @@ def _search_batch_social_ids(
     found_users = []
     not_found_ids = []
 
-    for idx, social_id in enumerate(social_ids, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(social_ids), "Searching social IDs") as advance:
+        for social_id in social_ids:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(social_ids), "Searching social IDs")
+            # Search for users with this social ID
+            users_found = _search_single_social_id(social_id, token, base_url)
+            if users_found:
+                # Add social_id to each user for later processing
+                for user in users_found:
+                    user["social_id"] = social_id
+                found_users.extend(users_found)
+            else:
+                # Sanitize social ID before adding to not found list
+                from ..utils.validators import SecurityValidator
 
-        # Search for users with this social ID
-        users_found = _search_single_social_id(social_id, token, base_url)
-        if users_found:
-            # Add social_id to each user for later processing
-            for user in users_found:
-                user["social_id"] = social_id
-            found_users.extend(users_found)
-        else:
-            # Sanitize social ID before adding to not found list
-            from ..utils.validators import SecurityValidator
+                sanitized_id = SecurityValidator.sanitize_user_input(social_id)
+                if sanitized_id:
+                    not_found_ids.append(sanitized_id)
 
-            sanitized_id = SecurityValidator.sanitize_user_input(social_id)
-            if sanitized_id:
-                not_found_ids.append(sanitized_id)
-
-    clear_progress_line()
+            advance()
     return found_users, not_found_ids
 
 
@@ -1526,8 +1523,6 @@ def _display_check_unblocked_results(unblocked_users: list[str]) -> None:
     Args:
         unblocked_users: List of unblocked user IDs
     """
-    clear_progress_line()
-
     if unblocked_users:
         print_warning(
             f"Found {len(unblocked_users)} unblocked users:",
@@ -1555,31 +1550,32 @@ def _check_batch_unblocked_users(
     """
     unblocked = []
 
-    for idx, user_id in enumerate(user_ids, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(user_ids), "Checking users") as advance:
+        for user_id in user_ids:
+            if shutdown_requested():
+                break
 
-        url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        }
+            url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Content-Type": "application/json",
+                "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+            }
 
-        try:
-            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-            response.raise_for_status()
-            user_data = response.json()
-            if not user_data.get("blocked", False):
-                unblocked.append(user_id)
-            show_progress(idx, len(user_ids), "Checking users")
-            time.sleep(API_RATE_LIMIT)
-        except requests.exceptions.RequestException as e:
-            print_error(
-                f"Error checking user {user_id}: {e}",
-                user_id=user_id,
-                operation="check_blocked",
-            )
-            continue
+            try:
+                response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
+                response.raise_for_status()
+                user_data = response.json()
+                if not user_data.get("blocked", False):
+                    unblocked.append(user_id)
+                time.sleep(API_RATE_LIMIT)
+            except requests.exceptions.RequestException as e:
+                print_error(
+                    f"Error checking user {user_id}: {e}",
+                    user_id=user_id,
+                    operation="check_blocked",
+                )
+
+            advance()
 
     return unblocked
