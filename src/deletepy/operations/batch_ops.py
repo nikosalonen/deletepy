@@ -1332,6 +1332,11 @@ def search_batch_social_ids(
             if shutdown_requested():
                 break
 
+            social_id = SecurityValidator.sanitize_user_input(social_id)
+            if not social_id:
+                advance()
+                continue
+
             # Search for users with this social ID
             users_found = _search_single_social_id(social_id, token, base_url)
             if users_found:
@@ -1340,10 +1345,7 @@ def search_batch_social_ids(
                     user["social_id"] = social_id
                 found_users.extend(users_found)
             else:
-                # Sanitize social ID before adding to not found list
-                sanitized_id = SecurityValidator.sanitize_user_input(social_id)
-                if sanitized_id:
-                    not_found_ids.append(sanitized_id)
+                not_found_ids.append(social_id)
 
             advance()
     return found_users, not_found_ids
