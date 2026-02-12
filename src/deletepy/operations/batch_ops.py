@@ -19,9 +19,10 @@ from ..utils.checkpoint_utils import handle_checkpoint_error as _handle_checkpoi
 from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _handle_checkpoint_interruption,
 )
-from ..utils.display_utils import clear_progress_line, show_progress, shutdown_requested
+from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.url_utils import secure_url_encode
+from ..utils.validators import SecurityValidator
 from .user_ops import delete_user, unlink_user_identity
 
 
@@ -86,7 +87,7 @@ class ExecuteCheckpointConfig:
     processing_config: ProcessingConfig | None = None
 
 
-def _categorize_users(
+def categorize_users(
     found_users: list[dict[str, Any]], auto_delete: bool = True
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     """Categorize users based on their identity configuration.
@@ -452,24 +453,23 @@ def _handle_user_deletions(
         operation="delete_users",
     )
 
-    for idx, user in enumerate(users_to_delete, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(users_to_delete), "Deleting users") as advance:
+        for user in users_to_delete:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(users_to_delete), "Deleting users")
+            try:
+                delete_user(user["user_id"], token, base_url)
+                deleted_count += 1
+            except Exception as e:
+                print_error(
+                    f"Failed to delete user {user['user_id']}: {e}",
+                    user_id=user["user_id"],
+                    operation="delete_user",
+                )
+                failed_deletions += 1
 
-        try:
-            delete_user(user["user_id"], token, base_url)
-            deleted_count += 1
-        except Exception as e:
-            print_error(
-                f"\nFailed to delete user {user['user_id']}: {e}",
-                user_id=user["user_id"],
-                operation="delete_user",
-            )
-            failed_deletions += 1
-
-    clear_progress_line()
+            advance()
     return {"deleted_count": deleted_count, "failed_deletions": failed_deletions}
 
 
@@ -502,14 +502,13 @@ def _handle_identity_unlinking(
         operation="unlink_identities",
     )
 
-    for idx, user in enumerate(identities_to_unlink, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(identities_to_unlink), "Unlinking identities") as advance:
+        for user in identities_to_unlink:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(identities_to_unlink), "Unlinking identities")
-        _process_single_identity_unlink(user, token, base_url, results)
-
-    clear_progress_line()
+            _process_single_identity_unlink(user, token, base_url, results)
+            advance()
     return results
 
 
@@ -741,6 +740,7 @@ def _get_user_identity_count(user_id: str, token: str, base_url: str) -> int:
 
         identities = user_data.get("identities", [])
         identity_count = len(identities) if isinstance(identities, list) else 0
+        time.sleep(API_RATE_LIMIT)
 
         return identity_count
 
@@ -1165,7 +1165,7 @@ def _process_social_search_batch(
     Returns:
         Dict[str, int]: Batch processing results
     """
-    found_users, not_found_ids = _search_batch_social_ids(
+    found_users, not_found_ids = search_batch_social_ids(
         batch_social_ids, token, base_url
     )
     accumulator["found_users"].extend(found_users)
@@ -1206,19 +1206,12 @@ def _process_social_search_with_checkpoints(
     env: str,
     auto_delete: bool,
     checkpoint_manager: CheckpointManager,
-    dry_run: bool = False,  # Processing config parameter
-    batch_timeout: int | None = None,  # Processing config parameter
-    connection_filter: str | None = None,  # Processing config parameter
-    include_inactive: bool = False,  # Processing config parameter
-    verify_results: bool = True,  # Processing config parameter
-    **custom_params: Any,  # Custom parameters from ProcessingConfig
+    **_kwargs: Any,
 ) -> str | None:
     """Process social search operation with checkpointing support.
 
-    This function is part of a generic interface system where all process functions
-    receive the same set of parameters from ProcessingConfig via _execute_with_checkpoints.
-    Only the first six parameters are used by this specific operation; the remaining
-    parameters are kept for interface consistency but are not used in the function body.
+    Called via _execute_with_checkpoints which unpacks ProcessingConfig params
+    as keyword arguments. Unused params are absorbed by **_kwargs.
 
     Args:
         checkpoint: Checkpoint to process
@@ -1227,12 +1220,7 @@ def _process_social_search_with_checkpoints(
         env: Environment
         auto_delete: Whether to auto-delete users
         checkpoint_manager: Checkpoint manager instance
-        dry_run: Processing config parameter (unused - kept for interface consistency)
-        batch_timeout: Processing config parameter (unused - kept for interface consistency)
-        connection_filter: Processing config parameter (unused - kept for interface consistency)
-        include_inactive: Processing config parameter (unused - kept for interface consistency)
-        verify_results: Processing config parameter (unused - kept for interface consistency)
-        **custom_params: Custom parameters from ProcessingConfig (unused - kept for interface consistency)
+        **_kwargs: Additional params from ProcessingConfig (unused by this operation)
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
@@ -1286,7 +1274,7 @@ def _process_final_social_search_results(
     total_processed = len(checkpoint.processed_items) + len(checkpoint.remaining_items)
 
     # Categorize users based on their identity configuration
-    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
+    users_to_delete, identities_to_unlink, auth0_main_protected = categorize_users(
         found_users, auto_delete
     )
 
@@ -1312,7 +1300,7 @@ def _process_final_social_search_results(
     )
 
 
-def _search_batch_social_ids(
+def search_batch_social_ids(
     social_ids: list[str], token: str, base_url: str
 ) -> tuple[list[dict[str, Any]], list[str]]:
     """Search for users with a batch of social media IDs.
@@ -1328,28 +1316,27 @@ def _search_batch_social_ids(
     found_users = []
     not_found_ids = []
 
-    for idx, social_id in enumerate(social_ids, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(social_ids), "Searching social IDs") as advance:
+        for social_id in social_ids:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(social_ids), "Searching social IDs")
+            social_id = SecurityValidator.sanitize_user_input(social_id)
+            if not social_id:
+                advance()
+                continue
 
-        # Search for users with this social ID
-        users_found = _search_single_social_id(social_id, token, base_url)
-        if users_found:
-            # Add social_id to each user for later processing
-            for user in users_found:
-                user["social_id"] = social_id
-            found_users.extend(users_found)
-        else:
-            # Sanitize social ID before adding to not found list
-            from ..utils.validators import SecurityValidator
+            # Search for users with this social ID
+            users_found = _search_single_social_id(social_id, token, base_url)
+            if users_found:
+                # Add social_id to each user for later processing
+                for user in users_found:
+                    user["social_id"] = social_id
+                found_users.extend(users_found)
+            else:
+                not_found_ids.append(social_id)
 
-            sanitized_id = SecurityValidator.sanitize_user_input(social_id)
-            if sanitized_id:
-                not_found_ids.append(sanitized_id)
-
-    clear_progress_line()
+            advance()
     return found_users, not_found_ids
 
 
@@ -1465,35 +1452,19 @@ def _process_check_unblocked_with_checkpoints(
     token: str,
     base_url: str,
     checkpoint_manager: CheckpointManager,
-    env: str | None = None,  # Ignored for check operations
-    auto_delete: bool | None = None,  # Ignored for check operations
-    dry_run: bool = False,  # Processing config parameter
-    batch_timeout: int | None = None,  # Processing config parameter
-    connection_filter: str | None = None,  # Processing config parameter
-    include_inactive: bool = False,  # Processing config parameter
-    verify_results: bool = True,  # Processing config parameter
-    **custom_params: Any,  # Custom parameters from ProcessingConfig
+    **_kwargs: Any,
 ) -> str | None:
     """Process check unblocked users with checkpoints.
 
-    This function is part of a generic interface system where all process functions
-    receive the same set of parameters from ProcessingConfig via _execute_with_checkpoints.
-    Only the first four parameters are used by this specific operation; the remaining
-    parameters are kept for interface consistency but are not used in the function body.
+    Called via _execute_with_checkpoints which unpacks ProcessingConfig params
+    as keyword arguments. Unused params are absorbed by **_kwargs.
 
     Args:
         checkpoint: Checkpoint to process
         token: Auth0 access token
         base_url: Auth0 API base URL
         checkpoint_manager: Checkpoint manager instance
-        env: Environment (unused - kept for interface consistency)
-        auto_delete: Auto-delete flag (unused - kept for interface consistency)
-        dry_run: Processing config parameter (unused - kept for interface consistency)
-        batch_timeout: Processing config parameter (unused - kept for interface consistency)
-        connection_filter: Processing config parameter (unused - kept for interface consistency)
-        include_inactive: Processing config parameter (unused - kept for interface consistency)
-        verify_results: Processing config parameter (unused - kept for interface consistency)
-        **custom_params: Custom parameters from ProcessingConfig (unused - kept for interface consistency)
+        **_kwargs: Additional params from ProcessingConfig (unused by this operation)
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
@@ -1526,8 +1497,6 @@ def _display_check_unblocked_results(unblocked_users: list[str]) -> None:
     Args:
         unblocked_users: List of unblocked user IDs
     """
-    clear_progress_line()
-
     if unblocked_users:
         print_warning(
             f"Found {len(unblocked_users)} unblocked users:",
@@ -1554,32 +1523,33 @@ def _check_batch_unblocked_users(
         List[str]: List of unblocked user IDs
     """
     unblocked = []
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+        "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
+    }
 
-    for idx, user_id in enumerate(user_ids, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(user_ids), "Checking users") as advance:
+        for user_id in user_ids:
+            if shutdown_requested():
+                break
 
-        url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "User-Agent": "DeletePy/1.0 (Auth0 User Management Tool)",
-        }
+            url = f"{base_url}/api/v2/users/{secure_url_encode(user_id, 'user ID')}"
 
-        try:
-            response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
-            response.raise_for_status()
-            user_data = response.json()
-            if not user_data.get("blocked", False):
-                unblocked.append(user_id)
-            show_progress(idx, len(user_ids), "Checking users")
-            time.sleep(API_RATE_LIMIT)
-        except requests.exceptions.RequestException as e:
-            print_error(
-                f"Error checking user {user_id}: {e}",
-                user_id=user_id,
-                operation="check_blocked",
-            )
-            continue
+            try:
+                response = requests.get(url, headers=headers, timeout=API_TIMEOUT)
+                response.raise_for_status()
+                user_data = response.json()
+                if not user_data.get("blocked", False):
+                    unblocked.append(user_id)
+                time.sleep(API_RATE_LIMIT)
+            except requests.exceptions.RequestException as e:
+                print_error(
+                    f"Error checking user {user_id}: {e}",
+                    user_id=user_id,
+                    operation="check_blocked",
+                )
+
+            advance()
 
     return unblocked

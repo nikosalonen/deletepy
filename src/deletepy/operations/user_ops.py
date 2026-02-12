@@ -11,6 +11,7 @@ from ..models.checkpoint import (
     CheckpointStatus,
     OperationType,
 )
+from ..utils.auth_utils import validate_auth0_user_id
 from ..utils.checkpoint_manager import CheckpointManager
 from ..utils.checkpoint_utils import (
     CheckpointConfig,
@@ -22,10 +23,11 @@ from ..utils.checkpoint_utils import (
 from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _checkpoint_interruption_handler,
 )
-from ..utils.display_utils import clear_progress_line, show_progress, shutdown_requested
+from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.request_utils import make_rate_limited_request
 from ..utils.url_utils import secure_url_encode
+from ..utils.validators import SecurityValidator
 
 
 def delete_user(user_id: str, token: str, base_url: str) -> None:
@@ -993,38 +995,38 @@ def _process_users_in_batch(
     Returns:
         dict: Updated results dictionary
     """
-    from ..utils.display_utils import shutdown_requested
-    from ..utils.output import print_error
+    with live_progress(len(user_ids), f"Processing {operation}") as advance:
+        for user_id in user_ids:
+            if shutdown_requested():
+                break
 
-    for idx, user_id in enumerate(user_ids, 1):
-        if shutdown_requested():
-            break
+            # Sanitize user input first
+            user_id = SecurityValidator.sanitize_user_input(user_id)
+            if not user_id:
+                advance()
+                continue
 
-        show_progress(idx, len(user_ids), f"Processing {operation}")
-
-        # Sanitize user input first
-        from ..utils.validators import SecurityValidator
-
-        user_id = SecurityValidator.sanitize_user_input(user_id)
-
-        # Resolve user identifier
-        resolved_user_id = _resolve_user_identifier_for_batch(
-            user_id, token, base_url, results
-        )
-
-        if resolved_user_id is None:
-            results["skipped_count"] += 1
-            continue
-
-        # Perform the operation
-        try:
-            _execute_user_operation(
-                operation, resolved_user_id, token, base_url, rotate_password
+            # Resolve user identifier
+            resolved_user_id = _resolve_user_identifier_for_batch(
+                user_id, token, base_url, results
             )
-            results["processed_count"] += 1
-        except Exception as e:
-            print_error(f"\nFailed to {operation} user {resolved_user_id}: {e}")
-            results["skipped_count"] += 1
+
+            if resolved_user_id is None:
+                results["skipped_count"] += 1
+                advance()
+                continue
+
+            # Perform the operation
+            try:
+                _execute_user_operation(
+                    operation, resolved_user_id, token, base_url, rotate_password
+                )
+                results["processed_count"] += 1
+            except Exception as e:
+                print_error(f"Failed to {operation} user {resolved_user_id}: {e}")
+                results["skipped_count"] += 1
+
+            advance()
 
     return results
 
@@ -1061,7 +1063,6 @@ def _process_user_batch(
         user_ids, token, base_url, operation, results, rotate_password
     )
 
-    clear_progress_line()
     return results
 
 
@@ -1079,8 +1080,6 @@ def _resolve_user_identifier_for_batch(
     Returns:
         Optional[str]: Valid user ID if found, None if should skip
     """
-    from ..utils.auth_utils import validate_auth0_user_id
-
     # If input is an email, resolve to user_id
     if "@" in user_id and user_id.count("@") == 1 and len(user_id.split("@")[1]) > 0:
         resolved_ids = get_user_id_from_email(user_id, token, base_url)

@@ -20,11 +20,11 @@ sync: ## [uv] Install/sync dependencies from lockfile
 	uv sync
 
 sync-dev: ## [uv] Install/sync with dev dependencies (recommended)
-	uv sync --group dev
+	uv sync --extra dev
 
 upgrade: ## [uv] Upgrade dependencies and sync
 	uv lock --upgrade
-	uv sync --group dev
+	uv sync --extra dev
 
 run: ## [uv] Run deletepy with uv (usage: make run ARGS="doctor dev")
 	uv run deletepy $(ARGS)

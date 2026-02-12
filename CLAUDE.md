@@ -62,11 +62,11 @@ The tool requires a `.env` file with separate credentials for dev and prod:
 
 ```bash
 # Install dependencies with uv (creates .venv automatically)
-uv sync --group dev
+uv sync --extra dev
 
 # Or use a specific Python version (e.g., 3.14)
 uv python install 3.14
-uv sync --python 3.14 --group dev
+uv sync --python 3.14 --extra dev
 
 # Or using make
 make sync-dev

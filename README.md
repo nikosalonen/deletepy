@@ -149,7 +149,7 @@ uv python install 3.14
 uv python install 3.11
 
 # Use a specific Python version when creating the environment
-uv sync --python 3.14 --group dev
+uv sync --python 3.14 --extra dev
 ```
 
 **Alternative version managers:**
@@ -173,10 +173,10 @@ cd deletepy
 uv python install 3.14
 
 # Install dependencies with uv (creates .venv automatically)
-uv sync --group dev
+uv sync --extra dev
 
 # Or use a specific Python version
-uv sync --python 3.14 --group dev
+uv sync --python 3.14 --extra dev
 
 # Verify setup
 uv run deletepy doctor dev
@@ -709,7 +709,7 @@ The tool requires appropriate Auth0 Management API scopes:
 
 ```bash
 # Install with development dependencies
-uv sync --group dev
+uv sync --extra dev
 
 # Or using make
 make sync-dev

@@ -23,14 +23,11 @@ from ..utils.checkpoint_utils import (
 from ..utils.checkpoint_utils import (
     try_load_checkpoint,
 )
-from ..utils.display_utils import (
-    show_progress,
-    shutdown_requested,
-)
+from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.logging_utils import get_logger, user_output, user_output_config
 from ..utils.output import print_info, print_success, print_warning
 from ..utils.validators import InputValidator
-from .user_ops import get_user_details, get_users_by_email
+from .user_ops import get_user_details, get_user_email, get_users_by_email
 
 logger = get_logger(__name__)
 
@@ -195,7 +192,6 @@ def _process_email_batch(
     token: str,
     base_url: str,
     connection: str | None,
-    batch_start: int,
     batch_number: int,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Process a batch of email addresses.
@@ -205,7 +201,6 @@ def _process_email_batch(
         token: Auth0 access token
         base_url: Auth0 API base URL
         connection: Optional connection filter
-        batch_start: Starting index of this batch
         batch_number: Batch number for display
 
     Returns:
@@ -219,31 +214,32 @@ def _process_email_batch(
         "error_count": 0,
     }
 
-    for idx, email in enumerate(batch_emails, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(batch_emails), f"Batch {batch_number}") as advance:
+        for email in batch_emails:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(batch_emails), f"Batch {batch_number}")
-
-        user_data_list, email_counters = _fetch_user_data(
-            email, token, base_url, connection
-        )
-
-        # Update batch counters
-        for key in batch_counters:
-            batch_counters[key] += email_counters[key]
-
-        # Build CSV data for each user found
-        for user_details in user_data_list:
-            csv_row = _build_csv_data_dict(
-                email, user_details.get("user_id", ""), user_details, "Found"
+            user_data_list, email_counters = _fetch_user_data(
+                email, token, base_url, connection
             )
-            csv_data.append(csv_row)
 
-        # If no users found, add a row with "Not Found" status
-        if not user_data_list and email_counters["not_found_count"] > 0:
-            csv_row = _build_csv_data_dict(email, "", None, "Not Found")
-            csv_data.append(csv_row)
+            # Update batch counters
+            for key in batch_counters:
+                batch_counters[key] += email_counters[key]
+
+            # Build CSV data for each user found
+            for user_details in user_data_list:
+                csv_row = _build_csv_data_dict(
+                    email, user_details.get("user_id", ""), user_details, "Found"
+                )
+                csv_data.append(csv_row)
+
+            # If no users found, add a row with "Not Found" status
+            if not user_data_list and email_counters["not_found_count"] > 0:
+                csv_row = _build_csv_data_dict(email, "", None, "Not Found")
+                csv_data.append(csv_row)
+
+            advance()
 
     return csv_data, batch_counters
 
@@ -400,7 +396,7 @@ def _build_csv_data_dict(
 
     if user_details is None:
         return {
-            "email": display_email if "@" in email else display_email,
+            "email": display_email,
             "user_id": user_id,
             "connection": "",
             "last_login": "",
@@ -655,11 +651,9 @@ def _process_export_with_checkpoints(
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
     """
     batch_size = checkpoint.progress.batch_size
-    connection = checkpoint.config.connection_filter
-    output_file = checkpoint.config.output_file
 
     # Validate output_file is not None (should be guaranteed by validation)
-    if output_file is None:
+    if checkpoint.config.output_file is None:
         raise ValueError(
             "output_file should be validated during checkpoint creation/loading"
         )
@@ -668,7 +662,9 @@ def _process_export_with_checkpoints(
 
     # Determine starting batch number and write mode
     current_batch_num = checkpoint.progress.current_batch + 1
-    write_headers = current_batch_num == 1 or not Path(output_file).exists()
+    write_headers = (
+        current_batch_num == 1 or not Path(checkpoint.config.output_file).exists()
+    )
 
     # Process remaining emails in batches
     remaining_emails = checkpoint.remaining_items.copy()
@@ -682,64 +678,94 @@ def _process_export_with_checkpoints(
         batch_end = min(batch_start + batch_size, len(remaining_emails))
         batch_emails = remaining_emails[batch_start:batch_end]
 
-        total_batches = checkpoint.progress.total_batches
-
-        print_info(
-            f"\nProcessing batch {current_batch_num}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_emails)} remaining)"
+        result = _process_single_export_batch(
+            batch_emails,
+            token,
+            base_url,
+            current_batch_num,
+            checkpoint,
+            checkpoint_manager,
+            write_headers,
         )
+        if result is not None:
+            return result
 
-        # Process this batch
-        batch_csv_data, batch_counters = _process_email_batch(
-            batch_emails, token, base_url, connection, batch_start, current_batch_num
-        )
-
-        user_output("")  # Clear progress line
-
-        # Write batch to CSV
-        mode = "w" if write_headers else "a"
-        success = _write_csv_batch(
-            batch_csv_data, output_file, current_batch_num, mode, write_headers
-        )
-
-        if not success:
-            error_msg = f"Failed to write CSV batch {current_batch_num}"
-            checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
-            checkpoint_manager.save_checkpoint(checkpoint)
-            return checkpoint.checkpoint_id
-
-        # Update checkpoint progress
-        results_update = {
-            "processed_count": batch_counters.get("processed_count", 0),
-            "not_found_count": batch_counters.get("not_found_count", 0),
-            "multiple_users_count": batch_counters.get("multiple_users_count", 0),
-            "error_count": batch_counters.get("error_count", 0),
-        }
-
-        checkpoint_manager.update_checkpoint_progress(
-            checkpoint=checkpoint,
-            processed_items=batch_emails,
-            results_update=results_update,
-        )
-
-        # Save checkpoint after each batch
-        checkpoint_manager.save_checkpoint(checkpoint)
-
-        write_headers = False  # Only write headers for first batch
+        write_headers = False
         current_batch_num += 1
 
-    # Mark checkpoint as completed
+    _finalize_export(checkpoint, checkpoint_manager)
+    return None
+
+
+def _process_single_export_batch(
+    batch_emails: list[str],
+    token: str,
+    base_url: str,
+    current_batch_num: int,
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    write_headers: bool,
+) -> str | None:
+    """Process a single export batch: fetch, write CSV, and update checkpoint.
+
+    Returns:
+        Checkpoint ID if the batch write failed, None on success.
+    """
+    connection = checkpoint.config.connection_filter
+    output_file = checkpoint.config.output_file
+    assert output_file is not None  # validated by caller
+    total_batches = checkpoint.progress.total_batches
+    print_info(
+        f"\nProcessing batch {current_batch_num}/{total_batches} "
+        f"({len(batch_emails)} emails)"
+    )
+
+    batch_csv_data, batch_counters = _process_email_batch(
+        batch_emails, token, base_url, connection, current_batch_num
+    )
+
+    mode = "w" if write_headers else "a"
+    success = _write_csv_batch(
+        batch_csv_data, output_file, current_batch_num, mode, write_headers
+    )
+
+    if not success:
+        error_msg = f"Failed to write CSV batch {current_batch_num}"
+        checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
+        checkpoint_manager.save_checkpoint(checkpoint)
+        return checkpoint.checkpoint_id
+
+    results_update = {
+        "processed_count": batch_counters.get("processed_count", 0),
+        "not_found_count": batch_counters.get("not_found_count", 0),
+        "multiple_users_count": batch_counters.get("multiple_users_count", 0),
+        "error_count": batch_counters.get("error_count", 0),
+    }
+
+    checkpoint_manager.update_checkpoint_progress(
+        checkpoint=checkpoint,
+        processed_items=batch_emails,
+        results_update=results_update,
+    )
+    checkpoint_manager.save_checkpoint(checkpoint)
+    return None
+
+
+def _finalize_export(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+) -> None:
+    """Mark export checkpoint as completed and display summary."""
+    output_file = checkpoint.config.output_file
+    assert output_file is not None  # validated by caller
     checkpoint.status = CheckpointStatus.COMPLETED
     checkpoint_manager.save_checkpoint(checkpoint)
-
-    # Generate final summary
     _generate_export_summary_from_checkpoint(checkpoint, output_file)
-
     print_success(
         f"Export completed! Checkpoint: {checkpoint.checkpoint_id}",
         operation="export_complete",
         checkpoint_id=checkpoint.checkpoint_id,
     )
-    return None  # Operation completed successfully
 
 
 def _generate_export_summary_from_checkpoint(
@@ -1113,10 +1139,9 @@ def _process_fetch_emails_with_checkpoints(
     """
 
     batch_size = checkpoint.progress.batch_size
-    output_file = checkpoint.config.output_file
 
     # Validate output_file is not None
-    if output_file is None:
+    if checkpoint.config.output_file is None:
         raise ValueError(
             "output_file should be validated during checkpoint creation/loading"
         )
@@ -1125,7 +1150,9 @@ def _process_fetch_emails_with_checkpoints(
 
     # Determine starting batch number and write mode
     current_batch_num = checkpoint.progress.current_batch + 1
-    write_headers = current_batch_num == 1 or not Path(output_file).exists()
+    write_headers = (
+        current_batch_num == 1 or not Path(checkpoint.config.output_file).exists()
+    )
 
     # Process remaining user IDs in batches
     remaining_user_ids = checkpoint.remaining_items.copy()
@@ -1141,70 +1168,98 @@ def _process_fetch_emails_with_checkpoints(
         batch_end = min(batch_start + batch_size, len(remaining_user_ids))
         batch_user_ids = remaining_user_ids[batch_start:batch_end]
 
-        total_batches = checkpoint.progress.total_batches
-
-        print_info(
-            f"\nProcessing batch {current_batch_num}/{total_batches} ({batch_start + 1}-{batch_end} of {len(remaining_user_ids)} remaining)"
+        result = _process_single_fetch_batch(
+            batch_user_ids,
+            token,
+            base_url,
+            current_batch_num,
+            checkpoint,
+            checkpoint_manager,
+            write_headers,
         )
+        if result is not None:
+            return result
 
-        # Process this batch
-        batch_csv_data, batch_counters = _process_user_id_batch(
-            batch_user_ids, token, base_url, batch_start, current_batch_num
-        )
-
-        user_output("")  # Clear progress line
-
-        # Write batch to CSV
-        mode = "w" if write_headers else "a"
-        success = _write_fetch_csv_batch(
-            batch_csv_data, output_file, current_batch_num, mode, write_headers
-        )
-
-        if not success:
-            error_msg = f"Failed to write CSV batch {current_batch_num}"
-            checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
-            checkpoint_manager.save_checkpoint(checkpoint)
-            return checkpoint.checkpoint_id
-
-        # Update checkpoint progress
-        results_update = {
-            "processed_count": batch_counters.get("processed_count", 0),
-            "not_found_count": batch_counters.get("not_found_count", 0),
-            "error_count": batch_counters.get("error_count", 0),
-        }
-
-        checkpoint_manager.update_checkpoint_progress(
-            checkpoint=checkpoint,
-            processed_items=batch_user_ids,
-            results_update=results_update,
-        )
-
-        # Save checkpoint after each batch
-        checkpoint_manager.save_checkpoint(checkpoint)
-
-        write_headers = False  # Only write headers for first batch
+        write_headers = False
         current_batch_num += 1
 
-    # Mark checkpoint as completed
+    _finalize_fetch_emails(checkpoint, checkpoint_manager)
+    return None
+
+
+def _process_single_fetch_batch(
+    batch_user_ids: list[str],
+    token: str,
+    base_url: str,
+    current_batch_num: int,
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+    write_headers: bool,
+) -> str | None:
+    """Process a single fetch-emails batch: fetch, write CSV, and update checkpoint.
+
+    Returns:
+        Checkpoint ID if the batch write failed, None on success.
+    """
+    output_file = checkpoint.config.output_file
+    assert output_file is not None  # validated by caller
+    total_batches = checkpoint.progress.total_batches
+    print_info(
+        f"\nProcessing batch {current_batch_num}/{total_batches} "
+        f"({len(batch_user_ids)} user IDs)"
+    )
+
+    batch_csv_data, batch_counters = _process_user_id_batch(
+        batch_user_ids, token, base_url, current_batch_num
+    )
+
+    mode = "w" if write_headers else "a"
+    success = _write_fetch_csv_batch(
+        batch_csv_data, output_file, current_batch_num, mode, write_headers
+    )
+
+    if not success:
+        error_msg = f"Failed to write CSV batch {current_batch_num}"
+        checkpoint_manager.mark_checkpoint_failed(checkpoint, error_msg)
+        checkpoint_manager.save_checkpoint(checkpoint)
+        return checkpoint.checkpoint_id
+
+    results_update = {
+        "processed_count": batch_counters.get("processed_count", 0),
+        "not_found_count": batch_counters.get("not_found_count", 0),
+        "error_count": batch_counters.get("error_count", 0),
+    }
+
+    checkpoint_manager.update_checkpoint_progress(
+        checkpoint=checkpoint,
+        processed_items=batch_user_ids,
+        results_update=results_update,
+    )
+    checkpoint_manager.save_checkpoint(checkpoint)
+    return None
+
+
+def _finalize_fetch_emails(
+    checkpoint: Checkpoint,
+    checkpoint_manager: CheckpointManager,
+) -> None:
+    """Mark fetch-emails checkpoint as completed and display summary."""
+    output_file = checkpoint.config.output_file
+    assert output_file is not None  # validated by caller
     checkpoint.status = CheckpointStatus.COMPLETED
     checkpoint_manager.save_checkpoint(checkpoint)
-
-    # Generate final summary
     _generate_fetch_summary_from_checkpoint(checkpoint, output_file)
-
     print_success(
         f"Fetch emails completed! Checkpoint: {checkpoint.checkpoint_id}",
         operation="fetch_emails_complete",
         checkpoint_id=checkpoint.checkpoint_id,
     )
-    return None  # Operation completed successfully
 
 
 def _process_user_id_batch(
     batch_user_ids: list[str],
     token: str,
     base_url: str,
-    batch_start: int,
     batch_number: int,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Process a batch of user IDs to fetch emails.
@@ -1213,63 +1268,61 @@ def _process_user_id_batch(
         batch_user_ids: List of user IDs to process
         token: Auth0 access token
         base_url: Auth0 API base URL
-        batch_start: Starting index of this batch
         batch_number: Batch number for display
 
     Returns:
         Tuple[List[Dict[str, Any]], Dict[str, int]]: (csv_data, batch_counters)
     """
-    from deletepy.operations.user_ops import get_user_email
-
-    csv_data = []
+    csv_data: list[dict[str, Any]] = []
     batch_counters = {
         "processed_count": 0,
         "not_found_count": 0,
         "error_count": 0,
     }
 
-    for idx, user_id in enumerate(batch_user_ids, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(batch_user_ids), f"Batch {batch_number}") as advance:
+        for user_id in batch_user_ids:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(batch_user_ids), f"Batch {batch_number}")
-
-        try:
-            email = get_user_email(user_id, token, base_url)
-
-            if email:
-                csv_row = {
-                    "user_id": user_id,
-                    "email": email,
-                    "status": "Found",
-                }
-                batch_counters["processed_count"] += 1
-            else:
-                csv_row = {
-                    "user_id": user_id,
-                    "email": "",
-                    "status": "Not Found",
-                }
-                batch_counters["not_found_count"] += 1
-
-            csv_data.append(csv_row)
-
-        except Exception as e:
-            logger.error(
-                "Error processing user %s: %s",
-                user_id,
-                str(e),
-                extra={"user_id": user_id, "operation": "fetch_email", "error": str(e)},
-            )
-            csv_row = {
-                "user_id": user_id,
-                "email": "",
-                "status": f"Error: {str(e)}",
-            }
-            csv_data.append(csv_row)
-            batch_counters["error_count"] += 1
+            row, counter_key = _fetch_and_build_csv_row(user_id, token, base_url)
+            csv_data.append(row)
+            batch_counters[counter_key] += 1
+            advance()
 
     return csv_data, batch_counters
+
+
+def _fetch_and_build_csv_row(
+    user_id: str, token: str, base_url: str
+) -> tuple[dict[str, Any], str]:
+    """Fetch a user's email and build a CSV row.
+
+    Returns:
+        Tuple of (csv_row, counter_key) where counter_key is
+        'processed_count', 'not_found_count', or 'error_count'.
+    """
+    try:
+        email = get_user_email(user_id, token, base_url)
+        if email:
+            return {
+                "user_id": user_id,
+                "email": email,
+                "status": "Found",
+            }, "processed_count"
+        return {
+            "user_id": user_id,
+            "email": "",
+            "status": "Not Found",
+        }, "not_found_count"
+    except Exception as e:
+        logger.error(
+            "Error processing user %s: %s",
+            user_id,
+            str(e),
+            extra={"user_id": user_id, "operation": "fetch_email", "error": str(e)},
+        )
+        return {"user_id": user_id, "email": "", "status": "Error"}, "error_count"
 
 
 def _write_fetch_csv_batch(

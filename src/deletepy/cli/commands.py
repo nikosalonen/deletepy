@@ -6,14 +6,6 @@ from pathlib import Path
 from typing import Any, cast
 
 import click
-from rich.progress import (
-    BarColumn,
-    MofNCompleteColumn,
-    Progress,
-    TextColumn,
-    TimeElapsedColumn,
-    TimeRemainingColumn,
-)
 
 from ..core.auth import get_access_token
 from ..core.config import get_base_url
@@ -47,9 +39,9 @@ from ..utils.display_utils import (
     RESET,
     YELLOW,
     confirm_action,
+    live_progress,
 )
 from ..utils.file_utils import read_user_ids_generator
-from ..utils.rich_utils import get_console
 
 
 class OperationHandler:
@@ -107,24 +99,12 @@ class OperationHandler:
         """
         click.echo(f"\n{CYAN}Fetching user emails...{RESET}")
         emails = []
-        console = get_console()
-        task_description = "Fetching emails"
-        with Progress(
-            TextColumn("{task.description}", style="info"),
-            BarColumn(),
-            MofNCompleteColumn(),
-            TextColumn("|"),
-            TimeElapsedColumn(),
-            TextColumn("remaining"),
-            TimeRemainingColumn(),
-            console=console,
-        ) as progress:
-            task_id = progress.add_task(task_description, total=len(user_ids))
+        with live_progress(len(user_ids), "Fetching emails") as advance:
             for user_id in user_ids:
                 email = get_user_email(user_id, token, base_url)
                 if email:
                     emails.append(email)
-                progress.advance(task_id)
+                advance()
         return emails
 
     def _calculate_export_parameters(self, num_emails: int) -> tuple[int, float]:
@@ -187,7 +167,9 @@ class OperationHandler:
             "revoke-grants-only": "Revoking grants and sessions",
         }.get(operation, "Processing users")
 
-    def _confirm_production_operation(self, operation: str, total_users: int, rotate_password: bool = False) -> bool:
+    def _confirm_production_operation(
+        self, operation: str, total_users: int, rotate_password: bool = False
+    ) -> bool:
         """Confirm production operation with user.
 
         Args:
@@ -589,7 +571,12 @@ class OperationHandler:
             self._handle_operation_error(e, "Fetch emails")
 
     def handle_user_operations(
-        self, input_file: Path, env: str, operation: str, dry_run: bool = False, rotate_password: bool = False
+        self,
+        input_file: Path,
+        env: str,
+        operation: str,
+        dry_run: bool = False,
+        rotate_password: bool = False,
     ) -> None:
         """Handle user operations (block, delete, revoke-grants-only)."""
         try:

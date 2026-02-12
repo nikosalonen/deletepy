@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 from rich.console import Console
@@ -11,6 +12,7 @@ from rich.theme import Theme
 from rich.traceback import install as rich_traceback_install
 
 _console: Console | None = None
+_stderr_console: Console | None = None
 
 # Custom theme for consistent styling
 DELETEPY_THEME = Theme(
@@ -37,6 +39,26 @@ def get_console() -> Console:
     if _console is None:
         _console = Console(theme=DELETEPY_THEME, highlight=False, soft_wrap=False)
     return _console
+
+
+def get_stderr_console() -> Console:
+    """Return a shared Rich Console instance writing to stderr.
+
+    This console is shared between RichHandler (logging) and Progress (live bar)
+    so that log messages render above the pinned progress bar automatically.
+
+    Creates the console on first use.
+    """
+    global _stderr_console
+    if _stderr_console is None:
+        _stderr_console = Console(
+            stderr=True,
+            theme=DELETEPY_THEME,
+            highlight=False,
+            soft_wrap=True,
+            force_terminal=sys.stderr.isatty(),
+        )
+    return _stderr_console
 
 
 def install_rich_tracebacks() -> None:

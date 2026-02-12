@@ -2,21 +2,20 @@
 
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
+
+from rich.panel import Panel
 
 from ..core.config import API_RATE_LIMIT
 from ..utils.auth_utils import validate_auth0_user_id
 from ..utils.display_utils import (
-    CYAN,
-    GREEN,
-    RED,
-    RESET,
-    YELLOW,
-    clear_progress_line,
-    show_progress,
+    live_progress,
     shutdown_requested,
 )
+from ..utils.output import print_error, print_info, print_warning
+from ..utils.rich_utils import create_table, get_console, print_table
+from ..utils.validators import SecurityValidator
 from .user_ops import get_user_details, get_user_id_from_email
 
 
@@ -78,72 +77,119 @@ def preview_user_operations(
     """
     result = PreviewResult(operation=operation, total_users=len(user_ids))
 
-    print(f"\n{YELLOW}🔍 DRY RUN PREVIEW - {operation.upper()} OPERATION{RESET}")
-    print(f"Analyzing {len(user_ids)} users...")
+    console = get_console()
+    console.print(
+        f"\n[warning]🔍 DRY RUN PREVIEW — {operation.upper()}[/warning]"
+        f"  [muted]({len(user_ids)} users)[/muted]"
+    )
 
-    for idx, user_id in enumerate(user_ids, 1):
-        if shutdown_requested():
-            break
+    with live_progress(len(user_ids), f"Analyzing users for {operation}") as advance:
+        for user_id in user_ids:
+            if shutdown_requested():
+                break
 
-        show_progress(idx, len(user_ids), f"Analyzing users for {operation}")
+            user_id = SecurityValidator.sanitize_user_input(user_id)
+            if not user_id:
+                advance()
+                continue
 
-        # Clean and sanitize the user ID
-        from ..utils.validators import SecurityValidator
+            resolved_user_id = _resolve_user_identifier(
+                user_id, token, base_url, result
+            )
 
-        user_id = SecurityValidator.sanitize_user_input(user_id)
-
-        # Resolve user identifier
-        resolved_user_id = _resolve_user_identifier(user_id, token, base_url, result)
-
-        if resolved_user_id:
-            try:
-                # Get user details to check current state
-                user_details = get_user_details(resolved_user_id, token, base_url)
-                # Rate limiting after API call
-                time.sleep(API_RATE_LIMIT)
-
-                if user_details:
-                    # Check if user is already in target state
-                    if _should_skip_user(user_details, operation):
-                        result.blocked_users.append(resolved_user_id)
-                    else:
-                        result.valid_users.append(
-                            {
-                                "user_id": resolved_user_id,
-                                "email": user_details.get("email", ""),
-                                "connection": _get_user_connection(user_details),
-                                "blocked": user_details.get("blocked", False),
-                                "last_login": user_details.get("last_login", ""),
-                                "created_at": user_details.get("created_at", ""),
-                            }
-                        )
-                else:
-                    result.errors.append(
-                        {
-                            "identifier": user_id,
-                            "error": "Could not fetch user details",
-                            "timestamp": datetime.utcnow().isoformat(),
-                            "operation": operation,
-                            "error_type": "user_details_fetch_failed",
-                        }
-                    )
-            except Exception as e:
-                result.errors.append(
-                    {
-                        "identifier": user_id,
-                        "error": f"API error: {str(e)}",
-                        "timestamp": datetime.utcnow().isoformat(),
-                        "operation": operation,
-                        "error_type": "api_exception",
-                    }
+            if resolved_user_id:
+                _process_resolved_user(
+                    user_id, resolved_user_id, token, base_url, result
                 )
 
-    clear_progress_line()
+            advance()
 
     if show_details:
         _display_preview_results(result)
 
     return result
+
+
+def _process_resolved_user(
+    original_id: str,
+    resolved_user_id: str,
+    token: str,
+    base_url: str,
+    result: PreviewResult,
+) -> None:
+    """Fetch user details and classify into valid, blocked, or error."""
+    operation = result.operation
+    try:
+        user_details = get_user_details(resolved_user_id, token, base_url)
+        time.sleep(API_RATE_LIMIT)
+
+        if not user_details:
+            print_warning(
+                f"Could not fetch details for {resolved_user_id}",
+                user_id=resolved_user_id,
+                operation=operation,
+            )
+            result.errors.append(
+                {
+                    "identifier": original_id,
+                    "error": "Could not fetch user details",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "operation": operation,
+                    "error_type": "user_details_fetch_failed",
+                }
+            )
+            return
+
+        _classify_user_result(resolved_user_id, user_details, result)
+    except Exception as e:
+        print_error(
+            f"API error for {original_id}: {e}",
+            user_id=original_id,
+            operation=operation,
+        )
+        result.errors.append(
+            {
+                "identifier": original_id,
+                "error": f"API error: {str(e)}",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "operation": operation,
+                "error_type": "api_exception",
+            }
+        )
+
+
+def _classify_user_result(
+    resolved_user_id: str,
+    user_details: dict[str, Any],
+    result: PreviewResult,
+) -> None:
+    """Classify a fetched user as valid or blocked and append to result."""
+    operation = result.operation
+    email = user_details.get("email", "")
+
+    if _should_skip_user(user_details, operation):
+        print_info(
+            f"Would skip {resolved_user_id} ({email}) - already in target state",
+            user_id=resolved_user_id,
+            operation=operation,
+        )
+        result.blocked_users.append(resolved_user_id)
+    else:
+        print_info(
+            f"Would {operation} {resolved_user_id} ({email})",
+            user_id=resolved_user_id,
+            operation=operation,
+        )
+        result.valid_users.append(
+            {
+                "user_id": resolved_user_id,
+                "email": email,
+                "connection": _get_user_connection(user_details),
+                "blocked": user_details.get("blocked", False),
+                "last_login": user_details.get("last_login", ""),
+                "created_at": user_details.get("created_at", ""),
+            }
+        )
 
 
 def _resolve_user_identifier(
@@ -174,7 +220,7 @@ def _resolve_user_identifier(
                 {
                     "identifier": user_id,
                     "error": f"Error resolving email: {str(e)}",
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(UTC).isoformat(),
                     "operation": result.operation,
                     "error_type": "email_resolution_failed",
                 }
@@ -210,105 +256,103 @@ def _get_user_connection(user_details: dict[str, Any]) -> str:
 
 
 def _display_preview_results(result: PreviewResult) -> None:
-    """Display detailed preview results."""
-    _display_preview_header(result)
-    _display_valid_users(result)
-    _display_skipped_users(result)
-    _display_error_categories(result)
+    """Display detailed preview results using Rich formatting."""
+    console = get_console()
 
-
-def _display_preview_header(result: PreviewResult) -> None:
-    """Display the preview results header with summary statistics."""
-    print(f"\n{GREEN}📊 DRY RUN PREVIEW RESULTS{RESET}")
-    print(f"Operation: {result.operation.upper()}")
-    print(f"Total users analyzed: {result.total_users}")
-    print(f"Would process: {CYAN}{result.success_count}{RESET}")
-    print(f"Would skip: {YELLOW}{result.skip_count}{RESET}")
-    print(
-        f"Success rate: {GREEN if result.success_rate > 90 else YELLOW}{result.success_rate:.1f}%{RESET}"
+    # --- Summary panel ---
+    rate_style = "success" if result.success_rate > 90 else "warning"
+    summary_lines = (
+        f"[bold]{result.operation.upper()}[/bold]\n"
+        f"\n"
+        f"  [muted]Total analyzed:[/muted]  [count]{result.total_users}[/count]\n"
+        f"  [muted]Would process:[/muted]   [success]{result.success_count}[/success]\n"
+        f"  [muted]Would skip:[/muted]      [warning]{result.skip_count}[/warning]\n"
+        f"  [muted]Success rate:[/muted]    [{rate_style}]{result.success_rate:.1f}%[/{rate_style}]"
     )
-
-
-def _display_valid_users(result: PreviewResult) -> None:
-    """Display users that would be successfully processed."""
-    if not result.valid_users:
-        return
-
-    print(
-        f"\n{GREEN}✅ Users that would be {result.operation}d ({len(result.valid_users)}):{RESET}"
-    )
-    for i, user in enumerate(result.valid_users[:10], 1):  # Show first 10
-        blocked_indicator = " (BLOCKED)" if user["blocked"] else ""
-        print(
-            f"  {i}. {user['user_id']} ({user['email']}) - {user['connection']}{blocked_indicator}"
+    console.print(
+        Panel(
+            summary_lines,
+            title="📊 Dry Run Results",
+            border_style="green",
+            expand=False,
         )
-
-    if len(result.valid_users) > 10:
-        print(f"  ... and {len(result.valid_users) - 10} more users")
-
-
-def _display_skipped_users(result: PreviewResult) -> None:
-    """Display users that would be skipped."""
-    _display_simple_list(
-        result.blocked_users, f"{YELLOW}⚠️  Users already in target state", limit=5
     )
 
+    # --- Valid users table ---
+    if result.valid_users:
+        table = create_table(
+            title=f"✅ Would {result.operation} ({len(result.valid_users)})",
+            columns=["#", "User ID", "Email", "Connection"],
+        )
+        for i, user in enumerate(result.valid_users[:10], 1):
+            blocked = " [warning](BLOCKED)[/warning]" if user["blocked"] else ""
+            table.add_row(
+                str(i),
+                f"[user_id]{user['user_id']}[/user_id]",
+                user["email"] + blocked,
+                f"[muted]{user['connection']}[/muted]",
+            )
+        if len(result.valid_users) > 10:
+            table.add_row(
+                "", f"[muted]… and {len(result.valid_users) - 10} more[/muted]", "", ""
+            )
+        print_table(table)
 
-def _display_error_categories(result: PreviewResult) -> None:
-    """Display all error categories (not found, invalid, multiple users, errors)."""
-    _display_simple_list(result.not_found_users, f"{RED}❌ Users not found", limit=5)
-
-    _display_simple_list(result.invalid_user_ids, f"{RED}❌ Invalid user IDs", limit=5)
-
+    # --- Skipped / errors ---
+    _display_item_table(result.blocked_users, "⚠ Already in target state")
+    _display_item_table(result.not_found_users, "✗ Not found")
+    _display_item_table(result.invalid_user_ids, "✗ Invalid user IDs")
     _display_multiple_users(result.multiple_users)
+    _display_error_table(result.errors)
 
-    _display_error_list(result.errors)
 
-
-def _display_simple_list(
-    items: list[str], header_template: str, limit: int = 5
-) -> None:
-    """Display a simple list of items with header and limit."""
+def _display_item_table(items: list[str], title: str, limit: int = 5) -> None:
+    """Display a short list of items as a compact table."""
     if not items:
         return
 
-    print(f"\n{header_template} ({len(items)}):{RESET}")
+    table = create_table(title=f"{title} ({len(items)})")
+    table.add_column("Identifier", style="user_id")
     for item in items[:limit]:
-        print(f"  - {item}")
-
+        table.add_row(item)
     if len(items) > limit:
-        print(f"  ... and {len(items) - limit} more")
+        table.add_row(f"[muted]… and {len(items) - limit} more[/muted]")
+    print_table(table)
 
 
 def _display_multiple_users(multiple_users: dict[str, list[str]]) -> None:
-    """Display emails with multiple users."""
+    """Display emails with multiple users as a table."""
     if not multiple_users:
         return
 
-    print(f"\n{YELLOW}⚠️  Emails with multiple users ({len(multiple_users)}):{RESET}")
-    for email, user_ids in list(multiple_users.items())[:3]:  # Show first 3
-        print(f"  - {email}:")
-        for uid in user_ids:
-            print(f"    • {uid}")
+    table = create_table(title=f"⚠ Emails with multiple users ({len(multiple_users)})")
+    table.add_column("Email")
+    table.add_column("User IDs")
+    for email, user_ids in list(multiple_users.items())[:5]:
+        table.add_row(email, ", ".join(user_ids))
+    if len(multiple_users) > 5:
+        table.add_row(f"[muted]… and {len(multiple_users) - 5} more[/muted]", "")
+    print_table(table)
 
-    if len(multiple_users) > 3:
-        print(f"  ... and {len(multiple_users) - 3} more")
 
-
-def _display_error_list(errors: list[dict[str, Any]]) -> None:
-    """Display error list with identifier, error message, timestamp, and error type."""
+def _display_error_table(errors: list[dict[str, Any]]) -> None:
+    """Display errors as a formatted table."""
     if not errors:
         return
 
-    print(f"\n{RED}❌ Errors ({len(errors)}):{RESET}")
-    for error in errors[:5]:  # Show first 5
-        timestamp = error.get("timestamp", "N/A")
-        error_type = error.get("error_type", "unknown")
-        print(f"  - {error['identifier']}: {error['error']}")
-        print(f"    ↳ Time: {timestamp[:19]} | Type: {error_type}")
-
+    table = create_table(title=f"✗ Errors ({len(errors)})")
+    table.add_column("Identifier", style="user_id")
+    table.add_column("Error")
+    table.add_column("Type", style="muted")
+    for error in errors[:5]:
+        table.add_row(
+            error["identifier"],
+            error["error"],
+            error.get("error_type", "unknown"),
+        )
     if len(errors) > 5:
-        print(f"  ... and {len(errors) - 5} more")
+        table.add_row(f"[muted]… and {len(errors) - 5} more[/muted]", "", "")
+    print_table(table)
 
 
 def preview_social_unlink_operations(
@@ -328,16 +372,19 @@ def preview_social_unlink_operations(
     Returns:
         dict: Preview results for social unlink operations
     """
-    from .batch_ops import _categorize_users, _search_batch_social_ids
+    from .batch_ops import categorize_users, search_batch_social_ids
 
-    print(f"\n{YELLOW}🔍 DRY RUN PREVIEW - SOCIAL UNLINK OPERATION{RESET}")
-    print(f"Analyzing {len(social_ids)} social IDs...")
+    console = get_console()
+    console.print(
+        f"\n[warning]🔍 DRY RUN PREVIEW — SOCIAL UNLINK[/warning]"
+        f"  [muted]({len(social_ids)} social IDs)[/muted]"
+    )
 
     # Search for users with each social ID
-    found_users, not_found_ids = _search_batch_social_ids(social_ids, token, base_url)
+    found_users, not_found_ids = search_batch_social_ids(social_ids, token, base_url)
 
     # Categorize users
-    users_to_delete, identities_to_unlink, auth0_main_protected = _categorize_users(
+    users_to_delete, identities_to_unlink, auth0_main_protected = categorize_users(
         found_users, auto_delete=True
     )
 
@@ -362,58 +409,50 @@ def preview_social_unlink_operations(
 
 def _display_social_preview_results(results: dict[str, Any]) -> None:
     """Display detailed preview results for social unlink operations."""
-    _display_social_header(results)
-    _display_social_operations(results)
-    _display_social_categories(results)
+    console = get_console()
 
-
-def _display_social_header(results: dict[str, Any]) -> None:
-    """Display social unlink preview header with summary statistics."""
-    print(f"\n{GREEN}📊 DRY RUN PREVIEW RESULTS - SOCIAL UNLINK{RESET}")
-    print(f"Total social IDs analyzed: {results['total_social_ids']}")
-    print(f"Users found: {results['found_users']}")
-    print(f"Social IDs not found: {results['not_found_ids']}")
-
-
-def _display_social_operations(results: dict[str, Any]) -> None:
-    """Display the operations that would be performed."""
-    print(f"\n{GREEN}Operations that would be performed:{RESET}")
-    print(f"  Users to delete: {CYAN}{results['users_to_delete']}{RESET}")
-    print(f"  Identities to unlink: {CYAN}{results['identities_to_unlink']}{RESET}")
-    print(f"  Protected users: {YELLOW}{results['auth0_main_protected']}{RESET}")
-
-
-def _display_social_categories(results: dict[str, Any]) -> None:
-    """Display detailed information for each category of social unlink operations."""
-    _display_social_user_list(
-        results["users_to_delete_list"],
-        f"{GREEN}Users that would be deleted:",
-        limit=10,
+    # --- Summary panel ---
+    summary_lines = (
+        f"[bold]SOCIAL UNLINK[/bold]\n"
+        f"\n"
+        f"  [muted]Total social IDs:[/muted]      [count]{results['total_social_ids']}[/count]\n"
+        f"  [muted]Users found:[/muted]            [success]{results['found_users']}[/success]\n"
+        f"  [muted]Not found:[/muted]              [warning]{results['not_found_ids']}[/warning]\n"
+        f"\n"
+        f"  [muted]Would delete:[/muted]           [info]{results['users_to_delete']}[/info]\n"
+        f"  [muted]Would unlink:[/muted]           [info]{results['identities_to_unlink']}[/info]\n"
+        f"  [muted]Protected (skipped):[/muted]    [warning]{results['auth0_main_protected']}[/warning]"
+    )
+    console.print(
+        Panel(
+            summary_lines,
+            title="📊 Dry Run Results",
+            border_style="green",
+            expand=False,
+        )
     )
 
-    _display_social_user_list(
-        results["identities_to_unlink_list"],
-        f"{YELLOW}Identities that would be unlinked:",
-        limit=10,
-    )
-
-    _display_social_user_list(
-        results["auth0_main_protected_list"],
-        f"{CYAN}Protected users (would be skipped):",
-        limit=10,
+    # --- Category tables ---
+    _display_social_user_table(results["users_to_delete_list"], "✅ Would delete")
+    _display_social_user_table(results["identities_to_unlink_list"], "🔗 Would unlink")
+    _display_social_user_table(
+        results["auth0_main_protected_list"], "🛡 Protected (skipped)"
     )
 
 
-def _display_social_user_list(
-    user_list: list[dict[str, str]], header: str, limit: int = 10
+def _display_social_user_table(
+    user_list: list[dict[str, str]], title: str, limit: int = 10
 ) -> None:
-    """Display a list of social users with their details."""
+    """Display a list of social users as a formatted table."""
     if not user_list:
         return
 
-    print(f"\n{header}{RESET}")
+    table = create_table(title=f"{title} ({len(user_list)})")
+    table.add_column("User ID", style="user_id")
+    table.add_column("Email")
+    table.add_column("Reason", style="muted")
     for user in user_list[:limit]:
-        print(f"  - {user['user_id']} ({user['email']}) - {user['reason']}")
-
+        table.add_row(user["user_id"], user["email"], user["reason"])
     if len(user_list) > limit:
-        print(f"  ... and {len(user_list) - limit} more")
+        table.add_row(f"[muted]… and {len(user_list) - limit} more[/muted]", "", "")
+    print_table(table)

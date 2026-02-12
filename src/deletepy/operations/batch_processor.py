@@ -11,12 +11,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from deletepy.utils.display_utils import (
-    clear_progress_line,
-    show_progress,
-    shutdown_requested,
-)
-
 from ..core.auth0_client import Auth0Client, Auth0Context
 from ..models.checkpoint import Checkpoint, OperationType
 from ..utils.checkpoint_manager import CheckpointManager
@@ -28,6 +22,7 @@ from ..utils.checkpoint_utils import (
     load_or_create_checkpoint,
     update_checkpoint_batch,
 )
+from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_info, print_warning
 
 
@@ -245,42 +240,49 @@ class BatchOperationProcessor(ABC):
         """
         results = BatchResults()
 
-        for idx, item in enumerate(items, 1):
-            if shutdown_requested():
-                results.was_interrupted = True
-                break
+        with live_progress(
+            len(items), f"{self.get_operation_name()} batch {batch_number}"
+        ) as advance:
+            for item in items:
+                if shutdown_requested():
+                    results.was_interrupted = True
+                    break
 
-            show_progress(
-                idx, len(items), f"{self.get_operation_name()} batch {batch_number}"
-            )
+                # Track this item as attempted (for checkpoint purposes)
+                results.items_attempted.append(item)
 
-            # Track this item as attempted (for checkpoint purposes)
-            results.items_attempted.append(item)
-
-            # Validate item
-            is_valid, error_msg = self.validate_item(item)
-            if not is_valid:
-                results.skipped_count += 1
-                if error_msg:
-                    results.items_by_status.setdefault("invalid", []).append(str(item))
-                continue
-
-            # Process item
-            try:
-                result = self.process_item(item)
-                if result.success:
-                    results.processed_count += 1
-                else:
+                # Validate item
+                is_valid, error_msg = self.validate_item(item)
+                if not is_valid:
                     results.skipped_count += 1
-                    if result.message:
-                        results.items_by_status.setdefault("skipped", []).append(
+                    if error_msg:
+                        results.items_by_status.setdefault("invalid", []).append(
                             str(item)
                         )
-            except Exception:
-                results.error_count += 1
-                results.items_by_status.setdefault("error", []).append(str(item))
+                    advance()
+                    continue
 
-        clear_progress_line()
+                # Process item
+                try:
+                    result = self.process_item(item)
+                    if result.success:
+                        results.processed_count += 1
+                    else:
+                        results.skipped_count += 1
+                        if result.message:
+                            results.items_by_status.setdefault("skipped", []).append(
+                                str(item)
+                            )
+                except Exception as e:
+                    results.error_count += 1
+                    results.items_by_status.setdefault("error", []).append(str(item))
+                    print_warning(
+                        f"Error processing {item}: {e}",
+                        operation=self.get_operation_name(),
+                    )
+
+                advance()
+
         return results
 
     def run(

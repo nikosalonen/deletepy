@@ -304,7 +304,7 @@ class TestBatchOperationProcessor:
         assert error_msg is None
 
     @patch("src.deletepy.operations.batch_processor.shutdown_requested")
-    @patch("src.deletepy.operations.batch_processor.show_progress")
+    @patch("src.deletepy.operations.batch_processor.live_progress")
     def test_process_batch_all_success(self, mock_progress, mock_shutdown):
         """Test processing batch with all successes."""
         mock_shutdown.return_value = False
@@ -319,7 +319,7 @@ class TestBatchOperationProcessor:
         assert len(results.items_attempted) == 3
 
     @patch("src.deletepy.operations.batch_processor.shutdown_requested")
-    @patch("src.deletepy.operations.batch_processor.show_progress")
+    @patch("src.deletepy.operations.batch_processor.live_progress")
     def test_process_batch_with_failures(self, mock_progress, mock_shutdown):
         """Test processing batch with some failures."""
         mock_shutdown.return_value = False
@@ -336,7 +336,7 @@ class TestBatchOperationProcessor:
         assert len(results.items_attempted) == 3
 
     @patch("src.deletepy.operations.batch_processor.shutdown_requested")
-    @patch("src.deletepy.operations.batch_processor.show_progress")
+    @patch("src.deletepy.operations.batch_processor.live_progress")
     def test_process_batch_with_exception(self, mock_progress, mock_shutdown):
         """Test processing batch when item raises exception."""
         mock_shutdown.return_value = False
@@ -361,7 +361,7 @@ class TestBatchOperationProcessor:
         assert "auth0|2" in results.items_by_status["error"]
 
     @patch("src.deletepy.operations.batch_processor.shutdown_requested")
-    @patch("src.deletepy.operations.batch_processor.show_progress")
+    @patch("src.deletepy.operations.batch_processor.live_progress")
     def test_process_batch_interrupted(self, mock_progress, mock_shutdown):
         """Test that batch processing stops when shutdown is requested."""
         # Shutdown after 2 items
@@ -375,7 +375,7 @@ class TestBatchOperationProcessor:
         assert len(results.items_attempted) == 2  # Only first 2 processed
 
     @patch("src.deletepy.operations.batch_processor.shutdown_requested")
-    @patch("src.deletepy.operations.batch_processor.show_progress")
+    @patch("src.deletepy.operations.batch_processor.live_progress")
     def test_process_batch_tracks_items_attempted(self, mock_progress, mock_shutdown):
         """Test that items_attempted tracks all items we tried to process."""
         mock_shutdown.return_value = False
@@ -404,7 +404,7 @@ class TestBatchOperationProcessorValidation:
         )
 
     @patch("src.deletepy.operations.batch_processor.shutdown_requested")
-    @patch("src.deletepy.operations.batch_processor.show_progress")
+    @patch("src.deletepy.operations.batch_processor.live_progress")
     def test_invalid_items_are_skipped(self, mock_progress, mock_shutdown):
         """Test that invalid items are skipped."""
         mock_shutdown.return_value = False
@@ -448,7 +448,7 @@ class TestBatchOperationProcessorRun:
     @patch("src.deletepy.operations.batch_processor.update_checkpoint_batch")
     @patch("src.deletepy.operations.batch_processor.load_or_create_checkpoint")
     @patch("src.deletepy.operations.batch_processor.shutdown_requested")
-    @patch("src.deletepy.operations.batch_processor.show_progress")
+    @patch("src.deletepy.operations.batch_processor.live_progress")
     @patch("src.deletepy.operations.batch_processor.print_info")
     def test_run_completes_successfully(
         self,

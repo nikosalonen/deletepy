@@ -136,3 +136,89 @@ def mock_requests(request):
     module_name = request.module.__name__.replace("test_", "")
     with patch(f"{module_name}.requests") as mock:
         yield mock
+
+
+# =============================================================================
+# Tests for get_stderr_console singleton
+# =============================================================================
+
+
+class TestGetStderrConsole:
+    """Tests for the shared stderr console singleton."""
+
+    def teardown_method(self):
+        """Reset the singleton between tests."""
+        import src.deletepy.utils.rich_utils as mod
+
+        mod._stderr_console = None
+
+    def test_returns_console(self):
+        from src.deletepy.utils.rich_utils import get_stderr_console
+
+        console = get_stderr_console()
+        from rich.console import Console
+
+        assert isinstance(console, Console)
+
+    def test_singleton(self):
+        from src.deletepy.utils.rich_utils import get_stderr_console
+
+        c1 = get_stderr_console()
+        c2 = get_stderr_console()
+        assert c1 is c2
+
+    def test_writes_to_stderr(self):
+        from src.deletepy.utils.rich_utils import get_stderr_console
+
+        console = get_stderr_console()
+        assert console.stderr is True
+
+
+# =============================================================================
+# Tests for live_progress context manager
+# =============================================================================
+
+
+class TestLiveProgress:
+    """Tests for the live_progress context manager."""
+
+    def test_zero_total_yields_noop(self):
+        from src.deletepy.utils.display_utils import live_progress
+
+        with live_progress(0, "Testing") as advance:
+            advance()  # Should not raise
+            advance(5)  # Should not raise
+
+    @patch("src.deletepy.utils.display_utils._RICH_PROGRESS_AVAILABLE", False)
+    @patch("src.deletepy.utils.display_utils.show_progress")
+    @patch("src.deletepy.utils.display_utils.clear_progress_line")
+    def test_fallback_to_ascii(self, mock_clear, mock_show):
+        from src.deletepy.utils.display_utils import live_progress
+
+        with live_progress(3, "Fallback") as advance:
+            advance()
+            advance()
+            advance()
+
+        assert mock_show.call_count == 3
+        mock_clear.assert_called_once()
+
+    def test_rich_progress_path(self):
+        """Test that Rich progress path works when Rich is available."""
+        from src.deletepy.utils.display_utils import live_progress
+
+        counter = 0
+        with live_progress(3, "Rich test") as advance:
+            for _ in range(3):
+                advance()
+                counter += 1
+
+        assert counter == 3
+
+    def test_advance_with_step(self):
+        """Test that advance accepts a step parameter."""
+        from src.deletepy.utils.display_utils import live_progress
+
+        with live_progress(10, "Step test") as advance:
+            advance(5)
+            advance(5)

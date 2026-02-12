@@ -53,7 +53,7 @@ class TestPreviewUserOperations:
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
     @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
+    @patch("src.deletepy.operations.preview_ops.live_progress")
     @patch("src.deletepy.operations.preview_ops.print")
     def test_preview_with_valid_user_ids(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
@@ -82,7 +82,7 @@ class TestPreviewUserOperations:
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
     @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
+    @patch("src.deletepy.operations.preview_ops.live_progress")
     @patch("src.deletepy.operations.preview_ops.print")
     def test_preview_with_emails(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
@@ -110,7 +110,7 @@ class TestPreviewUserOperations:
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
     @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
+    @patch("src.deletepy.operations.preview_ops.live_progress")
     @patch("src.deletepy.operations.preview_ops.print")
     def test_preview_with_invalid_user_ids(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
@@ -129,7 +129,7 @@ class TestPreviewUserOperations:
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
     @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
+    @patch("src.deletepy.operations.preview_ops.live_progress")
     @patch("src.deletepy.operations.preview_ops.print")
     def test_preview_with_not_found_emails(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
@@ -150,7 +150,7 @@ class TestPreviewUserOperations:
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
     @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
+    @patch("src.deletepy.operations.preview_ops.live_progress")
     @patch("src.deletepy.operations.preview_ops.print")
     def test_preview_with_multiple_users(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
@@ -171,7 +171,7 @@ class TestPreviewUserOperations:
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
     @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
+    @patch("src.deletepy.operations.preview_ops.live_progress")
     @patch("src.deletepy.operations.preview_ops.print")
     def test_preview_block_operation_with_blocked_user(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
@@ -197,8 +197,8 @@ class TestPreviewUserOperations:
 class TestSocialUnlinkPreview:
     """Test preview_social_unlink_operations function."""
 
-    @patch("src.deletepy.operations.batch_ops._search_batch_social_ids")
-    @patch("src.deletepy.operations.batch_ops._categorize_users")
+    @patch("src.deletepy.operations.batch_ops.search_batch_social_ids")
+    @patch("src.deletepy.operations.batch_ops.categorize_users")
     @patch("src.deletepy.operations.preview_ops.print")
     def test_social_unlink_preview(self, mock_print, mock_categorize, mock_search):
         """Test social unlink preview."""
@@ -318,7 +318,7 @@ class TestIntegration:
     @patch("src.deletepy.operations.preview_ops.get_user_details")
     @patch("src.deletepy.operations.preview_ops.get_user_id_from_email")
     @patch("src.deletepy.operations.preview_ops.time.sleep")
-    @patch("src.deletepy.operations.preview_ops.show_progress")
+    @patch("src.deletepy.operations.preview_ops.live_progress")
     @patch("src.deletepy.operations.preview_ops.print")
     def test_mixed_input_types(
         self, mock_print, mock_progress, mock_sleep, mock_get_email, mock_get_details
