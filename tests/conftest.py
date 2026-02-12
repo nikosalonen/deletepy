@@ -2,6 +2,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from src.deletepy.core.auth0_client import Auth0Client
+
 
 @pytest.fixture
 def mock_response():
@@ -17,10 +19,10 @@ def mock_response():
 def mock_client():
     """Create a mock Auth0Client for testing.
 
-    Returns a MagicMock with pre-configured context attributes.
+    Returns a MagicMock with spec=Auth0Client and pre-configured context attributes.
     Individual tests should configure return values on specific methods.
     """
-    client = MagicMock()
+    client = MagicMock(spec=Auth0Client)
     client.context.token = "test_token"
     client.context.base_url = "https://test.auth0.com"
     client.context.env = "dev"
