@@ -123,13 +123,3 @@ markers = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/deletepy"]
-
-[dependency-groups]
-dev = [
-    "mypy>=1.19.1",
-    "pre-commit>=4.5.1",
-    "pytest>=9.0.2",
-    "ruff>=0.15.0",
-    "types-pyyaml>=6.0.12.20250915",
-    "types-requests>=2.32.4.20260107",
-]

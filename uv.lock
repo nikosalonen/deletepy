@@ -135,16 +135,6 @@ dev = [
     { name = "types-requests" },
 ]
 
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "types-pyyaml" },
-    { name = "types-requests" },
-]
-
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.3.1" },
@@ -159,16 +149,6 @@ requires-dist = [
     { name = "types-requests", marker = "extra == 'dev'", specifier = ">=2.32.4.20260107" },
 ]
 provides-extras = ["dev"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=1.19.1" },
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "ruff", specifier = ">=0.15.0" },
-    { name = "types-pyyaml", specifier = ">=6.0.12.20250915" },
-    { name = "types-requests", specifier = ">=2.32.4.20260107" },
-]
 
 [[package]]
 name = "distlib"
