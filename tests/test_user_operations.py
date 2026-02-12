@@ -31,7 +31,9 @@ def test_delete_user():
     # Mock delete_user response
     client.delete_user.return_value = APIResponse(success=True, status_code=204)
 
-    delete_user("auth0|test_user_id", client)
+    result = delete_user("auth0|test_user_id", client)
+
+    assert result is True
 
     # Verify get_user_sessions was called with encoded user ID
     client.get_user_sessions.assert_called_once_with("auth0%7Ctest_user_id")
@@ -50,9 +52,9 @@ def test_delete_user_failure():
         success=False, status_code=500, error_message="Internal server error"
     )
 
-    # Should not raise, just prints error
-    delete_user("auth0|test_user_id", client)
+    result = delete_user("auth0|test_user_id", client)
 
+    assert result is False
     client.delete_user.assert_called_once_with("auth0%7Ctest_user_id")
 
 
@@ -68,7 +70,9 @@ def test_block_user():
     # Mock block_user response
     client.block_user.return_value = APIResponse(success=True, status_code=200)
 
-    block_user("auth0|test_user_id", client)
+    result = block_user("auth0|test_user_id", client)
+
+    assert result is True
 
     # Verify revoke_user_sessions was triggered (get_user_sessions called)
     client.get_user_sessions.assert_called_once_with("auth0%7Ctest_user_id")
@@ -91,9 +95,9 @@ def test_block_user_failure():
         success=False, status_code=400, error_message="Bad request"
     )
 
-    # Should not raise, just prints error
-    block_user("auth0|test_user_id", client)
+    result = block_user("auth0|test_user_id", client)
 
+    assert result is False
     client.block_user.assert_called_once_with("auth0%7Ctest_user_id")
 
 
@@ -107,8 +111,9 @@ def test_block_user_with_rotate_password():
     client.block_user.return_value = APIResponse(success=True, status_code=200)
 
     with patch("src.deletepy.operations.user_ops.rotate_user_password") as mock_rotate:
-        block_user("auth0|test_user_id", client, rotate_password=True)
+        result = block_user("auth0|test_user_id", client, rotate_password=True)
 
+        assert result is True
         mock_rotate.assert_called_once_with("auth0|test_user_id", client)
 
     client.block_user.assert_called_once_with("auth0%7Ctest_user_id")

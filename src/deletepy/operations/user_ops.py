@@ -26,8 +26,16 @@ from ..utils.url_utils import secure_url_encode
 from ..utils.validators import SecurityValidator
 
 
-def delete_user(user_id: str, client: Auth0Client) -> None:
-    """Delete user from Auth0."""
+def delete_user(user_id: str, client: Auth0Client) -> bool:
+    """Delete user from Auth0.
+
+    Args:
+        user_id: Auth0 user ID
+        client: Auth0 API client
+
+    Returns:
+        bool: True if deletion succeeded, False otherwise
+    """
     print_info(f"Deleting user: {user_id}", user_id=user_id, operation="delete_user")
 
     # First revoke all sessions
@@ -41,23 +49,28 @@ def delete_user(user_id: str, client: Auth0Client) -> None:
             user_id=user_id,
             operation="delete_user",
         )
+        return True
     else:
         print_error(
             f"Error deleting user {user_id}: {result.error_message}",
             user_id=user_id,
             operation="delete_user",
         )
+        return False
 
 
 def block_user(
     user_id: str, client: Auth0Client, rotate_password: bool = False
-) -> None:
+) -> bool:
     """Block user in Auth0.
 
     Args:
         user_id: Auth0 user ID
         client: Auth0 API client
         rotate_password: If True, rotate user's password before blocking
+
+    Returns:
+        bool: True if blocking succeeded, False otherwise
     """
     print_info(f"Blocking user: {user_id}", user_id=user_id, operation="block_user")
 
@@ -77,12 +90,14 @@ def block_user(
             user_id=user_id,
             operation="block_user",
         )
+        return True
     else:
         print_error(
             f"Error blocking user {user_id}: {result.error_message}",
             user_id=user_id,
             operation="block_user",
         )
+        return False
 
 
 def get_user_id_from_email(
@@ -867,13 +882,12 @@ def _process_users_in_batch(
                 continue
 
             # Perform the operation
-            try:
-                _execute_user_operation(
-                    operation, resolved_user_id, client, rotate_password
-                )
+            success = _execute_user_operation(
+                operation, resolved_user_id, client, rotate_password
+            )
+            if success:
                 results["processed_count"] += 1
-            except Exception as e:
-                print_error(f"Failed to {operation} user {resolved_user_id}: {e}")
+            else:
                 results["skipped_count"] += 1
 
             advance()
@@ -953,7 +967,7 @@ def _execute_user_operation(
     user_id: str,
     client: Auth0Client,
     rotate_password: bool = False,
-) -> None:
+) -> bool:
     """Execute the specified operation on a user.
 
     Args:
@@ -961,16 +975,21 @@ def _execute_user_operation(
         user_id: Auth0 user ID
         client: Auth0 API client
         rotate_password: If True, rotate user password during operation
+
+    Returns:
+        bool: True if the primary operation succeeded, False otherwise
     """
     if operation == "block":
-        block_user(user_id, client, rotate_password)
+        return block_user(user_id, client, rotate_password)
     elif operation == "delete":
-        delete_user(user_id, client)
+        return delete_user(user_id, client)
     elif operation == "revoke-grants-only":
         revoke_user_sessions(user_id, client)
         revoke_user_grants(user_id, client)
         if rotate_password:
             rotate_user_password(user_id, client)
+        return True
+    return False
 
 
 def _display_multiple_users_details(

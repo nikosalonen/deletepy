@@ -449,15 +449,9 @@ def _handle_user_deletions(
             if shutdown_requested():
                 break
 
-            try:
-                delete_user(user["user_id"], client)
+            if delete_user(user["user_id"], client):
                 deleted_count += 1
-            except Exception as e:
-                print_error(
-                    f"Failed to delete user {user['user_id']}: {e}",
-                    user_id=user["user_id"],
-                    operation="delete_user",
-                )
+            else:
                 failed_deletions += 1
 
             advance()
@@ -572,20 +566,9 @@ def _delete_orphaned_user(
         user_id=user_id,
         operation="delete_orphaned_user",
     )
-    try:
-        delete_user(user_id, client)
+    if delete_user(user_id, client):
         results["orphaned_users_deleted"] += 1
-        print_success(
-            f"Successfully deleted orphaned user {user_id}",
-            user_id=user_id,
-            operation="delete_orphaned_user",
-        )
-    except Exception as e:
-        print_error(
-            f"Failed to delete orphaned user {user_id}: {e}",
-            user_id=user_id,
-            operation="delete_orphaned_user",
-        )
+    else:
         results["orphaned_users_failed"] += 1
 
 
@@ -603,21 +586,9 @@ def _delete_detached_social_user(
         client: Auth0 API client
         results: Results dictionary to update
     """
-    try:
-        delete_user(detached_user["user_id"], client)
+    if delete_user(detached_user["user_id"], client):
         results["orphaned_users_deleted"] += 1
-        print_success(
-            f"Successfully deleted detached social user {detached_user['user_id']} with identity {social_id}",
-            user_id=detached_user["user_id"],
-            social_id=social_id,
-            operation="delete_detached_social_user",
-        )
-    except Exception as e:
-        print_error(
-            f"Failed to delete detached social user {detached_user['user_id']}: {e}",
-            user_id=detached_user["user_id"],
-            operation="delete_detached_social_user",
-        )
+    else:
         results["orphaned_users_failed"] += 1
 
 
