@@ -119,7 +119,8 @@ class APIConfig:
     """Configuration for API rate limiting and timeouts."""
 
     rate_limit: float = 0.5  # Seconds between requests
-    timeout: int = 30  # Request timeout in seconds
+    connect_timeout: int = 5  # Connection timeout in seconds
+    read_timeout: int = 15  # Read timeout in seconds
 
     def get_requests_per_second(self) -> float:
         """Calculate requests per second based on rate limit.
@@ -224,7 +225,8 @@ class AppConfig:
         if self.api:
             result["api"] = {
                 "rate_limit": self.api.rate_limit,
-                "timeout": self.api.timeout,
+                "connect_timeout": self.api.connect_timeout,
+                "read_timeout": self.api.read_timeout,
                 "requests_per_second": self.api.get_requests_per_second(),
             }
 
