@@ -104,7 +104,9 @@ class TestAuth0ClientInit:
         assert client.token == "test_token"
         assert client.base_url == "https://test.auth0.com"
         assert client.rate_limit == 0.5  # API_RATE_LIMIT default
-        assert client.timeout == 30  # API_TIMEOUT default
+        assert client.timeout == (5, 15)  # API_TIMEOUT default (connect, read)
+        assert client.max_retries == 3  # API_MAX_RETRIES default
+        assert client.retry_backoff_base == 1.0  # API_RETRY_BACKOFF_BASE default
 
     def test_client_custom_rate_limit(self):
         """Test client with custom rate limit."""
@@ -113,6 +115,14 @@ class TestAuth0ClientInit:
 
         assert client.rate_limit == 1.0
         assert client.timeout == 60
+
+    def test_client_custom_retry_settings(self):
+        """Test client with custom retry settings."""
+        context = Auth0Context(token="test", base_url="https://test.auth0.com")
+        client = Auth0Client(context, max_retries=5, retry_backoff_base=2.0)
+
+        assert client.max_retries == 5
+        assert client.retry_backoff_base == 2.0
 
 
 class TestAuth0ClientHeaders:
@@ -311,7 +321,7 @@ class TestAuth0ClientRequest:
     def setup_method(self):
         """Set up test fixtures."""
         self.context = Auth0Context(token="test", base_url="https://test.auth0.com")
-        self.client = Auth0Client(self.context, rate_limit=0.01)  # Fast for tests
+        self.client = Auth0Client(self.context, rate_limit=0.01, max_retries=0, retry_backoff_base=0.01)
 
     @patch("src.deletepy.core.auth0_client.requests.request")
     @patch("src.deletepy.core.auth0_client.time.sleep")
@@ -377,7 +387,7 @@ class TestAuth0ClientRequest:
     @patch("src.deletepy.core.auth0_client.requests.request")
     @patch("src.deletepy.core.auth0_client.time.sleep")
     def test_request_timeout(self, mock_sleep, mock_request):
-        """Test request timeout handling."""
+        """Test request timeout handling with no retries."""
         mock_request.side_effect = requests.exceptions.Timeout("Timeout")
 
         result = self.client.request(
@@ -389,11 +399,13 @@ class TestAuth0ClientRequest:
         assert result.success is False
         assert result.status_code == 0
         assert "timeout" in result.error_message.lower()
+        assert "after 1 attempts" in result.error_message
+        mock_request.assert_called_once()
 
     @patch("src.deletepy.core.auth0_client.requests.request")
     @patch("src.deletepy.core.auth0_client.time.sleep")
     def test_request_connection_error(self, mock_sleep, mock_request):
-        """Test request connection error handling."""
+        """Test request connection error handling with no retries."""
         mock_request.side_effect = requests.exceptions.ConnectionError(
             "Connection failed"
         )
@@ -407,11 +419,13 @@ class TestAuth0ClientRequest:
         assert result.success is False
         assert result.status_code == 0
         assert "Connection error" in result.error_message
+        assert "after 1 attempts" in result.error_message
+        mock_request.assert_called_once()
 
     @patch("src.deletepy.core.auth0_client.requests.request")
     @patch("src.deletepy.core.auth0_client.time.sleep")
     def test_request_generic_error(self, mock_sleep, mock_request):
-        """Test generic request exception handling."""
+        """Test generic request exception is not retried."""
         mock_request.side_effect = requests.exceptions.RequestException("Generic error")
 
         result = self.client.request(
