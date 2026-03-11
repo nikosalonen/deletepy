@@ -5,11 +5,8 @@ from dotenv import load_dotenv
 
 from ..utils.logging_utils import get_logger
 from .auth0_client import create_client_from_token
-from .config import get_env_config
+from .config import API_TIMEOUT, get_env_config
 from .exceptions import AuthConfigError
-
-# API timeout in seconds for authentication requests
-API_TIMEOUT = 30
 
 # Module logger
 logger = get_logger(__name__)

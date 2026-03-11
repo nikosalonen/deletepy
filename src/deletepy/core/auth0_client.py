@@ -7,7 +7,7 @@ from typing import Any
 
 import requests
 
-from .config import API_RATE_LIMIT, API_TIMEOUT
+from .config import API_MAX_RETRIES, API_RATE_LIMIT, API_RETRY_BACKOFF_BASE, API_TIMEOUT
 
 
 class HttpMethod(Enum):

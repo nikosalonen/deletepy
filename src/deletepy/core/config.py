@@ -9,7 +9,11 @@ from .exceptions import AuthConfigError
 
 # Global constants for API configuration
 API_RATE_LIMIT = 0.5  # seconds between requests
-API_TIMEOUT = 30  # request timeout in seconds
+API_CONNECT_TIMEOUT = 5  # connection timeout in seconds
+API_READ_TIMEOUT = 15  # read timeout in seconds
+API_TIMEOUT = (API_CONNECT_TIMEOUT, API_READ_TIMEOUT)  # combined timeout tuple
+API_MAX_RETRIES = 3  # max retries for timeout/connection errors
+API_RETRY_BACKOFF_BASE = 1.0  # base delay in seconds for exponential backoff
 
 
 def check_env_file() -> None:
