@@ -321,7 +321,9 @@ class TestAuth0ClientRequest:
     def setup_method(self):
         """Set up test fixtures."""
         self.context = Auth0Context(token="test", base_url="https://test.auth0.com")
-        self.client = Auth0Client(self.context, rate_limit=0.01, max_retries=0, retry_backoff_base=0.01)
+        self.client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=0, retry_backoff_base=0.01
+        )
 
     @patch("src.deletepy.core.auth0_client.requests.request")
     @patch("src.deletepy.core.auth0_client.time.sleep")
@@ -462,8 +464,12 @@ class TestAuth0ClientRetry:
             mock_response,
         ]
 
-        client = Auth0Client(self.context, rate_limit=0.01, max_retries=2, retry_backoff_base=0.01)
-        result = client.request(HttpMethod.GET, "/api/v2/users/123", operation_name="get user")
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=2, retry_backoff_base=0.01
+        )
+        result = client.request(
+            HttpMethod.GET, "/api/v2/users/123", operation_name="get user"
+        )
 
         assert result.success is True
         assert result.data == {"ok": True}
@@ -484,8 +490,12 @@ class TestAuth0ClientRetry:
             mock_response,
         ]
 
-        client = Auth0Client(self.context, rate_limit=0.01, max_retries=2, retry_backoff_base=0.01)
-        result = client.request(HttpMethod.GET, "/api/v2/users/123", operation_name="get user")
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=2, retry_backoff_base=0.01
+        )
+        result = client.request(
+            HttpMethod.GET, "/api/v2/users/123", operation_name="get user"
+        )
 
         assert result.success is True
         assert mock_request.call_count == 2
@@ -496,8 +506,12 @@ class TestAuth0ClientRetry:
         """Test that exhausting all retries returns an error with attempt count."""
         mock_request.side_effect = requests.exceptions.Timeout("Timeout")
 
-        client = Auth0Client(self.context, rate_limit=0.01, max_retries=2, retry_backoff_base=0.01)
-        result = client.request(HttpMethod.GET, "/api/v2/users/123", operation_name="get user")
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=2, retry_backoff_base=0.01
+        )
+        result = client.request(
+            HttpMethod.GET, "/api/v2/users/123", operation_name="get user"
+        )
 
         assert result.success is False
         assert result.status_code == 0
@@ -510,7 +524,9 @@ class TestAuth0ClientRetry:
         """Test that retries use exponential backoff delays."""
         mock_request.side_effect = requests.exceptions.Timeout("Timeout")
 
-        client = Auth0Client(self.context, rate_limit=0.01, max_retries=3, retry_backoff_base=1.0)
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=3, retry_backoff_base=1.0
+        )
         client.request(HttpMethod.GET, "/api/v2/users/123", operation_name="get user")
 
         # Backoff calls: 1.0 * 2^0 = 1.0, 1.0 * 2^1 = 2.0, 1.0 * 2^2 = 4.0
@@ -523,8 +539,12 @@ class TestAuth0ClientRetry:
         """Test that max_retries=0 means no retries."""
         mock_request.side_effect = requests.exceptions.Timeout("Timeout")
 
-        client = Auth0Client(self.context, rate_limit=0.01, max_retries=0, retry_backoff_base=0.01)
-        result = client.request(HttpMethod.GET, "/api/v2/users/123", operation_name="get user")
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=0, retry_backoff_base=0.01
+        )
+        result = client.request(
+            HttpMethod.GET, "/api/v2/users/123", operation_name="get user"
+        )
 
         assert result.success is False
         assert "after 1 attempts" in result.error_message
@@ -536,8 +556,12 @@ class TestAuth0ClientRetry:
         """Test that non-timeout/connection errors are not retried."""
         mock_request.side_effect = requests.exceptions.RequestException("SSL error")
 
-        client = Auth0Client(self.context, rate_limit=0.01, max_retries=3, retry_backoff_base=0.01)
-        result = client.request(HttpMethod.GET, "/api/v2/users/123", operation_name="get user")
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=3, retry_backoff_base=0.01
+        )
+        result = client.request(
+            HttpMethod.GET, "/api/v2/users/123", operation_name="get user"
+        )
 
         assert result.success is False
         assert "SSL error" in result.error_message
@@ -559,8 +583,12 @@ class TestAuth0ClientRetry:
             mock_response,
         ]
 
-        client = Auth0Client(self.context, rate_limit=0.01, max_retries=3, retry_backoff_base=0.01)
-        result = client.request(HttpMethod.GET, "/api/v2/users/123", operation_name="get user")
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=3, retry_backoff_base=0.01
+        )
+        result = client.request(
+            HttpMethod.GET, "/api/v2/users/123", operation_name="get user"
+        )
 
         assert result.success is True
         assert mock_request.call_count == 3
