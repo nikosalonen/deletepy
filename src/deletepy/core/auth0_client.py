@@ -76,18 +76,24 @@ class Auth0Client:
         self,
         context: Auth0Context,
         rate_limit: float = API_RATE_LIMIT,
-        timeout: int = API_TIMEOUT,
+        timeout: tuple[int, int] | int = API_TIMEOUT,
+        max_retries: int = API_MAX_RETRIES,
+        retry_backoff_base: float = API_RETRY_BACKOFF_BASE,
     ):
         """Initialize the Auth0 client.
 
         Args:
             context: Auth0 context with authentication information
             rate_limit: Minimum time between requests in seconds
-            timeout: Request timeout in seconds
+            timeout: Request timeout as (connect, read) tuple or single value in seconds
+            max_retries: Maximum number of retries for timeout/connection errors
+            retry_backoff_base: Base delay in seconds for exponential backoff
         """
         self.context = context
         self.rate_limit = rate_limit
         self.timeout = timeout
+        self.max_retries = max_retries
+        self.retry_backoff_base = retry_backoff_base
         self._last_request_time: float = 0
 
     @property
@@ -285,39 +291,45 @@ class Auth0Client:
         url = f"{self.base_url}{endpoint}"
         headers = self._build_headers(extra_headers)
 
-        try:
-            response = requests.request(
-                method=method.value,
-                url=url,
-                headers=headers,
-                params=params,
-                json=json_data,
-                timeout=self.timeout,
-            )
+        last_error: str = ""
+        for attempt in range(self.max_retries + 1):
+            try:
+                response = requests.request(
+                    method=method.value,
+                    url=url,
+                    headers=headers,
+                    params=params,
+                    json=json_data,
+                    timeout=self.timeout,
+                )
 
-            # Apply rate limiting with adaptive behavior
-            self._apply_rate_limit(response)
+                # Apply rate limiting with adaptive behavior
+                self._apply_rate_limit(response)
 
-            return self._handle_response(response, operation_name)
+                return self._handle_response(response, operation_name)
 
-        except requests.exceptions.Timeout:
-            return APIResponse(
-                success=False,
-                status_code=0,
-                error_message=f"Request timeout during {operation_name}",
-            )
-        except requests.exceptions.ConnectionError:
-            return APIResponse(
-                success=False,
-                status_code=0,
-                error_message=f"Connection error during {operation_name}",
-            )
-        except requests.exceptions.RequestException as e:
-            return APIResponse(
-                success=False,
-                status_code=0,
-                error_message=f"Request failed during {operation_name}: {str(e)}",
-            )
+            except requests.exceptions.Timeout:
+                last_error = f"Request timeout during {operation_name}"
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_backoff_base * (2**attempt))
+                    continue
+            except requests.exceptions.ConnectionError:
+                last_error = f"Connection error during {operation_name}"
+                if attempt < self.max_retries:
+                    time.sleep(self.retry_backoff_base * (2**attempt))
+                    continue
+            except requests.exceptions.RequestException as e:
+                return APIResponse(
+                    success=False,
+                    status_code=0,
+                    error_message=f"Request failed during {operation_name}: {str(e)}",
+                )
+
+        return APIResponse(
+            success=False,
+            status_code=0,
+            error_message=f"{last_error} (after {self.max_retries + 1} attempts)",
+        )
 
     def get(
         self,
