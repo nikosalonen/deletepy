@@ -198,3 +198,5 @@ domain_cache.json
 
 shady
 .checkpoints
+# Added by code-review-graph
+.code-review-graph/
