@@ -33,6 +33,10 @@ def check_email_domains(
         "total_checked": 0,
     }
 
+    # Normalize once for case-insensitive O(1) lookups.
+    blocked_set = {d.lower() for d in blocked_domains} if blocked_domains else None
+    allowed_set = {d.lower() for d in allowed_domains} if allowed_domains else None
+
     with live_progress(len(emails), "Checking domains") as advance:
         for email in emails:
             if shutdown_requested():
@@ -62,7 +66,7 @@ def check_email_domains(
                     continue
 
                 # Check against domain lists
-                if blocked_domains and domain in blocked_domains:
+                if blocked_set and domain in blocked_set:
                     results["blocked"].append(
                         {
                             "email": email,
@@ -70,7 +74,7 @@ def check_email_domains(
                             "reason": "Domain in blocked list",
                         }
                     )
-                elif allowed_domains and domain not in allowed_domains:
+                elif allowed_set and domain not in allowed_set:
                     results["blocked"].append(
                         {
                             "email": email,
