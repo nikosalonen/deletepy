@@ -3,6 +3,8 @@
 import random
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from email.utils import parsedate_to_datetime
 from enum import Enum
 from typing import Any
 
@@ -19,6 +21,10 @@ class HttpMethod(Enum):
     PATCH = "PATCH"
     DELETE = "DELETE"
     PUT = "PUT"
+
+
+# Methods safe to retry on 5xx without risking duplicated side effects.
+_IDEMPOTENT_METHODS = {HttpMethod.GET, HttpMethod.PUT, HttpMethod.DELETE}
 
 
 @dataclass
@@ -204,7 +210,17 @@ class Auth0Client:
             try:
                 delay = float(retry_after)
             except ValueError:
-                delay = None
+                try:
+                    parsed_dt = parsedate_to_datetime(retry_after)
+                except (TypeError, ValueError):
+                    parsed_dt = None
+                if parsed_dt is not None:
+                    if parsed_dt.tzinfo is None:
+                        parsed_dt = parsed_dt.replace(tzinfo=UTC)
+                    seconds = (parsed_dt - datetime.now(UTC)).total_seconds()
+                    delay = max(0.0, seconds) if seconds > 0 else None
+                else:
+                    delay = None
 
         if delay is None:
             _, reset_time = self._parse_rate_limit_headers(response)
@@ -344,10 +360,13 @@ class Auth0Client:
 
                 api_response = self._handle_response(response, operation_name)
 
-                # Retry on 429 (rate-limited) or 5xx (server error).
-                if (
-                    api_response.status_code == 429 or api_response.status_code >= 500
-                ) and attempt < self.max_retries:
+                # Retry on 429 always; retry 5xx only for idempotent methods
+                # so that non-idempotent calls (POST/PATCH) are not silently
+                # duplicated on server errors.
+                should_retry = api_response.status_code == 429 or (
+                    api_response.status_code >= 500 and method in _IDEMPOTENT_METHODS
+                )
+                if should_retry and attempt < self.max_retries:
                     time.sleep(self._compute_retry_delay(response, attempt))
                     last_api_response = api_response
                     continue
@@ -356,11 +375,13 @@ class Auth0Client:
 
             except requests.exceptions.Timeout:
                 last_error = f"Request timeout during {operation_name}"
+                last_api_response = None
                 if attempt < self.max_retries:
                     time.sleep(self.retry_backoff_base * (2**attempt))
                     continue
             except requests.exceptions.ConnectionError:
                 last_error = f"Connection error during {operation_name}"
+                last_api_response = None
                 if attempt < self.max_retries:
                     time.sleep(self.retry_backoff_base * (2**attempt))
                     continue

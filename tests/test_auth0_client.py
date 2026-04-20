@@ -624,13 +624,15 @@ class TestAuth0ClientRetry:
         # Retry-After=2 should produce sleeps >= 2.0 (jitter adds up to 0.5).
         assert any(s >= 2.0 for s in retry_sleeps)
 
+    @patch("src.deletepy.core.auth0_client.random.uniform", return_value=0.0)
+    @patch("src.deletepy.core.auth0_client.time.time", return_value=1_700_000_000.0)
     @patch("src.deletepy.core.auth0_client.requests.request")
     @patch("src.deletepy.core.auth0_client.time.sleep")
     def test_request_retries_on_429_with_x_ratelimit_reset(
-        self, mock_sleep, mock_request
+        self, mock_sleep, mock_request, mock_time, mock_uniform
     ):
         """Test that a 429 with X-RateLimit-Reset honors the reset epoch."""
-        reset_epoch = int(time.time()) + 3
+        reset_epoch = int(mock_time.return_value) + 3
         rate_limited = MagicMock()
         rate_limited.status_code = 429
         rate_limited.headers = {"X-RateLimit-Reset": str(reset_epoch)}
@@ -655,8 +657,8 @@ class TestAuth0ClientRetry:
         assert result.success is True
         assert mock_request.call_count == 2
         retry_sleeps = [call[0][0] for call in mock_sleep.call_args_list]
-        # The reset is ~3s away; sleep should be in that neighborhood (plus jitter).
-        assert any(s >= 2.0 for s in retry_sleeps)
+        # Reset is exactly 3s away with jitter pinned to 0 -> sleep == 3.0.
+        assert 3.0 in retry_sleeps
 
     @patch("src.deletepy.core.auth0_client.requests.request")
     @patch("src.deletepy.core.auth0_client.time.sleep")
