@@ -355,9 +355,6 @@ class Auth0Client:
                     timeout=self.timeout,
                 )
 
-                # Apply rate limiting with adaptive behavior
-                self._apply_rate_limit(response)
-
                 api_response = self._handle_response(response, operation_name)
 
                 # Retry on 429 always; retry 5xx only for idempotent methods
@@ -367,10 +364,15 @@ class Auth0Client:
                     api_response.status_code >= 500 and method in _IDEMPOTENT_METHODS
                 )
                 if should_retry and attempt < self.max_retries:
+                    # Retry-After / X-RateLimit-Reset already accounts for
+                    # server-side throttling; skip _apply_rate_limit here to
+                    # avoid double-sleeping before the backoff.
                     time.sleep(self._compute_retry_delay(response, attempt))
                     last_api_response = api_response
                     continue
 
+                # Throttle the next caller before returning.
+                self._apply_rate_limit(response)
                 return api_response
 
             except requests.exceptions.Timeout:

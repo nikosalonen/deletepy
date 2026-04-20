@@ -690,6 +690,58 @@ class TestAuth0ClientRetry:
 
     @patch("src.deletepy.core.auth0_client.requests.request")
     @patch("src.deletepy.core.auth0_client.time.sleep")
+    def test_request_does_not_retry_5xx_for_post(self, mock_sleep, mock_request):
+        """Non-idempotent POST must not retry on 5xx to avoid duplicate side effects."""
+        server_error = MagicMock()
+        server_error.status_code = 503
+        server_error.headers = {}
+        server_error.text = ""
+        server_error.json.return_value = {}
+
+        mock_request.return_value = server_error
+
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=3, retry_backoff_base=0.01
+        )
+        result = client.request(
+            HttpMethod.POST,
+            "/api/v2/users",
+            json_data={"email": "a@b.com"},
+            operation_name="create user",
+        )
+
+        assert result.success is False
+        assert result.status_code == 503
+        assert mock_request.call_count == 1
+
+    @patch("src.deletepy.core.auth0_client.requests.request")
+    @patch("src.deletepy.core.auth0_client.time.sleep")
+    def test_request_does_not_retry_5xx_for_patch(self, mock_sleep, mock_request):
+        """Non-idempotent PATCH must not retry on 5xx to avoid duplicate side effects."""
+        server_error = MagicMock()
+        server_error.status_code = 502
+        server_error.headers = {}
+        server_error.text = ""
+        server_error.json.return_value = {}
+
+        mock_request.return_value = server_error
+
+        client = Auth0Client(
+            self.context, rate_limit=0.01, max_retries=3, retry_backoff_base=0.01
+        )
+        result = client.request(
+            HttpMethod.PATCH,
+            "/api/v2/users/abc",
+            json_data={"blocked": True},
+            operation_name="update user",
+        )
+
+        assert result.success is False
+        assert result.status_code == 502
+        assert mock_request.call_count == 1
+
+    @patch("src.deletepy.core.auth0_client.requests.request")
+    @patch("src.deletepy.core.auth0_client.time.sleep")
     def test_request_exhausts_retries_on_persistent_429(self, mock_sleep, mock_request):
         """Test that persistent 429s return the final failed APIResponse."""
         rate_limited = MagicMock()
