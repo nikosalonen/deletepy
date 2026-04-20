@@ -39,3 +39,16 @@ class TestCheckEmailDomainsCaseInsensitivity:
 
         assert len(result["allowed"]) == 2
         assert not result["blocked"]
+
+
+class TestCheckEmailDomainsTotalChecked:
+    """`total_checked` must reflect every email that entered the loop."""
+
+    @patch("src.deletepy.operations.domain_ops.shutdown_requested", return_value=False)
+    def test_counts_validation_errors(self, _mock_shutdown):
+        """Validation failures must still bump total_checked."""
+        emails = ["invalid@", "foo@bar.com"]
+        result = check_email_domains(emails)
+
+        assert result["total_checked"] == len(emails)
+        assert len(result["errors"]) >= 1

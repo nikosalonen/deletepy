@@ -42,6 +42,7 @@ def check_email_domains(
             if shutdown_requested():
                 break
 
+            results["total_checked"] += 1
             try:
                 # Validate email format first
                 validation_result = InputValidator.validate_email_comprehensive(email)
@@ -84,8 +85,6 @@ def check_email_domains(
                     )
                 else:
                     results["allowed"].append({"email": email, "domain": domain})
-
-                results["total_checked"] += 1
 
             except Exception as e:
                 results["errors"].append(
