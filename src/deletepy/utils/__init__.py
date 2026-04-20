@@ -26,7 +26,6 @@ from .display_utils import (
     print_section_header,
     print_success,
     print_warning,
-    safe_file_write,
     setup_shutdown_handler,
     shutdown_requested,
 )
@@ -39,6 +38,7 @@ from .file_utils import (
     safe_file_delete,
     safe_file_move,
     safe_file_read,
+    safe_file_write,
     setup_signal_handlers,
     validate_file_path,
 )

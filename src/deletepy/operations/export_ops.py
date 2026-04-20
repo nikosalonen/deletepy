@@ -25,7 +25,7 @@ from ..utils.checkpoint_utils import (
     try_load_checkpoint,
 )
 from ..utils.display_utils import live_progress, shutdown_requested
-from ..utils.logging_utils import get_logger, user_output, user_output_config
+from ..utils.logging_utils import get_logger, user_output_config
 from ..utils.output import print_info, print_success, print_warning
 from ..utils.validators import InputValidator
 from .user_ops import get_user_details, get_user_email, get_users_by_email
@@ -299,50 +299,6 @@ def _write_csv_batch(
             error=str(e),
         )
         return False
-
-
-def _generate_export_summary(
-    total_emails: int,
-    processed_count: int,
-    not_found_count: int,
-    multiple_users_count: int,
-    error_count: int,
-    connection: str | None,
-    output_file: str,
-    csv_data: list[dict[str, Any]],
-) -> None:
-    """Generate and display export summary.
-
-    Args:
-        total_emails: Total number of emails processed
-        processed_count: Number of emails successfully processed
-        not_found_count: Number of emails not found
-        multiple_users_count: Number of emails with multiple users
-        error_count: Number of emails with errors
-        connection: Connection filter used
-        output_file: Output file path
-        csv_data: Final CSV data
-    """
-    user_output("\nExport Summary:", style="success")
-    user_output(f"Total emails processed: {total_emails}")
-    user_output(f"Successfully processed: {processed_count}")
-    user_output(f"Not found: {not_found_count}")
-    user_output(f"Multiple users: {multiple_users_count}")
-    user_output(f"Errors: {error_count}")
-
-    if connection:
-        user_output(f"Connection filter: {connection}")
-
-    user_output(f"Output file: {output_file}")
-    user_output(f"Total CSV rows: {len(csv_data)}")
-
-    # Show sample of data if available
-    if csv_data:
-        user_output("\nSample data:", style="warning")
-        for i, row in enumerate(csv_data[:3]):  # Show first 3 rows
-            user_output(
-                f"  {i + 1}. {row['email']} -> {row['user_id']} ({row['status']})"
-            )
 
 
 def _format_iso_datetime(iso_string: str) -> str:
@@ -823,32 +779,6 @@ def _generate_export_summary_from_checkpoint(
             operation="export_summary",
             success_rate=success_rate,
         )
-
-
-def find_resumable_export_checkpoint(
-    checkpoint_manager: CheckpointManager | None = None,
-) -> Checkpoint | None:
-    """Find the most recent resumable export checkpoint.
-
-    Args:
-        checkpoint_manager: Optional checkpoint manager instance
-
-    Returns:
-        Optional[Checkpoint]: Most recent resumable export checkpoint or None
-    """
-    if checkpoint_manager is None:
-        checkpoint_manager = CheckpointManager()
-
-    checkpoints = checkpoint_manager.list_checkpoints(
-        operation_type=OperationType.EXPORT_LAST_LOGIN, status=CheckpointStatus.ACTIVE
-    )
-
-    # Return the most recent resumable checkpoint
-    for checkpoint in checkpoints:
-        if checkpoint.is_resumable():
-            return checkpoint
-
-    return None
 
 
 @dataclass

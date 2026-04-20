@@ -10,6 +10,48 @@ from ..utils.logging_utils import user_output
 from ..utils.validators import InputValidator
 
 
+def _normalize_domain_sets(
+    allowed_domains: list[str] | None,
+    blocked_domains: list[str] | None,
+) -> tuple[set[str] | None, set[str] | None]:
+    """Lower-case allowed/blocked lists once for O(1) case-insensitive lookups."""
+    allowed_set = {d.lower() for d in allowed_domains} if allowed_domains else None
+    blocked_set = {d.lower() for d in blocked_domains} if blocked_domains else None
+    return allowed_set, blocked_set
+
+
+def _classify_email_domain(
+    email: str,
+    allowed_set: set[str] | None,
+    blocked_set: set[str] | None,
+) -> tuple[str, dict[str, str]]:
+    """Classify a single email into (category, entry) for aggregation."""
+    validation_result = InputValidator.validate_email_comprehensive(email)
+    if not validation_result.is_valid:
+        return "errors", {
+            "email": email,
+            "reason": f"Invalid email format: {validation_result.error_message}",
+        }
+
+    domain = email.split("@")[-1].lower() if "@" in email else ""
+    if not domain:
+        return "errors", {"email": email, "reason": "Invalid email format"}
+
+    if blocked_set and domain in blocked_set:
+        return "blocked", {
+            "email": email,
+            "domain": domain,
+            "reason": "Domain in blocked list",
+        }
+    if allowed_set and domain not in allowed_set:
+        return "blocked", {
+            "email": email,
+            "domain": domain,
+            "reason": "Domain not in allowed list",
+        }
+    return "allowed", {"email": email, "domain": domain}
+
+
 def check_email_domains(
     emails: list[str],
     allowed_domains: list[str] | None = None,
@@ -33,66 +75,26 @@ def check_email_domains(
         "total_checked": 0,
     }
 
+    allowed_set, blocked_set = _normalize_domain_sets(allowed_domains, blocked_domains)
+
     with live_progress(len(emails), "Checking domains") as advance:
         for email in emails:
             if shutdown_requested():
                 break
 
+            results["total_checked"] += 1
             try:
-                # Validate email format first
-                validation_result = InputValidator.validate_email_comprehensive(email)
-                if not validation_result.is_valid:
-                    results["errors"].append(
-                        {
-                            "email": email,
-                            "reason": f"Invalid email format: {validation_result.error_message}",
-                        }
-                    )
-                    advance()
-                    continue
-
-                # Extract domain from email
-                domain = email.split("@")[-1].lower() if "@" in email else ""
-
-                if not domain:
-                    results["errors"].append(
-                        {"email": email, "reason": "Invalid email format"}
-                    )
-                    advance()
-                    continue
-
-                # Check against domain lists
-                if blocked_domains and domain in blocked_domains:
-                    results["blocked"].append(
-                        {
-                            "email": email,
-                            "domain": domain,
-                            "reason": "Domain in blocked list",
-                        }
-                    )
-                elif allowed_domains and domain not in allowed_domains:
-                    results["blocked"].append(
-                        {
-                            "email": email,
-                            "domain": domain,
-                            "reason": "Domain not in allowed list",
-                        }
-                    )
-                else:
-                    results["allowed"].append({"email": email, "domain": domain})
-
-                results["total_checked"] += 1
-
+                category, entry = _classify_email_domain(
+                    email, allowed_set, blocked_set
+                )
+                results[category].append(entry)
             except Exception as e:
                 results["errors"].append(
                     {"email": email, "reason": f"Error processing: {str(e)}"}
                 )
-
             advance()
 
-    # Display results
     _display_domain_check_results(results, allowed_domains, blocked_domains)
-
     return results
 
 
