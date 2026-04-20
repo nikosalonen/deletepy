@@ -329,50 +329,6 @@ def confirm_production_operation(
 
 
 # =============================================================================
-# File Operations
-# =============================================================================
-
-
-def safe_file_write(file_path: str, content: str, backup: bool = True) -> bool:
-    """Safely write content to a file with optional backup.
-
-    Args:
-        file_path: Path to the file to write
-        content: Content to write to the file
-        backup: Whether to create a backup of existing file
-
-    Returns:
-        bool: True if successful, False otherwise
-    """
-    import os
-    import shutil
-    from datetime import datetime
-
-    try:
-        # Create backup if file exists and backup is requested
-        if backup and os.path.exists(file_path):
-            backup_path = (
-                f"{file_path}.backup.{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            )
-            shutil.copy2(file_path, backup_path)
-
-        # Write new content
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(content)
-
-        return True
-
-    except Exception as e:
-        logger.error(
-            "Error writing file %s: %s",
-            file_path,
-            str(e),
-            extra={"file_path": file_path, "operation": "file_write", "error": str(e)},
-        )
-        return False
-
-
-# =============================================================================
 # Module Exports
 # =============================================================================
 
@@ -391,8 +347,6 @@ __all__ = [
     # User confirmation
     "confirm_action",
     "confirm_production_operation",
-    # File operations
-    "safe_file_write",
     # Re-exported from output module
     "print_error",
     "print_info",
