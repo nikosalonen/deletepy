@@ -1,5 +1,6 @@
 """Unified Auth0 API client for centralized HTTP operations."""
 
+import random
 import time
 from dataclasses import dataclass
 from enum import Enum
@@ -181,6 +182,40 @@ class Auth0Client:
 
         return remaining, reset_time
 
+    def _compute_retry_delay(self, response: requests.Response, attempt: int) -> float:
+        """Compute how long to sleep before retrying a 429/5xx response.
+
+        Prefers the HTTP-standard ``Retry-After`` header, then
+        ``X-RateLimit-Reset`` (absolute epoch seconds), and finally falls back
+        to exponential backoff. A small jitter is added to reduce thundering
+        herd on parallel clients.
+
+        Args:
+            response: The HTTP response that triggered the retry.
+            attempt: Zero-based retry attempt number.
+
+        Returns:
+            Seconds to sleep (always >= 0).
+        """
+        delay: float | None = None
+
+        retry_after = response.headers.get("Retry-After")
+        if retry_after is not None:
+            try:
+                delay = float(retry_after)
+            except ValueError:
+                delay = None
+
+        if delay is None:
+            _, reset_time = self._parse_rate_limit_headers(response)
+            if reset_time is not None:
+                delay = max(0.0, reset_time - time.time())
+
+        if delay is None:
+            delay = self.retry_backoff_base * (2**attempt)
+
+        return max(0.0, delay) + random.uniform(0, 0.5)
+
     def _handle_response(
         self,
         response: requests.Response,
@@ -292,6 +327,7 @@ class Auth0Client:
         headers = self._build_headers(extra_headers)
 
         last_error: str = ""
+        last_api_response: APIResponse | None = None
         for attempt in range(self.max_retries + 1):
             try:
                 response = requests.request(
@@ -306,7 +342,17 @@ class Auth0Client:
                 # Apply rate limiting with adaptive behavior
                 self._apply_rate_limit(response)
 
-                return self._handle_response(response, operation_name)
+                api_response = self._handle_response(response, operation_name)
+
+                # Retry on 429 (rate-limited) or 5xx (server error).
+                if (
+                    api_response.status_code == 429 or api_response.status_code >= 500
+                ) and attempt < self.max_retries:
+                    time.sleep(self._compute_retry_delay(response, attempt))
+                    last_api_response = api_response
+                    continue
+
+                return api_response
 
             except requests.exceptions.Timeout:
                 last_error = f"Request timeout during {operation_name}"
@@ -324,6 +370,9 @@ class Auth0Client:
                     status_code=0,
                     error_message=f"Request failed during {operation_name}: {str(e)}",
                 )
+
+        if last_api_response is not None:
+            return last_api_response
 
         return APIResponse(
             success=False,
