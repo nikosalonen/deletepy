@@ -463,6 +463,12 @@ def _handle_identity_unlinking(
 ) -> dict[str, int]:
     """Handle unlinking of identities and cleanup of orphaned users.
 
+    Detached users created by Auth0 when a secondary identity is unlinked are
+    cleaned up in a deferred sweep AFTER the unlink loop completes, using
+    strongly-consistent GET-by-id rather than the eventually-consistent search
+    endpoint. This avoids missing detached accounts when Auth0's search index
+    has not yet caught up.
+
     Args:
         identities_to_unlink: List of identities to unlink
         client: Auth0 API client
@@ -486,25 +492,40 @@ def _handle_identity_unlinking(
         operation="unlink_identities",
     )
 
+    detached_targets: list[tuple[str, str]] = []
+
     with live_progress(len(identities_to_unlink), "Unlinking identities") as advance:
         for user in identities_to_unlink:
             if shutdown_requested():
                 break
 
-            _process_single_identity_unlink(user, client, results)
+            _process_single_identity_unlink(user, client, results, detached_targets)
             advance()
+
+    if detached_targets and not shutdown_requested():
+        _sweep_detached_social_users(detached_targets, client, results)
+
     return results
 
 
 def _process_single_identity_unlink(
-    user: dict[str, Any], client: Auth0Client, results: dict[str, int]
+    user: dict[str, Any],
+    client: Auth0Client,
+    results: dict[str, int],
+    detached_targets: list[tuple[str, str]],
 ) -> None:
-    """Process unlinking of a single identity and handle orphaned users.
+    """Process unlinking of a single identity.
+
+    Performs the unlink and the strongly-consistent "user has no remaining
+    identities" check inline. Defers detached-user cleanup to the post-loop
+    sweep by appending to ``detached_targets``.
 
     Args:
         user: User data with identity information
         client: Auth0 API client
         results: Results dictionary to update
+        detached_targets: Output list for (connection, social_id) pairs whose
+            unlink succeeded, to be cleaned up in the deferred sweep
     """
     try:
         success = unlink_user_identity(
@@ -515,7 +536,8 @@ def _process_single_identity_unlink(
         )
         if success:
             results["unlinked_count"] += 1
-            _handle_orphaned_users_cleanup(user, client, results)
+            _delete_orphaned_user_if_empty(user["user_id"], client, results)
+            detached_targets.append((user["matching_connection"], user["social_id"]))
         else:
             results["failed_unlinks"] += 1
     except Exception as e:
@@ -528,27 +550,22 @@ def _process_single_identity_unlink(
         results["failed_unlinks"] += 1
 
 
-def _handle_orphaned_users_cleanup(
-    user: dict[str, Any], client: Auth0Client, results: dict[str, int]
+def _delete_orphaned_user_if_empty(
+    user_id: str, client: Auth0Client, results: dict[str, int]
 ) -> None:
-    """Handle cleanup of orphaned users after identity unlinking.
+    """Delete the original user if no identities remain after unlinking.
+
+    Uses GET-by-id which is strongly consistent, so this is safe to run
+    immediately after the unlink call.
 
     Args:
-        user: User data with identity information
+        user_id: Auth0 user ID to inspect
         client: Auth0 API client
         results: Results dictionary to update
     """
-    # Check if user has no remaining identities after unlinking
-    remaining_identities = _get_user_identity_count(user["user_id"], client)
+    remaining_identities = _get_user_identity_count(user_id, client)
     if remaining_identities is not None and remaining_identities == 0:
-        _delete_orphaned_user(user["user_id"], client, results)
-
-    # Search for and delete separate user accounts with this social ID as primary identity
-    detached_users = _find_users_with_primary_social_id(
-        user["social_id"], user["matching_connection"], client
-    )
-    for detached_user in detached_users:
-        _delete_detached_social_user(detached_user, user["social_id"], client, results)
+        _delete_orphaned_user(user_id, client, results)
 
 
 def _delete_orphaned_user(
@@ -572,24 +589,77 @@ def _delete_orphaned_user(
         results["orphaned_users_failed"] += 1
 
 
-def _delete_detached_social_user(
-    detached_user: dict[str, Any],
+def _sweep_detached_social_users(
+    detached_targets: list[tuple[str, str]],
+    client: Auth0Client,
+    results: dict[str, int],
+) -> None:
+    """Delete detached user accounts produced by identity unlinking.
+
+    When Auth0 unlinks a secondary identity, it creates a standalone user
+    whose ``user_id`` is ``"{connection}|{social_id}"``. We look it up directly
+    via GET-by-id (strongly consistent) rather than via the search endpoint
+    (eventually consistent), which previously missed accounts that had not yet
+    been indexed.
+
+    A 404 is treated as a no-op: the account either was already cleaned up or
+    never split out.
+
+    Args:
+        detached_targets: List of (connection, social_id) pairs collected
+            during the unlink loop
+        client: Auth0 API client
+        results: Results dictionary to update
+    """
+    print_info(
+        f"\nChecking for {len(detached_targets)} detached user accounts to clean up...",
+        count=len(detached_targets),
+        operation="sweep_detached_users",
+    )
+
+    with live_progress(len(detached_targets), "Cleaning up detached users") as advance:
+        for connection, social_id in detached_targets:
+            if shutdown_requested():
+                break
+            _lookup_and_delete_detached_user(connection, social_id, client, results)
+            advance()
+
+
+def _lookup_and_delete_detached_user(
+    connection: str,
     social_id: str,
     client: Auth0Client,
     results: dict[str, int],
 ) -> None:
-    """Delete a detached social user account.
+    """Look up a detached user by constructed user_id and delete if present.
 
     Args:
-        detached_user: Detached user data
+        connection: Connection/provider name from the original identity
         social_id: Social media ID
         client: Auth0 API client
         results: Results dictionary to update
     """
-    if delete_user(detached_user["user_id"], client):
-        results["orphaned_users_deleted"] += 1
-    else:
-        results["orphaned_users_failed"] += 1
+    user_id = f"{connection}|{social_id}"
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.get_user(encoded_id)
+
+    if result.success:
+        if delete_user(user_id, client):
+            results["orphaned_users_deleted"] += 1
+        else:
+            results["orphaned_users_failed"] += 1
+        return
+
+    if result.status_code == 404:
+        return
+
+    print_error(
+        f"Error looking up detached user {user_id}: {result.error_message}",
+        user_id=user_id,
+        social_id=social_id,
+        operation="lookup_detached_user",
+    )
+    results["orphaned_users_failed"] += 1
 
 
 def _print_operations_summary(
@@ -693,77 +763,6 @@ def _get_user_identity_count(user_id: str, client: Auth0Client) -> int | None:
     user_data = result.data if isinstance(result.data, dict) else {}
     identities = user_data.get("identities", [])
     return len(identities) if isinstance(identities, list) else 0
-
-
-def _has_social_id_as_primary_identity(
-    user: dict[str, Any], social_id: str, connection: str
-) -> bool:
-    """Check if a user has the given social ID as their primary identity.
-
-    Args:
-        user: User data from Auth0
-        social_id: The social media ID to check
-        connection: The connection name for the social ID
-
-    Returns:
-        bool: True if the user has this social ID as their primary identity
-    """
-    if "identities" not in user or not isinstance(user["identities"], list):
-        return False
-
-    identities = user["identities"]
-    if len(identities) == 0:
-        return False
-
-    # Check if this is the primary identity (usually the first one)
-    primary_identity = identities[0]
-    user_id = primary_identity.get("user_id")
-    connection_name = primary_identity.get("connection")
-    return bool(user_id == social_id and connection_name == connection)
-
-
-def _find_users_with_primary_social_id(
-    social_id: str,
-    connection: str,
-    client: Auth0Client,
-) -> list[dict[str, Any]]:
-    """Find users with a specific social media ID as their primary identity.
-
-    Args:
-        social_id: The social media ID to search for
-        connection: The connection name for the social ID
-        client: Auth0 API client
-
-    Returns:
-        List[Dict[str, Any]]: List of users found with this social ID as primary identity
-    """
-    query = f'identities.user_id:"{social_id}" AND identities.connection:"{connection}"'
-    result = client.search_users(query)
-
-    found_users: list[dict[str, Any]] = []
-
-    if not result.success:
-        print_error(
-            f"Error searching for social ID {social_id}: {result.error_message}",
-            social_id=social_id,
-            operation="social_search",
-        )
-        return found_users
-
-    data = result.data if isinstance(result.data, dict) else {}
-    if "users" in data:
-        for user in data["users"]:
-            # Only include users where this social ID is their primary/main identity
-            if _has_social_id_as_primary_identity(user, social_id, connection):
-                found_users.append(user)
-                print_info(
-                    f"Found detached social user {user.get('user_id', 'unknown')} with primary identity {social_id}",
-                    user_id=user.get("user_id", "unknown"),
-                    social_id=social_id,
-                    operation="find_detached_social_user",
-                )
-
-    return found_users
 
 
 def _execute_batch_processing_loop(
