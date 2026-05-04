@@ -23,6 +23,10 @@ def mock_client():
     Individual tests should configure return values on specific methods.
     """
     client = MagicMock(spec=Auth0Client)
+    # context is assigned in Auth0Client.__init__, so it isn't visible to
+    # MagicMock's spec inspection (which only sees class-level attributes).
+    # Attach it explicitly so tests can read context.token / .base_url / .env.
+    client.context = MagicMock()
     client.context.token = "test_token"
     client.context.base_url = "https://test.auth0.com"
     client.context.env = "dev"
