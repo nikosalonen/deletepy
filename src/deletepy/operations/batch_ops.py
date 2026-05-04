@@ -502,7 +502,7 @@ def _handle_identity_unlinking(
             _process_single_identity_unlink(user, client, results, detached_targets)
             advance()
 
-    if detached_targets and not shutdown_requested():
+    if detached_targets:
         _sweep_detached_social_users(detached_targets, client, results)
 
     return results
