@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 from src.deletepy.core.auth0_client import APIResponse
 from src.deletepy.operations.batch_ops import (
+    _delete_orphaned_user_if_empty,
     _handle_identity_unlinking,
     _lookup_and_delete_detached_user,
     _process_single_identity_unlink,
@@ -17,6 +18,7 @@ def _empty_results() -> dict[str, int]:
         "failed_unlinks": 0,
         "orphaned_users_deleted": 0,
         "orphaned_users_failed": 0,
+        "orphaned_users_lookup_failed": 0,
     }
 
 
@@ -57,7 +59,7 @@ def test_lookup_and_delete_detached_user_not_found(mock_delete_user, mock_client
 
 @patch("src.deletepy.operations.batch_ops.delete_user")
 def test_lookup_and_delete_detached_user_lookup_error(mock_delete_user, mock_client):
-    """Non-404 lookup error → counted as failure, no delete attempted."""
+    """Non-404 lookup error → counted as lookup failure, not delete failure."""
     mock_client.get_user.return_value = APIResponse(
         success=False, status_code=500, error_message="server error"
     )
@@ -67,7 +69,27 @@ def test_lookup_and_delete_detached_user_lookup_error(mock_delete_user, mock_cli
 
     mock_delete_user.assert_not_called()
     assert results["orphaned_users_deleted"] == 0
-    assert results["orphaned_users_failed"] == 1
+    assert results["orphaned_users_failed"] == 0
+    assert results["orphaned_users_lookup_failed"] == 1
+
+
+@patch("src.deletepy.operations.batch_ops.print_error")
+@patch("src.deletepy.operations.batch_ops.delete_user")
+def test_lookup_and_delete_detached_user_renders_status_when_no_message(
+    mock_delete_user, mock_print_error, mock_client
+):
+    """Lookup failure with error_message=None logs the HTTP status, not 'None'."""
+    mock_client.get_user.return_value = APIResponse(
+        success=False, status_code=502, error_message=None
+    )
+    results = _empty_results()
+
+    _lookup_and_delete_detached_user("facebook", "123", mock_client, results)
+
+    logged_message = mock_print_error.call_args.args[0]
+    assert "HTTP 502" in logged_message
+    assert "None" not in logged_message
+    assert results["orphaned_users_lookup_failed"] == 1
 
 
 @patch("src.deletepy.operations.batch_ops.delete_user")
@@ -258,3 +280,126 @@ def test_handle_identity_unlinking_skips_sweep_for_failed_unlinks(
     # Only one sweep lookup, for the successful unlink
     assert mock_client.get_user.call_count == 1
     mock_delete_user.assert_not_called()
+
+
+# ---------- _delete_orphaned_user_if_empty ----------
+
+
+@patch("src.deletepy.operations.batch_ops.delete_user")
+def test_delete_orphaned_user_if_empty_no_remaining_identities(
+    mock_delete_user, mock_client
+):
+    """count==0 → user is deleted and orphaned_users_deleted is incremented."""
+    mock_client.get_user.return_value = APIResponse(
+        success=True, status_code=200, data={"identities": []}
+    )
+    mock_delete_user.return_value = True
+    results = _empty_results()
+
+    _delete_orphaned_user_if_empty("auth0|main", mock_client, results)
+
+    mock_delete_user.assert_called_once_with("auth0|main", mock_client)
+    assert results["orphaned_users_deleted"] == 1
+    assert results["orphaned_users_failed"] == 0
+    assert results["orphaned_users_lookup_failed"] == 0
+
+
+@patch("src.deletepy.operations.batch_ops.delete_user")
+def test_delete_orphaned_user_if_empty_still_has_identities(
+    mock_delete_user, mock_client
+):
+    """count>0 → no delete; no counter touched."""
+    mock_client.get_user.return_value = APIResponse(
+        success=True,
+        status_code=200,
+        data={"identities": [{"connection": "auth0"}]},
+    )
+    results = _empty_results()
+
+    _delete_orphaned_user_if_empty("auth0|main", mock_client, results)
+
+    mock_delete_user.assert_not_called()
+    assert results == _empty_results()
+
+
+@patch("src.deletepy.operations.batch_ops.delete_user")
+def test_delete_orphaned_user_if_empty_lookup_failure(mock_delete_user, mock_client):
+    """Lookup failure (count is None) → no delete; lookup-failed counter increments."""
+    mock_client.get_user.return_value = APIResponse(
+        success=False, status_code=500, error_message="server error"
+    )
+    results = _empty_results()
+
+    _delete_orphaned_user_if_empty("auth0|main", mock_client, results)
+
+    mock_delete_user.assert_not_called()
+    assert results["orphaned_users_deleted"] == 0
+    assert results["orphaned_users_failed"] == 0
+    assert results["orphaned_users_lookup_failed"] == 1
+
+
+# ---------- collision guard and sweep edge cases ----------
+
+
+@patch("src.deletepy.operations.batch_ops.unlink_user_identity")
+@patch("src.deletepy.operations.batch_ops._delete_orphaned_user_if_empty")
+def test_process_single_identity_unlink_skips_target_when_id_matches_primary(
+    mock_orphan_check, mock_unlink, mock_client
+):
+    """No sweep target enqueued when the constructed id equals the primary user_id.
+
+    Protects an active primary social account from accidental deletion if the
+    inline orphan check fails transiently.
+    """
+    mock_unlink.return_value = True
+    results = _empty_results()
+    targets: list[tuple[str, str]] = []
+    user = {
+        "user_id": "facebook|fb123",
+        "matching_connection": "facebook",
+        "social_id": "fb123",
+    }
+
+    _process_single_identity_unlink(user, mock_client, results, targets)
+
+    assert results["unlinked_count"] == 1
+    assert targets == []
+
+
+@patch("src.deletepy.operations.batch_ops.delete_user")
+def test_sweep_passes_per_target_encoded_id(mock_delete_user, mock_client):
+    """Each target's {connection}|{social_id} is URL-encoded and passed to GET."""
+    mock_client.get_user.return_value = APIResponse(success=False, status_code=404)
+    results = _empty_results()
+
+    _sweep_detached_social_users(
+        [("facebook", "fb1"), ("google-oauth2", "abc-xyz")],
+        mock_client,
+        results,
+    )
+
+    call_args = [c.args[0] for c in mock_client.get_user.call_args_list]
+    assert call_args == ["facebook%7Cfb1", "google-oauth2%7Cabc-xyz"]
+
+
+@patch("src.deletepy.operations.batch_ops.shutdown_requested")
+@patch("src.deletepy.operations.batch_ops.print_warning")
+@patch("src.deletepy.operations.batch_ops.delete_user")
+def test_sweep_warns_when_shutdown_aborts_mid_loop(
+    mock_delete_user, mock_print_warning, mock_shutdown, mock_client
+):
+    """Shutdown mid-sweep stops processing and warns about unprocessed targets."""
+    # First two iterations proceed; third triggers shutdown before lookup.
+    mock_shutdown.side_effect = [False, False, True]
+    mock_client.get_user.return_value = APIResponse(success=False, status_code=404)
+    results = _empty_results()
+
+    _sweep_detached_social_users(
+        [("facebook", "1"), ("facebook", "2"), ("facebook", "3")],
+        mock_client,
+        results,
+    )
+
+    assert mock_client.get_user.call_count == 2
+    warning_messages = [c.args[0] for c in mock_print_warning.call_args_list]
+    assert any("1 detached user" in msg for msg in warning_messages)

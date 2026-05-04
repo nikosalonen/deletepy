@@ -481,6 +481,7 @@ def _handle_identity_unlinking(
         "failed_unlinks": 0,
         "orphaned_users_deleted": 0,
         "orphaned_users_failed": 0,
+        "orphaned_users_lookup_failed": 0,
     }
 
     if not identities_to_unlink:
@@ -537,7 +538,16 @@ def _process_single_identity_unlink(
         if success:
             results["unlinked_count"] += 1
             _delete_orphaned_user_if_empty(user["user_id"], client, results)
-            detached_targets.append((user["matching_connection"], user["social_id"]))
+            # Guard: only enqueue the sweep target when the constructed
+            # detached user_id differs from the primary. If they match (the
+            # primary itself was a social account), the sweep would otherwise
+            # be able to delete the still-active primary on a transient
+            # orphan-check failure.
+            detached_id = f"{user['matching_connection']}|{user['social_id']}"
+            if detached_id != user["user_id"]:
+                detached_targets.append(
+                    (user["matching_connection"], user["social_id"])
+                )
         else:
             results["failed_unlinks"] += 1
     except Exception as e:
@@ -564,7 +574,13 @@ def _delete_orphaned_user_if_empty(
         results: Results dictionary to update
     """
     remaining_identities = _get_user_identity_count(user_id, client)
-    if remaining_identities is not None and remaining_identities == 0:
+    if remaining_identities is None:
+        # Lookup itself failed — we cannot tell whether the user is now
+        # orphaned. Surface this distinctly from a delete failure so the
+        # operator knows cleanup is incomplete and may need a re-run.
+        results["orphaned_users_lookup_failed"] += 1
+        return
+    if remaining_identities == 0:
         _delete_orphaned_user(user_id, client, results)
 
 
@@ -598,9 +614,9 @@ def _sweep_detached_social_users(
 
     When Auth0 unlinks a secondary identity, it creates a standalone user
     whose ``user_id`` is ``"{connection}|{social_id}"``. We look it up directly
-    via GET-by-id (strongly consistent) rather than via the search endpoint
-    (eventually consistent), which previously missed accounts that had not yet
-    been indexed.
+    via GET-by-id (strongly consistent). The Auth0 search endpoint is
+    eventually consistent and can miss accounts that have not yet been
+    indexed, so it is unsuitable here.
 
     A 404 is treated as a no-op: the account either was already cleaned up or
     never split out.
@@ -617,12 +633,23 @@ def _sweep_detached_social_users(
         operation="sweep_detached_users",
     )
 
+    processed = 0
     with live_progress(len(detached_targets), "Cleaning up detached users") as advance:
         for connection, social_id in detached_targets:
             if shutdown_requested():
                 break
             _lookup_and_delete_detached_user(connection, social_id, client, results)
+            processed += 1
             advance()
+
+    unprocessed = len(detached_targets) - processed
+    if unprocessed > 0:
+        print_warning(
+            f"\nShutdown requested mid-sweep: {unprocessed} detached user "
+            "candidates were not checked. Re-run to complete cleanup.",
+            unprocessed=unprocessed,
+            operation="sweep_detached_users",
+        )
 
 
 def _lookup_and_delete_detached_user(
@@ -653,13 +680,18 @@ def _lookup_and_delete_detached_user(
     if result.status_code == 404:
         return
 
+    # Non-404 lookup failure: bucketed separately from delete failures because
+    # the user's actual state is unknown (token expiry, exhausted 429 retries,
+    # 5xx, transport errors). Auth0Client retries 429/idempotent-5xx
+    # internally; reaching here means those retries were exhausted.
+    error_detail = result.error_message or f"HTTP {result.status_code}"
     print_error(
-        f"Error looking up detached user {user_id}: {result.error_message}",
+        f"Error looking up detached user {user_id}: {error_detail}",
         user_id=user_id,
         social_id=social_id,
         operation="lookup_detached_user",
     )
-    results["orphaned_users_failed"] += 1
+    results["orphaned_users_lookup_failed"] += 1
 
 
 def _print_operations_summary(
@@ -708,6 +740,15 @@ def _print_operations_summary(
             print_info(
                 f"Failed orphaned user deletions: {unlinking_results['orphaned_users_failed']}",
                 orphaned_users_failed=unlinking_results["orphaned_users_failed"],
+            )
+
+        if unlinking_results.get("orphaned_users_lookup_failed", 0) > 0:
+            print_warning(
+                "Orphaned user lookups failed (state unknown, re-run recommended): "
+                f"{unlinking_results['orphaned_users_lookup_failed']}",
+                orphaned_users_lookup_failed=unlinking_results[
+                    "orphaned_users_lookup_failed"
+                ],
             )
 
 
