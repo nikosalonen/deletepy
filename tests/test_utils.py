@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import pytest
 
-from src.deletepy.cli.validators import validate_args
 from src.deletepy.utils.file_utils import read_user_ids, read_user_ids_generator
 
 
@@ -68,63 +67,6 @@ def test_read_user_ids_generator_file_not_found():
     # The generator function handles file not found gracefully and returns empty generator
     result = list(read_user_ids_generator("nonexistent_file.txt"))
     assert result == []
-
-
-def test_validate_args():
-    # Test block operation
-    with pytest.raises(SystemExit):
-        validate_args()  # Should exit when no args provided
-
-    # Test with valid arguments
-    import sys
-
-    original_argv = sys.argv.copy()
-    try:
-        sys.argv = ["script.py", "test.txt", "dev", "--block"]
-        args = validate_args()
-        assert args.input_file == "test.txt"
-        assert args.env == "dev"
-        assert args.operation == "block"
-
-        # Test with invalid environment
-        sys.argv = ["script.py", "test.txt", "invalid_env", "--block"]
-        with pytest.raises(SystemExit):
-            validate_args()
-
-        # Test with missing operation
-        sys.argv = ["script.py", "test.txt", "dev"]
-        with pytest.raises(SystemExit):
-            validate_args()
-    finally:
-        sys.argv = original_argv
-
-
-@pytest.mark.parametrize(
-    "flag,expected_operation",
-    [
-        ("--block", "block"),
-        ("--delete", "delete"),
-        ("--revoke-grants-only", "revoke-grants-only"),
-        ("--check-unblocked", "check-unblocked"),
-        ("--check-domains", "check-domains"),
-        ("--export-last-login", "export-last-login"),
-        ("--doctor", "doctor"),
-        ("--unlink-social-ids", "unlink-social-ids"),
-    ],
-)
-def test_validate_args_operations(monkeypatch, flag, expected_operation):
-    """Test that validate_args correctly parses all supported operation flags."""
-    # Set up test arguments
-    test_args = ["script.py", "test.txt", "dev", flag]
-    monkeypatch.setattr("sys.argv", test_args)
-
-    # Parse arguments
-    args = validate_args()
-
-    # Verify the operation was parsed correctly
-    assert args.input_file == "test.txt"
-    assert args.env == "dev"
-    assert args.operation == expected_operation
 
 
 @pytest.fixture

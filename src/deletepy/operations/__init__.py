@@ -7,9 +7,6 @@ from .batch_ops import CheckpointOperationConfig
 # Domain operations
 from .domain_ops import (
     check_email_domains,
-    extract_domains_from_emails,
-    filter_emails_by_domain,
-    get_domain_statistics,
     validate_domain_format,
 )
 
@@ -50,7 +47,4 @@ __all__ = [
     # Domain operations
     "check_email_domains",
     "validate_domain_format",
-    "extract_domains_from_emails",
-    "get_domain_statistics",
-    "filter_emails_by_domain",
 ]

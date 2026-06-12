@@ -34,22 +34,12 @@ from .file_utils import (
     handle_shutdown,
     read_user_ids,
     read_user_ids_generator,
-    safe_file_copy,
-    safe_file_delete,
-    safe_file_move,
     safe_file_read,
     safe_file_write,
     setup_signal_handlers,
     validate_file_path,
 )
 from .logging_utils import get_logger, log_operation, setup_logging
-from .output import (
-    log_api_request,
-    log_batch_operation,
-    log_file_operation,
-    log_progress,
-    log_user_operation,
-)
 from .rich_utils import (
     create_table,
     get_console,
@@ -96,9 +86,6 @@ __all__ = [
     "handle_shutdown",
     "read_user_ids",
     "read_user_ids_generator",
-    "safe_file_copy",
-    "safe_file_delete",
-    "safe_file_move",
     "safe_file_read",
     "safe_file_write",
     "setup_signal_handlers",
@@ -109,11 +96,6 @@ __all__ = [
     "get_logger",
     "setup_logging",
     "log_operation",
-    "log_api_request",
-    "log_batch_operation",
-    "log_file_operation",
-    "log_progress",
-    "log_user_operation",
     # Rich utilities for pretty output
     "create_table",
     "get_console",
