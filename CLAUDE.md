@@ -16,8 +16,7 @@ deletepy/
 │   └── deletepy/
 │       ├── cli/                 # Command-line interface
 │       │   ├── main.py          # Click-based CLI entry point
-│       │   ├── commands.py      # Operation handlers
-│       │   └── validators.py    # Argument validation
+│       │   └── commands.py      # Operation handlers
 │       ├── core/                # Core functionality
 │       │   ├── auth.py          # Auth0 authentication
 │       │   ├── auth0_client.py  # Unified Auth0 API client
@@ -33,9 +32,8 @@ deletepy/
 │       │   ├── display_utils.py # Progress/output formatting
 │       │   ├── request_utils.py # Batch processing utilities
 │       │   └── auth_utils.py    # Authentication utilities
-│       └── models/              # Data models
+│       └── models/              # Data models (checkpoint state)
 ├── tests/                       # Test suite
-├── legacy files (main.py, etc.) # Backward compatibility
 └── pyproject.toml              # Modern Python packaging
 ```
 
@@ -166,7 +164,7 @@ make check-all
 - `conftest.py` provides `mock_client` fixture (`MagicMock(spec=Auth0Client)`) and `mock_requests` for auth bootstrap tests
 - Each module has corresponding test files following `test_*.py` naming
 - Tests mock `Auth0Client` methods and assert on `APIResponse` return values
-- Test coverage should be maintained at 100%
+- Coverage is enforced as a ratchet via `fail_under` in `pyproject.toml` (currently 52%) — raise it when coverage improves, never lower it
 
 ### Function Complexity Guidelines
 

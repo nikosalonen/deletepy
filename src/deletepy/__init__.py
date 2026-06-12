@@ -7,12 +7,6 @@ from .cli import (
     handle_csv_command,
     parse_csv_args,
     print_csv_usage,
-    validate_args,
-    validate_connection_type,
-    validate_environment,
-    validate_file_path_argument,
-    validate_operation,
-    validate_user_id_list,
 )
 from .core.auth import doctor, get_access_token
 from .core.config import (
@@ -23,12 +17,9 @@ from .core.config import (
     validate_rate_limit_config,
 )
 from .core.exceptions import (
-    APIError,
     Auth0ManagerError,
     AuthConfigError,
     FileOperationError,
-    UserOperationError,
-    ValidationError,
 )
 
 # Models
@@ -50,9 +41,6 @@ from .operations.batch_ops import (
 )
 from .operations.domain_ops import (
     check_email_domains,
-    extract_domains_from_emails,
-    filter_emails_by_domain,
-    get_domain_statistics,
     validate_domain_format,
 )
 from .operations.export_ops import (
@@ -99,9 +87,6 @@ from .utils import (
     read_user_ids,
     read_user_ids_generator,
     resolve_encoded_username,
-    safe_file_copy,
-    safe_file_delete,
-    safe_file_move,
     safe_file_read,
     safe_file_write,
     setup_signal_handlers,
@@ -129,10 +114,7 @@ __all__ = [
     # Exceptions
     "Auth0ManagerError",
     "AuthConfigError",
-    "UserOperationError",
     "FileOperationError",
-    "APIError",
-    "ValidationError",
     # Models
     "Checkpoint",
     "CheckpointStatus",
@@ -154,9 +136,6 @@ __all__ = [
     "unlink_user_identity",
     "check_email_domains",
     "validate_domain_format",
-    "extract_domains_from_emails",
-    "get_domain_statistics",
-    "filter_emails_by_domain",
     # Checkpoint-enabled operations
     "export_users_last_login_to_csv_with_checkpoints",
     "check_unblocked_users_with_checkpoints",
@@ -181,9 +160,6 @@ __all__ = [
     "clean_identifier",
     "safe_file_read",
     "safe_file_write",
-    "safe_file_copy",
-    "safe_file_move",
-    "safe_file_delete",
     "validate_file_path",
     "read_user_ids",
     "read_user_ids_generator",
@@ -201,12 +177,6 @@ __all__ = [
     # Checkpoint manager
     "CheckpointManager",
     # CLI
-    "validate_args",
-    "validate_environment",
-    "validate_operation",
-    "validate_connection_type",
-    "validate_user_id_list",
-    "validate_file_path_argument",
     "csv_main",
     "parse_csv_args",
     "print_csv_usage",

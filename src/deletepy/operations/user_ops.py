@@ -381,21 +381,6 @@ def _revoke_individual_sessions(
         user_id: Auth0 user ID
         client: Auth0 API client
     """
-    _process_session_revocations(sessions, user_id, client)
-
-
-def _process_session_revocations(
-    sessions: list[dict[str, Any]],
-    user_id: str,
-    client: Auth0Client,
-) -> None:
-    """Process the revocation of individual sessions.
-
-    Args:
-        sessions: List of session objects
-        user_id: Auth0 user ID
-        client: Auth0 API client
-    """
     for session in sessions:
         session_id = session.get("id")
         if not session_id:
