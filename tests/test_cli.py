@@ -142,6 +142,113 @@ class TestCLIMain:
         finally:
             os.unlink(temp_path)
 
+    @staticmethod
+    def _resolve_force_otp(call):
+        """Extract the force_otp value from a handle_user_operations call.
+
+        The flag is wired positionally for block/revoke-grants-only and as a
+        keyword for delete, so resolve it by name independent of position.
+        """
+        if "force_otp" in call.kwargs:
+            return call.kwargs["force_otp"]
+        # Positional: handle_user_operations(input_file, env, operation,
+        # dry_run, rotate_password, force_otp)
+        return call.args[5]
+
+    @patch("src.deletepy.cli.main.OperationHandler")
+    def test_users_revoke_grants_only_force_otp(self, mock_handler_class):
+        """Test users revoke-grants-only command with --force-otp."""
+        mock_handler = MagicMock()
+        mock_handler_class.return_value = mock_handler
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp:
+            temp.write("auth0|123\nauth0|456\n")
+            temp_path = temp.name
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(
+                cli,
+                ["users", "revoke-grants-only", temp_path, "dev", "--force-otp"],
+            )
+
+            assert result.exit_code == 0
+            mock_handler.handle_user_operations.assert_called_once()
+            call = mock_handler.handle_user_operations.call_args
+            assert call.args[2] == "revoke-grants-only"
+            assert self._resolve_force_otp(call) is True
+        finally:
+            os.unlink(temp_path)
+
+    @patch("src.deletepy.cli.main.OperationHandler")
+    def test_users_block_force_otp(self, mock_handler_class):
+        """Test users block command with --force-otp."""
+        mock_handler = MagicMock()
+        mock_handler_class.return_value = mock_handler
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp:
+            temp.write("auth0|123\n")
+            temp_path = temp.name
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(
+                cli, ["users", "block", temp_path, "dev", "--force-otp"]
+            )
+
+            assert result.exit_code == 0
+            mock_handler.handle_user_operations.assert_called_once()
+            call = mock_handler.handle_user_operations.call_args
+            assert call.args[2] == "block"
+            assert self._resolve_force_otp(call) is True
+        finally:
+            os.unlink(temp_path)
+
+    @patch("src.deletepy.cli.main.OperationHandler")
+    def test_users_delete_force_otp(self, mock_handler_class):
+        """Test users delete command wires --force-otp (passed as keyword)."""
+        mock_handler = MagicMock()
+        mock_handler_class.return_value = mock_handler
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp:
+            temp.write("auth0|123\n")
+            temp_path = temp.name
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(
+                cli, ["users", "delete", temp_path, "dev", "--force-otp"]
+            )
+
+            assert result.exit_code == 0
+            mock_handler.handle_user_operations.assert_called_once()
+            call = mock_handler.handle_user_operations.call_args
+            assert call.args[2] == "delete"
+            assert self._resolve_force_otp(call) is True
+        finally:
+            os.unlink(temp_path)
+
+    @patch("src.deletepy.cli.main.OperationHandler")
+    def test_users_block_without_force_otp_defaults_false(self, mock_handler_class):
+        """Test block command leaves force_otp False when flag is omitted."""
+        mock_handler = MagicMock()
+        mock_handler_class.return_value = mock_handler
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp:
+            temp.write("auth0|123\n")
+            temp_path = temp.name
+
+        try:
+            runner = CliRunner()
+            result = runner.invoke(cli, ["users", "block", temp_path, "dev"])
+
+            assert result.exit_code == 0
+            mock_handler.handle_user_operations.assert_called_once()
+            call = mock_handler.handle_user_operations.call_args
+            assert self._resolve_force_otp(call) is False
+        finally:
+            os.unlink(temp_path)
+
 
 class TestOperationHandler:
     """Test OperationHandler class."""
@@ -202,7 +309,7 @@ class TestOperationHandler:
         result = handler._confirm_production_operation("delete", 10)
 
         assert result is True
-        mock_confirm.assert_called_once_with("delete", 10, False)
+        mock_confirm.assert_called_once_with("delete", 10, False, False)
 
     @patch("src.deletepy.cli.commands.get_user_email")
     def test_fetch_user_emails(self, mock_get_email):

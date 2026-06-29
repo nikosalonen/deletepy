@@ -1,5 +1,6 @@
 """Core user operations for Auth0 user management."""
 
+from dataclasses import dataclass
 from typing import Any, cast
 
 from ..core.auth0_client import Auth0Client
@@ -24,6 +25,27 @@ from ..utils.display_utils import live_progress, shutdown_requested
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.url_utils import secure_url_encode
 from ..utils.validators import SecurityValidator
+
+
+@dataclass(frozen=True)
+class UserOperationOptions:
+    """Per-user modifier flags applied alongside the primary batch operation.
+
+    Each flag is an independent, best-effort modifier: it is attempted
+    alongside the primary operation (block/delete/revoke) but does not gate
+    that operation's success.
+
+    Attributes:
+        rotate_password: If True, rotate user passwords during the operation
+        force_otp: If True, set app_metadata.requiresAdditionalVerification=true
+    """
+
+    rotate_password: bool = False
+    force_otp: bool = False
+
+
+# Shared frozen default — safe to reuse because the dataclass is immutable.
+_DEFAULT_OPTIONS = UserOperationOptions()
 
 
 def delete_user(user_id: str, client: Auth0Client) -> bool:
@@ -96,6 +118,46 @@ def block_user(
             f"Error blocking user {user_id}: {result.error_message}",
             user_id=user_id,
             operation="block_user",
+        )
+        return False
+
+
+def set_requires_additional_verification(user_id: str, client: Auth0Client) -> bool:
+    """Set app_metadata.requiresAdditionalVerification = true on a user.
+
+    Auth0 shallow-merges app_metadata keys on PATCH, so other existing
+    app_metadata values are preserved.
+
+    Args:
+        user_id: Auth0 user ID
+        client: Auth0 API client
+
+    Returns:
+        bool: True if the update succeeded, False otherwise
+    """
+    print_info(
+        f"Setting requiresAdditionalVerification for user: {user_id}",
+        user_id=user_id,
+        operation="set_requires_additional_verification",
+    )
+
+    encoded_id = secure_url_encode(user_id, "user ID")
+    result = client.update_user(
+        encoded_id, {"app_metadata": {"requiresAdditionalVerification": True}}
+    )
+    if result.success:
+        print_success(
+            f"Successfully set requiresAdditionalVerification for user {user_id}",
+            user_id=user_id,
+            operation="set_requires_additional_verification",
+        )
+        return True
+    else:
+        print_error(
+            f"Error setting requiresAdditionalVerification for user {user_id}: "
+            f"{result.error_message}",
+            user_id=user_id,
+            operation="set_requires_additional_verification",
         )
         return False
 
@@ -541,6 +603,7 @@ def batch_user_operations_with_checkpoints(
     resume_checkpoint_id: str | None = None,
     checkpoint_manager: CheckpointManager | None = None,
     rotate_password: bool = False,
+    force_otp: bool = False,
 ) -> str | None:
     """Perform batch user operations with checkpointing support.
 
@@ -552,6 +615,7 @@ def batch_user_operations_with_checkpoints(
         resume_checkpoint_id: Optional checkpoint ID to resume from
         checkpoint_manager: Optional checkpoint manager instance
         rotate_password: If True, rotate user passwords during operation
+        force_otp: If True, set app_metadata.requiresAdditionalVerification=true
 
     Returns:
         Optional[str]: Checkpoint ID if operation was checkpointed, None if completed
@@ -578,6 +642,7 @@ def batch_user_operations_with_checkpoints(
         additional_params={
             "operation": operation,
             "rotate_password": rotate_password,
+            "force_otp": force_otp,
         },
     )
 
@@ -598,6 +663,17 @@ def batch_user_operations_with_checkpoints(
         operation = additional_params.get("operation", operation)
         # Prefer persisted rotate_password from checkpoint when resuming
         rotate_password = additional_params.get("rotate_password", rotate_password)
+        # Prefer persisted force_otp from checkpoint when resuming
+        force_otp = additional_params.get("force_otp", force_otp)
+
+    options = UserOperationOptions(rotate_password=rotate_password, force_otp=force_otp)
+
+    # Warn once up front rather than once per user inside the batch loop.
+    if options.force_otp and operation == "delete":
+        print_warning(
+            "--force-otp is ignored for delete operations (users are being deleted)",
+            operation="set_requires_additional_verification",
+        )
 
     try:
         return _process_batch_user_operations_with_checkpoints(
@@ -605,7 +681,7 @@ def batch_user_operations_with_checkpoints(
             client=client,
             operation=operation,
             checkpoint_manager=checkpoint_manager,
-            rotate_password=rotate_password,
+            options=options,
         )
     except KeyboardInterrupt:
         return _checkpoint_interruption_handler(
@@ -622,7 +698,7 @@ def _process_batch_user_operations_with_checkpoints(
     client: Auth0Client,
     operation: str,
     checkpoint_manager: CheckpointManager,
-    rotate_password: bool = False,
+    options: UserOperationOptions = _DEFAULT_OPTIONS,
 ) -> str | None:
     """Process batch user operations with checkpointing support.
 
@@ -631,7 +707,7 @@ def _process_batch_user_operations_with_checkpoints(
         client: Auth0 API client
         operation: Operation to perform
         checkpoint_manager: Checkpoint manager instance
-        rotate_password: If True, rotate user passwords during operation
+        options: Optional operation modifiers (rotate_password, force_otp)
 
     Returns:
         Optional[str]: Checkpoint ID if operation was interrupted, None if completed
@@ -654,7 +730,7 @@ def _process_batch_user_operations_with_checkpoints(
         client,
         operation,
         tracking_state,
-        rotate_password,
+        options,
     )
 
     if interrupted_checkpoint_id:
@@ -694,6 +770,7 @@ def _initialize_batch_processing_state() -> dict[str, Any]:
         "multiple_users": {},
         "not_found_users": [],
         "invalid_user_ids": [],
+        "force_otp_failed": [],
     }
 
 
@@ -705,7 +782,7 @@ def _process_batch_loop(
     client: Auth0Client,
     operation: str,
     tracking_state: dict[str, Any],
-    rotate_password: bool = False,
+    options: UserOperationOptions = _DEFAULT_OPTIONS,
 ) -> str | None:
     """Process user IDs in batches with checkpoint management.
 
@@ -717,7 +794,7 @@ def _process_batch_loop(
         client: Auth0 API client
         operation: Operation to perform
         tracking_state: State tracking dictionary
-        rotate_password: If True, rotate user passwords during operation
+        options: Optional operation modifiers (rotate_password, force_otp)
 
     Returns:
         Optional[str]: Checkpoint ID if interrupted, None if completed
@@ -747,7 +824,7 @@ def _process_batch_loop(
             client,
             operation,
             tracking_state,
-            rotate_password,
+            options,
         )
 
     return None
@@ -760,7 +837,7 @@ def _process_and_update_batch(
     client: Auth0Client,
     operation: str,
     tracking_state: dict[str, Any],
-    rotate_password: bool = False,
+    options: UserOperationOptions = _DEFAULT_OPTIONS,
 ) -> None:
     """Process a single batch and update checkpoint.
 
@@ -771,17 +848,16 @@ def _process_and_update_batch(
         client: Auth0 API client
         operation: Operation to perform
         tracking_state: State tracking dictionary
-        rotate_password: If True, rotate user passwords during operation
+        options: Optional operation modifiers (rotate_password, force_otp)
     """
     # Process users in this batch
-    batch_results = _process_user_batch(
-        batch_user_ids, client, operation, rotate_password
-    )
+    batch_results = _process_user_batch(batch_user_ids, client, operation, options)
 
     # Update tracking lists
     tracking_state["multiple_users"].update(batch_results.get("multiple_users", {}))
     tracking_state["not_found_users"].extend(batch_results.get("not_found_users", []))
     tracking_state["invalid_user_ids"].extend(batch_results.get("invalid_user_ids", []))
+    tracking_state["force_otp_failed"].extend(batch_results.get("force_otp_failed", []))
 
     # Update checkpoint progress
     results_update = {
@@ -790,6 +866,7 @@ def _process_and_update_batch(
         "multiple_users": batch_results.get("multiple_users", {}),
         "not_found_users": batch_results.get("not_found_users", []),
         "invalid_user_ids": batch_results.get("invalid_user_ids", []),
+        "force_otp_failed": batch_results.get("force_otp_failed", []),
     }
 
     checkpoint_manager.update_checkpoint_progress(
@@ -826,6 +903,7 @@ def _finalize_batch_processing(
         tracking_state["invalid_user_ids"],
         tracking_state["multiple_users"],
         client,
+        tracking_state["force_otp_failed"],
     )
 
     # Mark checkpoint as completed
@@ -842,7 +920,7 @@ def _process_users_in_batch(
     client: Auth0Client,
     operation: str,
     results: dict[str, Any],
-    rotate_password: bool = False,
+    options: UserOperationOptions = _DEFAULT_OPTIONS,
 ) -> dict[str, Any]:
     """Process users in a batch, handling user resolution and operation execution.
 
@@ -851,7 +929,7 @@ def _process_users_in_batch(
         client: Auth0 API client
         operation: Operation to perform
         results: Results dictionary to update
-        rotate_password: If True, rotate user passwords during operation
+        options: Optional operation modifiers (rotate_password, force_otp)
 
     Returns:
         dict: Updated results dictionary
@@ -879,7 +957,7 @@ def _process_users_in_batch(
 
             # Perform the operation
             success = _execute_user_operation(
-                operation, resolved_user_id, client, rotate_password
+                operation, resolved_user_id, client, options, results
             )
             if success:
                 results["processed_count"] += 1
@@ -895,7 +973,7 @@ def _process_user_batch(
     user_ids: list[str],
     client: Auth0Client,
     operation: str,
-    rotate_password: bool = False,
+    options: UserOperationOptions = _DEFAULT_OPTIONS,
 ) -> dict[str, Any]:
     """Process a batch of users for a specific operation.
 
@@ -903,7 +981,7 @@ def _process_user_batch(
         user_ids: List of user IDs to process
         client: Auth0 API client
         operation: Operation to perform
-        rotate_password: If True, rotate user passwords during operation
+        options: Optional operation modifiers (rotate_password, force_otp)
 
     Returns:
         dict: Processing results for this batch
@@ -914,12 +992,11 @@ def _process_user_batch(
         "multiple_users": {},
         "not_found_users": [],
         "invalid_user_ids": [],
+        "force_otp_failed": [],
     }
 
     # Process users using the extracted helper function
-    results = _process_users_in_batch(
-        user_ids, client, operation, results, rotate_password
-    )
+    results = _process_users_in_batch(user_ids, client, operation, results, options)
 
     return results
 
@@ -962,7 +1039,8 @@ def _execute_user_operation(
     operation: str,
     user_id: str,
     client: Auth0Client,
-    rotate_password: bool = False,
+    options: UserOperationOptions = _DEFAULT_OPTIONS,
+    results: dict[str, Any] | None = None,
 ) -> bool:
     """Execute the specified operation on a user.
 
@@ -970,19 +1048,31 @@ def _execute_user_operation(
         operation: Operation to perform
         user_id: Auth0 user ID
         client: Auth0 API client
-        rotate_password: If True, rotate user password during operation
+        options: Operation modifiers (rotate_password, force_otp)
+        results: Optional results dict; force_otp failures are appended to its
+            "force_otp_failed" list so they can be surfaced in the summary
+            rather than only logged per user.
 
     Returns:
         bool: True if the primary operation succeeded, False otherwise
     """
+    # Best-effort step-up flag, mirroring rotate_password: it is applied
+    # alongside the primary operation but does not gate its success. The
+    # delete + force_otp combination is warned about once up front in
+    # batch_user_operations_with_checkpoints, so it is silently skipped here.
+    if options.force_otp and operation != "delete":
+        if not set_requires_additional_verification(user_id, client):
+            if results is not None:
+                results.setdefault("force_otp_failed", []).append(user_id)
+
     if operation == "block":
-        return block_user(user_id, client, rotate_password)
+        return block_user(user_id, client, options.rotate_password)
     elif operation == "delete":
         return delete_user(user_id, client)
     elif operation == "revoke-grants-only":
         sessions_ok = revoke_user_sessions(user_id, client)
         grants_ok = revoke_user_grants(user_id, client)
-        if rotate_password:
+        if options.rotate_password:
             rotate_user_password(user_id, client)
         return sessions_ok and grants_ok
     return False
@@ -1033,6 +1123,7 @@ def _print_user_operation_summary(
     invalid_user_ids: list[str],
     multiple_users: dict[str, list[str]],
     client: Auth0Client,
+    force_otp_failed: list[str] | None = None,
 ) -> None:
     """Print operation summary for user operations.
 
@@ -1043,8 +1134,10 @@ def _print_user_operation_summary(
         invalid_user_ids: List of invalid user IDs
         multiple_users: Dict of emails with multiple users
         client: Auth0 API client
+        force_otp_failed: User IDs whose requiresAdditionalVerification flag
+            could not be set (the primary operation still succeeded)
     """
-    from ..utils.display_utils import CYAN, RESET
+    from ..utils.display_utils import CYAN, RESET, YELLOW
 
     print_info("\nOperation Summary:")
     print_info(f"Total users processed: {processed_count}")
@@ -1059,6 +1152,15 @@ def _print_user_operation_summary(
         print_info(f"\nInvalid user IDs ({len(invalid_user_ids)}):")
         for user_id in invalid_user_ids:
             print_info(f"  {CYAN}{user_id}{RESET}")
+
+    if force_otp_failed:
+        print_warning(
+            f"\nForce-OTP failures ({len(force_otp_failed)}): "
+            "primary operation succeeded but requiresAdditionalVerification "
+            "could NOT be set for these users:"
+        )
+        for user_id in force_otp_failed:
+            print_warning(f"  {YELLOW}{user_id}{RESET}")
 
     # Display multiple users using the extracted helper function
     _display_multiple_users_details(multiple_users, client, fetch_details=True)
