@@ -1060,22 +1060,31 @@ def _execute_user_operation(
     # alongside the primary operation but does not gate its success. The
     # delete + force_otp combination is warned about once up front in
     # batch_user_operations_with_checkpoints, so it is silently skipped here.
+    force_otp_ok = True
     if options.force_otp and operation != "delete":
-        if not set_requires_additional_verification(user_id, client):
-            if results is not None:
-                results.setdefault("force_otp_failed", []).append(user_id)
+        force_otp_ok = set_requires_additional_verification(user_id, client)
 
     if operation == "block":
-        return block_user(user_id, client, options.rotate_password)
+        primary_ok = block_user(user_id, client, options.rotate_password)
     elif operation == "delete":
-        return delete_user(user_id, client)
+        primary_ok = delete_user(user_id, client)
     elif operation == "revoke-grants-only":
         sessions_ok = revoke_user_sessions(user_id, client)
         grants_ok = revoke_user_grants(user_id, client)
         if options.rotate_password:
             rotate_user_password(user_id, client)
-        return sessions_ok and grants_ok
-    return False
+        primary_ok = sessions_ok and grants_ok
+    else:
+        primary_ok = False
+
+    # Only recorded when the primary operation succeeded: the summary bucket
+    # reads "primary operation succeeded but the flag could not be set". A user
+    # whose primary operation failed is already surfaced as a failure, and
+    # claiming otherwise would be misleading.
+    if primary_ok and not force_otp_ok and results is not None:
+        results.setdefault("force_otp_failed", []).append(user_id)
+
+    return primary_ok
 
 
 def _display_multiple_users_details(

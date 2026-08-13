@@ -268,6 +268,35 @@ def test_execute_user_operation_force_otp_success_not_recorded():
         assert "force_otp_failed" not in results
 
 
+def test_execute_user_operation_force_otp_failure_not_recorded_when_primary_fails():
+    """force_otp_failed only lists users whose primary operation succeeded.
+
+    The summary bucket reads "primary operation succeeded but the flag could
+    not be set", so a user whose block failed must not appear there — that
+    failure is already surfaced through the skipped/failed counts.
+    """
+    client = _make_client()
+    results: dict = {}
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=False,
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=False),
+    ):
+        result = _execute_user_operation(
+            "block",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+            results,
+        )
+
+        assert result is False
+        assert "force_otp_failed" not in results
+
+
 def test_batch_force_otp_persisted_in_checkpoint_config():
     """force_otp is written into the checkpoint's additional_params (Gap A)."""
     client = _make_client()

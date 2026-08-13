@@ -246,7 +246,10 @@ def block(
 @click.option(
     "--force-otp",
     is_flag=True,
-    help="Set app_metadata.requiresAdditionalVerification=true on each user",
+    help=(
+        "No effect for delete (the users are removed); accepted for symmetry "
+        "with block/revoke-grants-only and warned about at run time"
+    ),
 )
 @common_options
 def delete(input_file: str, env: str, dry_run: bool, force_otp: bool) -> None:
