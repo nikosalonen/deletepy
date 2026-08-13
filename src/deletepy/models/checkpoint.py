@@ -45,6 +45,7 @@ class ProcessingResults:
     not_found_users: list[str] = field(default_factory=list)
     invalid_user_ids: list[str] = field(default_factory=list)
     multiple_users: dict[str, list[str]] = field(default_factory=dict)
+    force_otp_failed: list[str] = field(default_factory=list)
     errors: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -58,6 +59,7 @@ class ProcessingResults:
             "not_found_users": self.not_found_users,
             "invalid_user_ids": self.invalid_user_ids,
             "multiple_users": self.multiple_users,
+            "force_otp_failed": self.force_otp_failed,
             "errors": self.errors,
         }
 
@@ -73,6 +75,7 @@ class ProcessingResults:
             not_found_users=data.get("not_found_users", []),
             invalid_user_ids=data.get("invalid_user_ids", []),
             multiple_users=data.get("multiple_users", {}),
+            force_otp_failed=data.get("force_otp_failed", []),
             errors=data.get("errors", []),
         )
 

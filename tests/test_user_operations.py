@@ -2,7 +2,10 @@ from unittest.mock import MagicMock, patch
 
 from src.deletepy.core.auth0_client import APIResponse, Auth0Client
 from src.deletepy.operations.user_ops import (
+    UserOperationOptions,
+    _execute_user_operation,
     _fetch_users_by_email,
+    batch_user_operations_with_checkpoints,
     block_user,
     delete_user,
     get_user_details,
@@ -10,6 +13,7 @@ from src.deletepy.operations.user_ops import (
     get_user_id_from_email,
     revoke_user_grants,
     revoke_user_sessions,
+    set_requires_additional_verification,
     unlink_user_identity,
 )
 
@@ -117,6 +121,254 @@ def test_block_user_with_rotate_password():
         mock_rotate.assert_called_once_with("auth0|test_user_id", client)
 
     client.block_user.assert_called_once_with("auth0%7Ctest_user_id")
+
+
+def test_set_requires_additional_verification():
+    client = _make_client()
+
+    client.update_user.return_value = APIResponse(success=True, status_code=200)
+
+    result = set_requires_additional_verification("auth0|test_user_id", client)
+
+    assert result is True
+    client.update_user.assert_called_once_with(
+        "auth0%7Ctest_user_id",
+        {"app_metadata": {"requiresAdditionalVerification": True}},
+    )
+
+
+def test_set_requires_additional_verification_failure():
+    client = _make_client()
+
+    client.update_user.return_value = APIResponse(
+        success=False, status_code=400, error_message="Bad request"
+    )
+
+    result = set_requires_additional_verification("auth0|test_user_id", client)
+
+    assert result is False
+    client.update_user.assert_called_once_with(
+        "auth0%7Ctest_user_id",
+        {"app_metadata": {"requiresAdditionalVerification": True}},
+    )
+
+
+def test_execute_user_operation_force_otp_revoke_grants():
+    client = _make_client()
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification"
+        ) as mock_force_otp,
+        patch(
+            "src.deletepy.operations.user_ops.revoke_user_sessions", return_value=True
+        ),
+        patch("src.deletepy.operations.user_ops.revoke_user_grants", return_value=True),
+    ):
+        result = _execute_user_operation(
+            "revoke-grants-only",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+        )
+
+        assert result is True
+        mock_force_otp.assert_called_once_with("auth0|test_user_id", client)
+
+
+def test_execute_user_operation_force_otp_skipped_for_delete():
+    client = _make_client()
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification"
+        ) as mock_force_otp,
+        patch("src.deletepy.operations.user_ops.delete_user", return_value=True),
+    ):
+        result = _execute_user_operation(
+            "delete",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+        )
+
+        assert result is True
+        mock_force_otp.assert_not_called()
+
+
+def test_execute_user_operation_force_otp_block():
+    """force_otp is applied for the block operation (Gap C)."""
+    client = _make_client()
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=True,
+        ) as mock_force_otp,
+        patch("src.deletepy.operations.user_ops.block_user", return_value=True),
+    ):
+        result = _execute_user_operation(
+            "block",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+        )
+
+        assert result is True
+        mock_force_otp.assert_called_once_with("auth0|test_user_id", client)
+
+
+def test_execute_user_operation_force_otp_failure_does_not_gate_success():
+    """A failed force_otp PATCH must not fail the primary operation (Gap B)."""
+    client = _make_client()
+    results: dict = {}
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=False,
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=True),
+    ):
+        result = _execute_user_operation(
+            "block",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+            results,
+        )
+
+        # Primary operation still succeeds...
+        assert result is True
+        # ...but the failure is recorded so it can be surfaced in the summary.
+        assert results["force_otp_failed"] == ["auth0|test_user_id"]
+
+
+def test_execute_user_operation_force_otp_success_not_recorded():
+    """A successful force_otp PATCH leaves the failure list untouched."""
+    client = _make_client()
+    results: dict = {}
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=True,
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=True),
+    ):
+        result = _execute_user_operation(
+            "block",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+            results,
+        )
+
+        assert result is True
+        assert "force_otp_failed" not in results
+
+
+def test_execute_user_operation_force_otp_failure_not_recorded_when_primary_fails():
+    """force_otp_failed only lists users whose primary operation succeeded.
+
+    The summary bucket reads "primary operation succeeded but the flag could
+    not be set", so a user whose block failed must not appear there — that
+    failure is already surfaced through the skipped/failed counts.
+    """
+    client = _make_client()
+    results: dict = {}
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=False,
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=False),
+    ):
+        result = _execute_user_operation(
+            "block",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+            results,
+        )
+
+        assert result is False
+        assert "force_otp_failed" not in results
+
+
+def test_batch_force_otp_persisted_in_checkpoint_config():
+    """force_otp is written into the checkpoint's additional_params (Gap A)."""
+    client = _make_client()
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.load_or_create_checkpoint"
+        ) as mock_load,
+        patch(
+            "src.deletepy.operations.user_ops."
+            "_process_batch_user_operations_with_checkpoints",
+            return_value=None,
+        ) as mock_process,
+    ):
+        checkpoint_result = MagicMock()
+        checkpoint_result.is_resuming = False
+        checkpoint_result.checkpoint = MagicMock()
+        checkpoint_result.checkpoint_manager = MagicMock()
+        mock_load.return_value = checkpoint_result
+
+        batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1"],
+            client=client,
+            operation="block",
+            env="dev",
+            force_otp=True,
+        )
+
+        config = mock_load.call_args.kwargs["config"]
+        assert config.additional_params["force_otp"] is True
+        # And it is threaded into the processing options.
+        assert mock_process.call_args.kwargs["options"].force_otp is True
+
+
+def test_batch_force_otp_restored_from_checkpoint_on_resume():
+    """Persisted force_otp wins over the caller's value when resuming (Gap A)."""
+    client = _make_client()
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.load_or_create_checkpoint"
+        ) as mock_load,
+        patch(
+            "src.deletepy.operations.user_ops."
+            "_process_batch_user_operations_with_checkpoints",
+            return_value=None,
+        ) as mock_process,
+    ):
+        checkpoint = MagicMock()
+        checkpoint.config.environment = "dev"
+        checkpoint.config.additional_params = {
+            "operation": "block",
+            "rotate_password": False,
+            "force_otp": True,
+        }
+        checkpoint_result = MagicMock()
+        checkpoint_result.is_resuming = True
+        checkpoint_result.checkpoint = checkpoint
+        checkpoint_result.checkpoint_manager = MagicMock()
+        mock_load.return_value = checkpoint_result
+
+        # Caller passes force_otp=False, but the persisted True must win.
+        batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1"],
+            client=client,
+            operation="block",
+            env="dev",
+            resume_checkpoint_id="cp-123",
+            force_otp=False,
+        )
+
+        assert mock_process.call_args.kwargs["options"].force_otp is True
 
 
 def test_get_user_id_from_email():

@@ -174,7 +174,11 @@ class OperationHandler:
         }.get(operation, "Processing users")
 
     def _confirm_production_operation(
-        self, operation: str, total_users: int, rotate_password: bool = False
+        self,
+        operation: str,
+        total_users: int,
+        rotate_password: bool = False,
+        force_otp: bool = False,
     ) -> bool:
         """Confirm production operation with user.
 
@@ -182,13 +186,16 @@ class OperationHandler:
             operation: Operation type
             total_users: Number of users to process
             rotate_password: Whether password rotation is enabled
+            force_otp: Whether the requiresAdditionalVerification flag will be set
 
         Returns:
             bool: True if confirmed, False otherwise
         """
         from ..utils.display_utils import confirm_production_operation
 
-        return confirm_production_operation(operation, total_users, rotate_password)
+        return confirm_production_operation(
+            operation, total_users, rotate_password, force_otp
+        )
 
     def _resolve_user_identifier(
         self,
@@ -482,6 +489,7 @@ class OperationHandler:
         operation: str,
         dry_run: bool = False,
         rotate_password: bool = False,
+        force_otp: bool = False,
     ) -> None:
         """Handle user operations (block, delete, revoke-grants-only)."""
         try:
@@ -493,12 +501,14 @@ class OperationHandler:
 
             if dry_run:
                 # Run dry-run preview
-                self._handle_dry_run_preview(user_ids, client, operation)
+                self._handle_dry_run_preview(
+                    user_ids, client, operation, force_otp=force_otp
+                )
                 return
 
             # Request confirmation for production environment
             if env == "prod" and not self._confirm_production_operation(
-                operation, total_users, rotate_password
+                operation, total_users, rotate_password, force_otp
             ):
                 click.echo("Operation cancelled by user.")
                 return
@@ -512,6 +522,7 @@ class OperationHandler:
                 operation=operation,
                 env=env,
                 rotate_password=rotate_password,
+                force_otp=force_otp,
             )
 
             if checkpoint_id:
@@ -567,13 +578,26 @@ class OperationHandler:
             self._handle_operation_error(e, "Find social IDs")
 
     def _handle_dry_run_preview(
-        self, user_ids: list[str], client: Auth0Client, operation: str
+        self,
+        user_ids: list[str],
+        client: Auth0Client,
+        operation: str,
+        force_otp: bool = False,
     ) -> None:
         """Handle dry-run preview for user operations."""
         try:
             result = preview_user_operations(
                 user_ids, client, operation, show_details=True
             )
+
+            # The preview itself does not exercise the force_otp write, so make
+            # the side effect explicit before the operator confirms.
+            if force_otp and operation != "delete":
+                click.echo(
+                    f"\n{YELLOW}NOTE: --force-otp will additionally set "
+                    f"app_metadata.requiresAdditionalVerification=true on each "
+                    f"processed user (not shown in the preview above).{RESET}"
+                )
 
             # Ask for confirmation to proceed with actual operation
             if result.success_count > 0:
@@ -586,7 +610,9 @@ class OperationHandler:
                         f"\n{CYAN}Proceeding with actual {operation} operation...{RESET}"
                     )
                     # Remove dry_run flag and call the actual operation
-                    self._execute_actual_operation(user_ids, client, operation)
+                    self._execute_actual_operation(
+                        user_ids, client, operation, force_otp=force_otp
+                    )
                 else:
                     click.echo("Operation cancelled by user.")
             else:
@@ -646,7 +672,11 @@ class OperationHandler:
             click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
 
     def _execute_actual_operation(
-        self, user_ids: list[str], client: Auth0Client, operation: str
+        self,
+        user_ids: list[str],
+        client: Auth0Client,
+        operation: str,
+        force_otp: bool = False,
     ) -> None:
         """Execute the actual operation after dry-run preview."""
         env = client.context.env
@@ -657,6 +687,7 @@ class OperationHandler:
             client=client,
             operation=operation,
             env=env,
+            force_otp=force_otp,
         )
 
         if checkpoint_id:

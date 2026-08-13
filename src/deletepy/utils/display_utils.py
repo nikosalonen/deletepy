@@ -248,7 +248,10 @@ def confirm_action(message: str, default: bool = False) -> bool:
 
 
 def confirm_production_operation(
-    operation: str, total_users: int, rotate_password: bool = False
+    operation: str,
+    total_users: int,
+    rotate_password: bool = False,
+    force_otp: bool = False,
 ) -> bool:
     """Confirm operation in production environment.
 
@@ -256,6 +259,7 @@ def confirm_production_operation(
         operation: The operation to be performed
         total_users: Total number of users to be processed
         rotate_password: Whether password rotation is enabled
+        force_otp: Whether the requiresAdditionalVerification flag will be set
 
     Returns:
         bool: True if confirmed, False otherwise
@@ -318,6 +322,12 @@ def confirm_production_operation(
     if rotate_password:
         print(
             f"{YELLOW}WARNING: Password rotation is enabled. This will invalidate current user credentials.{RESET}"
+        )
+
+    if force_otp and operation != "delete":
+        print(
+            f"{YELLOW}WARNING: --force-otp is enabled. This will set "
+            f"app_metadata.requiresAdditionalVerification=true on each user.{RESET}"
         )
 
     print("This action cannot be undone.")

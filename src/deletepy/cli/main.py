@@ -218,12 +218,19 @@ def users() -> None:
 @click.option(
     "--rotate-password", is_flag=True, help="Rotate user passwords after operation"
 )
+@click.option(
+    "--force-otp",
+    is_flag=True,
+    help="Set app_metadata.requiresAdditionalVerification=true on each user",
+)
 @common_options
-def block(input_file: str, env: str, dry_run: bool, rotate_password: bool) -> None:
+def block(
+    input_file: str, env: str, dry_run: bool, rotate_password: bool, force_otp: bool
+) -> None:
     """Block the specified users."""
     handler = OperationHandler()
     handler.handle_user_operations(
-        Path(input_file), env, "block", dry_run, rotate_password
+        Path(input_file), env, "block", dry_run, rotate_password, force_otp
     )
 
 
@@ -236,11 +243,21 @@ def block(input_file: str, env: str, dry_run: bool, rotate_password: bool) -> No
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would happen without executing"
 )
+@click.option(
+    "--force-otp",
+    is_flag=True,
+    help=(
+        "No effect for delete (the users are removed); accepted for symmetry "
+        "with block/revoke-grants-only and warned about at run time"
+    ),
+)
 @common_options
-def delete(input_file: str, env: str, dry_run: bool) -> None:
+def delete(input_file: str, env: str, dry_run: bool, force_otp: bool) -> None:
     """Delete the specified users."""
     handler = OperationHandler()
-    handler.handle_user_operations(Path(input_file), env, "delete", dry_run)
+    handler.handle_user_operations(
+        Path(input_file), env, "delete", dry_run, force_otp=force_otp
+    )
 
 
 @users.command()
@@ -255,14 +272,19 @@ def delete(input_file: str, env: str, dry_run: bool) -> None:
 @click.option(
     "--rotate-password", is_flag=True, help="Rotate user passwords after operation"
 )
+@click.option(
+    "--force-otp",
+    is_flag=True,
+    help="Set app_metadata.requiresAdditionalVerification=true on each user",
+)
 @common_options
 def revoke_grants_only(
-    input_file: str, env: str, dry_run: bool, rotate_password: bool
+    input_file: str, env: str, dry_run: bool, rotate_password: bool, force_otp: bool
 ) -> None:
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
     handler.handle_user_operations(
-        Path(input_file), env, "revoke-grants-only", dry_run, rotate_password
+        Path(input_file), env, "revoke-grants-only", dry_run, rotate_password, force_otp
     )
 
 
