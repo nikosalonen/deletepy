@@ -1,5 +1,7 @@
 """CSV processing utilities for Auth0 user management."""
 
+from __future__ import annotations
+
 import csv
 import re
 from typing import Any, NamedTuple, TextIO, cast
