@@ -598,6 +598,18 @@ class CheckpointManager:
         print(f"  Not Found: {results.not_found_count}")
         print(f"  Multiple Users: {results.multiple_users_count}")
 
+        # Only surfaced when non-empty: for a run interrupted before the
+        # summary printed, this is the sole way to recover which users the
+        # force-OTP flag did not land on.
+        if results.force_otp_failed:
+            print(f"  Force-OTP Failed: {len(results.force_otp_failed)}")
+            for user_id in results.force_otp_failed:
+                print(f"    - {user_id}")
+        if results.force_otp_orphaned:
+            print(f"  Force-OTP Orphaned: {len(results.force_otp_orphaned)}")
+            for user_id in results.force_otp_orphaned:
+                print(f"    - {user_id}")
+
         if results.errors:
             print("\nRecent Errors:")
             for error in results.errors[-3:]:  # Show last 3 errors

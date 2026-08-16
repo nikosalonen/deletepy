@@ -322,7 +322,7 @@ def test_batch_force_otp_persisted_in_checkpoint_config():
             client=client,
             operation="block",
             env="dev",
-            force_otp=True,
+            options=UserOperationOptions(force_otp=True),
         )
 
         config = mock_load.call_args.kwargs["config"]
@@ -365,7 +365,7 @@ def test_batch_force_otp_restored_from_checkpoint_on_resume():
             operation="block",
             env="dev",
             resume_checkpoint_id="cp-123",
-            force_otp=False,
+            options=UserOperationOptions(force_otp=False),
         )
 
         assert mock_process.call_args.kwargs["options"].force_otp is True
@@ -765,3 +765,228 @@ def test_unlink_user_identity_failure():
     client.unlink_identity.assert_called_once_with(
         "auth0%7C123", "google-oauth2", "google123"
     )
+
+
+def test_execute_user_operation_records_orphan_when_primary_fails():
+    """Flag set + primary failed is recorded so the mutation is not silent.
+
+    The PATCH runs before the primary operation, so a failed block leaves the
+    user flagged but not blocked. That user must not disappear into the
+    anonymous skipped_count.
+    """
+    client = _make_client()
+    results: dict = {}
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=True,
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=False),
+    ):
+        ok = _execute_user_operation(
+            "block",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+            results,
+        )
+
+    assert ok is False
+    assert results["force_otp_orphaned"] == ["auth0|test_user_id"]
+    assert "force_otp_failed" not in results
+
+
+def test_execute_user_operation_no_orphan_when_flag_also_failed():
+    """Primary failed and flag failed mutates nothing, so nothing is recorded."""
+    client = _make_client()
+    results: dict = {}
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=False,
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=False),
+    ):
+        ok = _execute_user_operation(
+            "block",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+            results,
+        )
+
+    assert ok is False
+    assert "force_otp_orphaned" not in results
+    assert "force_otp_failed" not in results
+
+
+def test_execute_user_operation_force_otp_revoke_failure_recorded():
+    """revoke-grants-only's compound primary_ok gates recording correctly."""
+    client = _make_client()
+    results: dict = {}
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=False,
+        ),
+        patch(
+            "src.deletepy.operations.user_ops.revoke_user_sessions", return_value=True
+        ),
+        patch(
+            "src.deletepy.operations.user_ops.revoke_user_grants", return_value=False
+        ),
+    ):
+        ok = _execute_user_operation(
+            "revoke-grants-only",
+            "auth0|test_user_id",
+            client,
+            UserOperationOptions(force_otp=True),
+            results,
+        )
+
+    # grants_ok False => primary failed => flag failure is not claimed as a
+    # standalone force-OTP failure, and nothing was mutated to orphan.
+    assert ok is False
+    assert "force_otp_failed" not in results
+    assert "force_otp_orphaned" not in results
+
+
+def test_set_requires_additional_verification_rejects_bad_id_without_raising():
+    """An unencodable user ID returns False rather than aborting the batch."""
+    client = _make_client()
+
+    assert set_requires_additional_verification("", client) is False
+    client.update_user.assert_not_called()
+
+
+def test_force_otp_failures_reach_checkpoint_and_summary(tmp_path):
+    """End-to-end: a failed flag PATCH reaches checkpoint.results and the summary.
+
+    Covers the batch_results -> tracking_state -> results_update ->
+    checkpoint.results -> summary chain, which unit tests on
+    _execute_user_operation alone do not exercise.
+    """
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    client = _make_client()
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.set_requires_additional_verification",
+            return_value=False,
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=True),
+        patch(
+            "src.deletepy.operations.user_ops._print_user_operation_summary"
+        ) as mock_summary,
+    ):
+        batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1", "auth0|2"],
+            client=client,
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+            options=UserOperationOptions(force_otp=True),
+        )
+
+    saved = manager.list_checkpoints()
+    assert len(saved) == 1
+    checkpoint = manager.load_checkpoint(saved[0].checkpoint_id)
+    assert checkpoint.results.force_otp_failed == ["auth0|1", "auth0|2"]
+
+    # And the summary was handed the same (cumulative) list, not an empty one.
+    mock_summary.assert_called_once()
+    assert mock_summary.call_args.args[6] == ["auth0|1", "auth0|2"]
+
+
+def test_summary_reports_cumulative_lists_not_session_lists(tmp_path):
+    """The summary reads checkpoint.results, so a resume does not under-report.
+
+    tracking_state is reset on every invocation; pairing it with the cumulative
+    processed_count would hide failures recorded before the interruption.
+    """
+    from src.deletepy.models.checkpoint import CheckpointStatus
+    from src.deletepy.operations.user_ops import _finalize_batch_processing
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    client = _make_client()
+    manager = MagicMock(spec=CheckpointManager)
+
+    checkpoint = MagicMock()
+    checkpoint.results.processed_count = 5000
+    checkpoint.results.skipped_count = 0
+    checkpoint.results.not_found_users = []
+    checkpoint.results.invalid_user_ids = []
+    checkpoint.results.multiple_users = {}
+    checkpoint.results.force_otp_failed = ["auth0|earlier-run"]
+    checkpoint.results.force_otp_orphaned = []
+
+    # Empty tracking_state stands in for a resumed run whose own batches were clean.
+    tracking_state = {
+        "multiple_users": {},
+        "not_found_users": [],
+        "invalid_user_ids": [],
+        "force_otp_failed": [],
+        "force_otp_orphaned": [],
+    }
+
+    with patch(
+        "src.deletepy.operations.user_ops._print_user_operation_summary"
+    ) as mock_summary:
+        _finalize_batch_processing(checkpoint, manager, "block", tracking_state, client)
+
+    assert checkpoint.status == CheckpointStatus.COMPLETED
+    assert mock_summary.call_args.args[6] == ["auth0|earlier-run"]
+
+
+def _summary_output(**kwargs) -> str:
+    """Render _print_user_operation_summary and capture its warning lines."""
+    from src.deletepy.operations.user_ops import _print_user_operation_summary
+
+    defaults = {
+        "processed_count": 1,
+        "skipped_count": 0,
+        "not_found_users": [],
+        "invalid_user_ids": [],
+        "multiple_users": {},
+        "client": _make_client(),
+    }
+    defaults.update(kwargs)
+
+    lines: list[str] = []
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.print_warning",
+            side_effect=lambda msg, *a, **kw: lines.append(str(msg)),
+        ),
+        patch("src.deletepy.operations.user_ops.print_info"),
+    ):
+        _print_user_operation_summary(**defaults)
+    return "\n".join(lines)
+
+
+def test_summary_reports_force_otp_failures():
+    output = _summary_output(force_otp_failed=["auth0|1", "auth0|2"])
+
+    assert "Force-OTP failures (2)" in output
+    assert "auth0|1" in output
+    assert "auth0|2" in output
+
+
+def test_summary_reports_force_otp_orphans_distinctly():
+    """Orphans read as 'flagged but NOT acted on', not as a flag failure."""
+    output = _summary_output(force_otp_orphaned=["auth0|9"])
+
+    assert "Force-OTP orphaned (1)" in output
+    assert "auth0|9" in output
+    assert "Force-OTP failures" not in output
+
+
+def test_summary_omits_force_otp_sections_when_clean():
+    output = _summary_output()
+
+    assert "Force-OTP" not in output

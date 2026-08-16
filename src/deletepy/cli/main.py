@@ -11,6 +11,7 @@ import click
 
 from deletepy.cli.commands import OperationHandler
 from deletepy.core.exceptions import AuthConfigError
+from deletepy.operations.user_ops import UserOperationOptions
 from deletepy.utils.display_utils import RED, RESET, YELLOW
 from deletepy.utils.logging_utils import setup_logging
 from deletepy.utils.rich_utils import install_rich_tracebacks
@@ -221,7 +222,10 @@ def users() -> None:
 @click.option(
     "--force-otp",
     is_flag=True,
-    help="Set app_metadata.requiresAdditionalVerification=true on each user",
+    help=(
+        "Also attempt to set app_metadata.requiresAdditionalVerification=true "
+        "on each user (best-effort; failures are reported, not fatal)"
+    ),
 )
 @common_options
 def block(
@@ -230,7 +234,11 @@ def block(
     """Block the specified users."""
     handler = OperationHandler()
     handler.handle_user_operations(
-        Path(input_file), env, "block", dry_run, rotate_password, force_otp
+        Path(input_file),
+        env,
+        "block",
+        dry_run,
+        UserOperationOptions(rotate_password=rotate_password, force_otp=force_otp),
     )
 
 
@@ -246,18 +254,21 @@ def block(
 @click.option(
     "--force-otp",
     is_flag=True,
-    help=(
-        "No effect for delete (the users are removed); accepted for symmetry "
-        "with block/revoke-grants-only and warned about at run time"
-    ),
+    help="Not valid for delete (the users are removed); rejected if passed",
 )
 @common_options
 def delete(input_file: str, env: str, dry_run: bool, force_otp: bool) -> None:
     """Delete the specified users."""
+    # Rejected here rather than accepted-and-ignored: a warning printed once the
+    # batch is already running arrives after the operator has typed the
+    # production confirmation phrase.
+    if force_otp:
+        raise click.UsageError(
+            "--force-otp has no effect for delete (the users are removed)."
+        )
+
     handler = OperationHandler()
-    handler.handle_user_operations(
-        Path(input_file), env, "delete", dry_run, force_otp=force_otp
-    )
+    handler.handle_user_operations(Path(input_file), env, "delete", dry_run)
 
 
 @users.command()
@@ -275,7 +286,10 @@ def delete(input_file: str, env: str, dry_run: bool, force_otp: bool) -> None:
 @click.option(
     "--force-otp",
     is_flag=True,
-    help="Set app_metadata.requiresAdditionalVerification=true on each user",
+    help=(
+        "Also attempt to set app_metadata.requiresAdditionalVerification=true "
+        "on each user (best-effort; failures are reported, not fatal)"
+    ),
 )
 @common_options
 def revoke_grants_only(
@@ -284,7 +298,11 @@ def revoke_grants_only(
     """Revoke grants and sessions for the specified users."""
     handler = OperationHandler()
     handler.handle_user_operations(
-        Path(input_file), env, "revoke-grants-only", dry_run, rotate_password, force_otp
+        Path(input_file),
+        env,
+        "revoke-grants-only",
+        dry_run,
+        UserOperationOptions(rotate_password=rotate_password, force_otp=force_otp),
     )
 
 

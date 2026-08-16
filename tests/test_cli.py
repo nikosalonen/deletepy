@@ -5,10 +5,12 @@ import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
 from click.testing import CliRunner
 
 from src.deletepy.cli.commands import OperationHandler
 from src.deletepy.cli.main import cli
+from src.deletepy.operations.user_ops import UserOperationOptions
 
 
 class TestCLIMain:
@@ -143,46 +145,44 @@ class TestCLIMain:
             os.unlink(temp_path)
 
     @staticmethod
-    def _resolve_force_otp(call):
-        """Extract the force_otp value from a handle_user_operations call.
+    def _resolve_options(call):
+        """Extract the UserOperationOptions from a handle_user_operations call.
 
-        The flag is wired positionally for block/revoke-grants-only and as a
-        keyword for delete, so resolve it by name independent of position.
+        Positional: handle_user_operations(input_file, env, operation, dry_run,
+        options).
         """
-        if "force_otp" in call.kwargs:
-            return call.kwargs["force_otp"]
-        # Positional: handle_user_operations(input_file, env, operation,
-        # dry_run, rotate_password, force_otp)
-        return call.args[5]
+        if "options" in call.kwargs:
+            return call.kwargs["options"]
+        return call.args[4]
 
+    @pytest.mark.parametrize(
+        ("command", "operation"),
+        [("block", "block"), ("revoke-grants-only", "revoke-grants-only")],
+    )
+    @pytest.mark.parametrize(
+        ("flags", "expected_rotate", "expected_otp"),
+        [
+            ([], False, False),
+            (["--force-otp"], False, True),
+            (["--rotate-password"], True, False),
+            (["--rotate-password", "--force-otp"], True, True),
+        ],
+    )
     @patch("src.deletepy.cli.main.OperationHandler")
-    def test_users_revoke_grants_only_force_otp(self, mock_handler_class):
-        """Test users revoke-grants-only command with --force-otp."""
-        mock_handler = MagicMock()
-        mock_handler_class.return_value = mock_handler
+    def test_users_modifier_flags_wired(
+        self,
+        mock_handler_class,
+        flags,
+        expected_rotate,
+        expected_otp,
+        command,
+        operation,
+    ):
+        """Both modifier flags reach the handler for block/revoke-grants-only.
 
-        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp:
-            temp.write("auth0|123\nauth0|456\n")
-            temp_path = temp.name
-
-        try:
-            runner = CliRunner()
-            result = runner.invoke(
-                cli,
-                ["users", "revoke-grants-only", temp_path, "dev", "--force-otp"],
-            )
-
-            assert result.exit_code == 0
-            mock_handler.handle_user_operations.assert_called_once()
-            call = mock_handler.handle_user_operations.call_args
-            assert call.args[2] == "revoke-grants-only"
-            assert self._resolve_force_otp(call) is True
-        finally:
-            os.unlink(temp_path)
-
-    @patch("src.deletepy.cli.main.OperationHandler")
-    def test_users_block_force_otp(self, mock_handler_class):
-        """Test users block command with --force-otp."""
+        Asserting both flags together pins their order: swapping
+        rotate_password and force_otp fails the mixed cases.
+        """
         mock_handler = MagicMock()
         mock_handler_class.return_value = mock_handler
 
@@ -192,21 +192,25 @@ class TestCLIMain:
 
         try:
             runner = CliRunner()
-            result = runner.invoke(
-                cli, ["users", "block", temp_path, "dev", "--force-otp"]
-            )
+            result = runner.invoke(cli, ["users", command, temp_path, "dev", *flags])
 
             assert result.exit_code == 0
             mock_handler.handle_user_operations.assert_called_once()
             call = mock_handler.handle_user_operations.call_args
-            assert call.args[2] == "block"
-            assert self._resolve_force_otp(call) is True
+            assert call.args[2] == operation
+            options = self._resolve_options(call)
+            assert options.rotate_password is expected_rotate
+            assert options.force_otp is expected_otp
         finally:
             os.unlink(temp_path)
 
     @patch("src.deletepy.cli.main.OperationHandler")
-    def test_users_delete_force_otp(self, mock_handler_class):
-        """Test users delete command wires --force-otp (passed as keyword)."""
+    def test_users_delete_rejects_force_otp(self, mock_handler_class):
+        """delete --force-otp is rejected before any work happens.
+
+        The flag is inert for delete, and a warning printed once the batch is
+        running would arrive after the prod confirmation phrase was typed.
+        """
         mock_handler = MagicMock()
         mock_handler_class.return_value = mock_handler
 
@@ -220,17 +224,15 @@ class TestCLIMain:
                 cli, ["users", "delete", temp_path, "dev", "--force-otp"]
             )
 
-            assert result.exit_code == 0
-            mock_handler.handle_user_operations.assert_called_once()
-            call = mock_handler.handle_user_operations.call_args
-            assert call.args[2] == "delete"
-            assert self._resolve_force_otp(call) is True
+            assert result.exit_code == 2
+            assert "no effect for delete" in result.output
+            mock_handler.handle_user_operations.assert_not_called()
         finally:
             os.unlink(temp_path)
 
     @patch("src.deletepy.cli.main.OperationHandler")
-    def test_users_block_without_force_otp_defaults_false(self, mock_handler_class):
-        """Test block command leaves force_otp False when flag is omitted."""
+    def test_users_delete_without_force_otp_proceeds(self, mock_handler_class):
+        """delete still works normally when --force-otp is absent."""
         mock_handler = MagicMock()
         mock_handler_class.return_value = mock_handler
 
@@ -240,12 +242,11 @@ class TestCLIMain:
 
         try:
             runner = CliRunner()
-            result = runner.invoke(cli, ["users", "block", temp_path, "dev"])
+            result = runner.invoke(cli, ["users", "delete", temp_path, "dev"])
 
             assert result.exit_code == 0
             mock_handler.handle_user_operations.assert_called_once()
-            call = mock_handler.handle_user_operations.call_args
-            assert self._resolve_force_otp(call) is False
+            assert mock_handler.handle_user_operations.call_args.args[2] == "delete"
         finally:
             os.unlink(temp_path)
 
@@ -310,6 +311,19 @@ class TestOperationHandler:
 
         assert result is True
         mock_confirm.assert_called_once_with("delete", 10, False, False)
+
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    def test_confirm_production_operation_unpacks_options_in_order(self, mock_confirm):
+        """Options are unpacked as (rotate_password, force_otp), not swapped."""
+        mock_confirm.return_value = True
+
+        handler = OperationHandler()
+        result = handler._confirm_production_operation(
+            "block", 10, UserOperationOptions(rotate_password=False, force_otp=True)
+        )
+
+        assert result is True
+        mock_confirm.assert_called_once_with("block", 10, False, True)
 
     @patch("src.deletepy.cli.commands.get_user_email")
     def test_fetch_user_emails(self, mock_get_email):
@@ -593,3 +607,81 @@ class TestCLIIntegration:
             assert "auth0|456" in user_ids
         finally:
             os.unlink(temp_path)
+
+
+class TestDryRunHandoff:
+    """The dry-run -> confirm -> execute path must not drop modifier flags."""
+
+    @patch("src.deletepy.cli.commands.confirm_action", return_value=True)
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_both_modifiers_survive_the_handoff(
+        self, mock_batch, mock_preview, _mock_confirm
+    ):
+        """rotate_password used to be dropped here while force_otp survived."""
+        mock_preview.return_value = MagicMock(success_count=2)
+        handler = OperationHandler()
+        client = MagicMock()
+        client.context.env = "dev"
+        options = UserOperationOptions(rotate_password=True, force_otp=True)
+
+        handler._handle_dry_run_preview(
+            ["auth0|1", "auth0|2"], client, "block", options
+        )
+
+        mock_batch.assert_called_once()
+        passed = mock_batch.call_args.kwargs["options"]
+        assert passed.rotate_password is True
+        assert passed.force_otp is True
+
+    @patch("src.deletepy.cli.commands.confirm_action", return_value=True)
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_both_modifier_side_effects_are_disclosed(
+        self, _mock_batch, mock_preview, _mock_confirm, capsys
+    ):
+        """The preview exercises neither modifier, so both are called out."""
+        mock_preview.return_value = MagicMock(success_count=1)
+        handler = OperationHandler()
+        client = MagicMock()
+        client.context.env = "dev"
+
+        handler._handle_dry_run_preview(
+            ["auth0|1"],
+            client,
+            "block",
+            UserOperationOptions(rotate_password=True, force_otp=True),
+        )
+
+        output = capsys.readouterr().out
+        assert "--force-otp will additionally set" in output
+        assert "--rotate-password will additionally rotate" in output
+
+    @patch("src.deletepy.cli.commands.confirm_action", return_value=True)
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_real_operation_failure_is_not_swallowed_as_a_preview_error(
+        self, mock_batch, mock_preview, _mock_confirm
+    ):
+        """Failures after confirmation must propagate, not exit 0 as preview errors."""
+        mock_preview.return_value = MagicMock(success_count=1)
+        mock_batch.side_effect = ValueError("boom")
+        handler = OperationHandler()
+        client = MagicMock()
+        client.context.env = "dev"
+
+        with pytest.raises(ValueError, match="boom"):
+            handler._handle_dry_run_preview(["auth0|1"], client, "block", None)
+
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_preview_failure_is_still_reported_and_stops(
+        self, mock_batch, mock_preview
+    ):
+        """A genuine preview error is caught and the operation does not run."""
+        mock_preview.side_effect = ValueError("preview exploded")
+        handler = OperationHandler()
+
+        handler._handle_dry_run_preview(["auth0|1"], MagicMock(), "block", None)
+
+        mock_batch.assert_not_called()

@@ -120,3 +120,61 @@ class TestCheckpointValidation:
             match="Invalid checkpoint configuration.*output_file is required",
         ):
             Checkpoint.from_dict(checkpoint_data)
+
+
+class TestProcessingResultsSerialization:
+    """Round-trip coverage for ProcessingResults.
+
+    CheckpointManager._update_results dispatches on hasattr(), so a field that
+    is dropped from the dataclass or from to_dict is silently discarded rather
+    than raising. These tests are the only thing standing between that and a
+    lost record of which users a security flag failed to apply to.
+    """
+
+    def test_force_otp_lists_round_trip(self):
+        from src.deletepy.models.checkpoint import ProcessingResults
+
+        original = ProcessingResults(
+            processed_count=3,
+            force_otp_failed=["auth0|1", "auth0|2"],
+            force_otp_orphaned=["auth0|3"],
+        )
+
+        restored = ProcessingResults.from_dict(original.to_dict())
+
+        assert restored.force_otp_failed == ["auth0|1", "auth0|2"]
+        assert restored.force_otp_orphaned == ["auth0|3"]
+        assert restored.to_dict() == original.to_dict()
+
+    def test_legacy_checkpoint_without_force_otp_keys_deserializes(self):
+        """Checkpoints written before the flag existed still load."""
+        from src.deletepy.models.checkpoint import ProcessingResults
+
+        restored = ProcessingResults.from_dict({"processed_count": 7})
+
+        assert restored.processed_count == 7
+        assert restored.force_otp_failed == []
+        assert restored.force_otp_orphaned == []
+
+    def test_update_results_lands_force_otp_keys_on_the_dataclass(self, tmp_path):
+        """The results_update key names actually match the dataclass fields."""
+        from unittest.mock import MagicMock
+
+        from src.deletepy.models.checkpoint import ProcessingResults
+        from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+        manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+        # Only .results is touched; a real ProcessingResults is what matters.
+        checkpoint = MagicMock()
+        checkpoint.results = ProcessingResults()
+
+        manager._update_results(
+            checkpoint,
+            {
+                "force_otp_failed": ["auth0|1"],
+                "force_otp_orphaned": ["auth0|2"],
+            },
+        )
+
+        assert checkpoint.results.force_otp_failed == ["auth0|1"]
+        assert checkpoint.results.force_otp_orphaned == ["auth0|2"]

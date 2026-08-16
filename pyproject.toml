@@ -79,7 +79,7 @@ omit = ["tests/*"]
 
 [tool.coverage.report]
 # Ratchet: raise this as coverage improves; never lower it.
-fail_under = 52
+fail_under = 55
 
 [tool.mypy]
 python_version = "3.11"

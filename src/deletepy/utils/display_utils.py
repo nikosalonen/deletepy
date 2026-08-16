@@ -324,7 +324,7 @@ def confirm_production_operation(
             f"{YELLOW}WARNING: Password rotation is enabled. This will invalidate current user credentials.{RESET}"
         )
 
-    if force_otp and operation != "delete":
+    if force_otp:
         print(
             f"{YELLOW}WARNING: --force-otp is enabled. This will set "
             f"app_metadata.requiresAdditionalVerification=true on each user.{RESET}"
