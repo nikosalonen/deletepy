@@ -11,6 +11,7 @@ This module provides:
 import logging
 import signal
 import sys
+import threading
 from collections.abc import Generator
 from contextlib import contextmanager
 from types import FrameType
@@ -88,6 +89,47 @@ def setup_shutdown_handler() -> None:
 def shutdown_requested() -> bool:
     """Check if shutdown has been requested."""
     return _shutdown_requested
+
+
+def _request_shutdown(signum: int, frame: FrameType | None) -> None:
+    """Signal handler: the first signal asks to stop, the second stops now."""
+    global _shutdown_requested
+    if _shutdown_requested:
+        raise KeyboardInterrupt
+    _shutdown_requested = True
+    print_warning(
+        "\nShutdown requested. Finishing the current user, then saving the "
+        "checkpoint. Press Ctrl-C again to stop immediately.",
+        signal=signal.Signals(signum).name,
+        operation="shutdown",
+    )
+
+
+@contextmanager
+def graceful_shutdown() -> Generator[None, None, None]:
+    """Turn the first Ctrl-C or SIGTERM into a shutdown request.
+
+    Inside the block, loops that check shutdown_requested() stop at a safe
+    point and save their checkpoint. A second signal raises KeyboardInterrupt,
+    so a stuck run can still be stopped. The previous handlers and the flag
+    are restored on exit, so prompts outside the block keep normal Ctrl-C.
+    """
+    global _shutdown_requested
+
+    # signal.signal() only works in the main thread.
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    previous_sigint = signal.signal(signal.SIGINT, _request_shutdown)
+    previous_sigterm = signal.signal(signal.SIGTERM, _request_shutdown)
+    _shutdown_requested = False
+    try:
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint)
+        signal.signal(signal.SIGTERM, previous_sigterm)
+        _shutdown_requested = False
 
 
 # =============================================================================
@@ -352,6 +394,7 @@ __all__ = [
     # Shutdown handling
     "setup_shutdown_handler",
     "shutdown_requested",
+    "graceful_shutdown",
     # Progress display
     "live_progress",
     # User confirmation

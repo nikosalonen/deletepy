@@ -23,7 +23,11 @@ from ..utils.checkpoint_utils import (
 from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _checkpoint_interruption_handler,
 )
-from ..utils.display_utils import live_progress, shutdown_requested
+from ..utils.display_utils import (
+    graceful_shutdown,
+    live_progress,
+    shutdown_requested,
+)
 from ..utils.file_utils import safe_file_write
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.url_utils import secure_url_encode
@@ -695,13 +699,14 @@ def batch_user_operations_with_checkpoints(
         )
 
     try:
-        return _process_batch_user_operations_with_checkpoints(
-            checkpoint=checkpoint,
-            client=client,
-            operation=operation,
-            checkpoint_manager=checkpoint_manager,
-            options=options,
-        )
+        with graceful_shutdown():
+            return _process_batch_user_operations_with_checkpoints(
+                checkpoint=checkpoint,
+                client=client,
+                operation=operation,
+                checkpoint_manager=checkpoint_manager,
+                options=options,
+            )
     except KeyboardInterrupt:
         return _checkpoint_interruption_handler(
             checkpoint, checkpoint_manager, f"{operation.title()} operation"
@@ -821,11 +826,6 @@ def _process_batch_loop(
         Optional[str]: Checkpoint ID if interrupted, None if completed
     """
     for batch_start in range(0, len(remaining_user_ids), batch_size):
-        if shutdown_requested():
-            print_warning("\nOperation interrupted", operation=operation)
-            checkpoint_manager.save_checkpoint(checkpoint)
-            return checkpoint.checkpoint_id
-
         batch_end = min(batch_start + batch_size, len(remaining_user_ids))
         batch_user_ids = remaining_user_ids[batch_start:batch_end]
 
@@ -847,6 +847,13 @@ def _process_batch_loop(
             tracking_state,
             options,
         )
+
+        # Checked after the batch is saved, so a stop during the last batch
+        # is not finalized as COMPLETED with users still remaining.
+        if shutdown_requested():
+            return _checkpoint_interruption_handler(
+                checkpoint, checkpoint_manager, f"{operation.title()} operation"
+            )
 
     return None
 
@@ -896,9 +903,11 @@ def _process_and_update_batch(
         "failed_users": batch_results.get("failed_users", []),
     }
 
+    # Only the users actually reached: a shutdown can stop the batch early,
+    # and the rest must stay in remaining_items for resume.
     checkpoint_manager.update_checkpoint_progress(
         checkpoint=checkpoint,
-        processed_items=batch_user_ids,
+        processed_items=batch_results["handled_items"],
         results_update=results_update,
     )
 
@@ -1015,6 +1024,7 @@ def _process_users_in_batch(
         for user_id in user_ids:
             if shutdown_requested():
                 break
+            results["handled_items"].append(user_id)
 
             # Sanitize user input first
             user_id = SecurityValidator.sanitize_user_input(user_id)
@@ -1040,8 +1050,8 @@ def _process_users_in_batch(
                 results["processed_count"] += 1
             else:
                 results["skipped_count"] += 1
-                # Recorded so the user is not lost: the whole batch is marked
-                # processed in the checkpoint, so resume will not retry it.
+                # Recorded so the user is not lost: it is marked processed in
+                # the checkpoint, so resume will not retry it.
                 results["failed_users"].append(resolved_user_id)
 
             advance()
@@ -1075,6 +1085,7 @@ def _process_user_batch(
         "force_otp_failed": [],
         "force_otp_orphaned": [],
         "failed_users": [],
+        "handled_items": [],
     }
 
     # Process users using the extracted helper function

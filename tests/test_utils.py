@@ -164,3 +164,44 @@ class TestLiveProgress:
         with live_progress(10, "Step test") as advance:
             advance(5)
             advance(5)
+
+
+class TestGracefulShutdown:
+    """graceful_shutdown() turns the first Ctrl-C into a flag, the second into a stop."""
+
+    def test_first_signal_sets_flag_second_raises(self):
+        import signal
+
+        from src.deletepy.utils.display_utils import (
+            graceful_shutdown,
+            shutdown_requested,
+        )
+
+        with graceful_shutdown():
+            handler = signal.getsignal(signal.SIGINT)
+            assert shutdown_requested() is False
+
+            handler(signal.SIGINT, None)
+            assert shutdown_requested() is True
+
+            with pytest.raises(KeyboardInterrupt):
+                handler(signal.SIGINT, None)
+
+    def test_handlers_and_flag_are_restored_on_exit(self):
+        import signal
+
+        from src.deletepy.utils.display_utils import (
+            graceful_shutdown,
+            shutdown_requested,
+        )
+
+        before_int = signal.getsignal(signal.SIGINT)
+        before_term = signal.getsignal(signal.SIGTERM)
+
+        with graceful_shutdown():
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            assert shutdown_requested() is True
+
+        assert signal.getsignal(signal.SIGINT) is before_int
+        assert signal.getsignal(signal.SIGTERM) is before_term
+        assert shutdown_requested() is False
