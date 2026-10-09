@@ -618,9 +618,8 @@ class OperationHandler:
             return
 
         click.echo(f"\n{GREEN}Preview completed successfully!{RESET}")
-        if not confirm_action(
-            f"Do you want to proceed with {operation} operation on {result.success_count} users?",
-            default=False,
+        if not self._confirm_after_preview(
+            client.context.env, operation, result.success_count, options
         ):
             click.echo("Operation cancelled by user.")
             return
@@ -675,6 +674,25 @@ class OperationHandler:
 
         except Exception as e:
             click.echo(f"{RED}Error during dry-run preview: {e}{RESET}", err=True)
+
+    def _confirm_after_preview(
+        self,
+        env: str,
+        operation: str,
+        user_count: int,
+        options: UserOperationOptions,
+    ) -> bool:
+        """Ask whether to run the real operation after a dry-run preview.
+
+        Prod gets the same typed confirmation as a run without --dry-run, so
+        adding --dry-run cannot turn it into a single y/N keypress.
+        """
+        if env == "prod":
+            return self._confirm_production_operation(operation, user_count, options)
+        return confirm_action(
+            f"Do you want to proceed with {operation} operation on {user_count} users?",
+            default=False,
+        )
 
     def _execute_actual_operation(
         self,
@@ -1041,14 +1059,41 @@ class OperationHandler:
             OperationType.BATCH_BLOCK: "block",
             OperationType.BATCH_REVOKE_GRANTS: "revoke-grants-only",
         }
+        operation = operation_map[operation_type]
+        if env == "prod" and not self._confirm_resume_in_prod(checkpoint, operation):
+            click.echo("Operation cancelled by user.")
+            return
+
         client = self._create_client_for_env(env)
         batch_user_operations_with_checkpoints(
             user_ids=checkpoint.remaining_items,
             client=client,
-            operation=operation_map[operation_type],
+            operation=operation,
             env=env,
             resume_checkpoint_id=checkpoint_id,
             checkpoint_manager=checkpoint_manager,
+        )
+
+    def _confirm_resume_in_prod(self, checkpoint: Checkpoint, operation: str) -> bool:
+        """Ask for the prod confirmation before resuming a batch user operation.
+
+        The resumed run applies the modifiers saved in the checkpoint, so those
+        are the ones disclosed in the prompt.
+
+        Args:
+            checkpoint: The checkpoint being resumed
+            operation: Operation the resumed run will perform
+
+        Returns:
+            bool: True if confirmed, False otherwise
+        """
+        params = checkpoint.config.additional_params or {}
+        options = UserOperationOptions(
+            rotate_password=params.get("rotate_password", False),
+            force_otp=params.get("force_otp", False),
+        )
+        return self._confirm_production_operation(
+            operation, len(checkpoint.remaining_items), options
         )
 
     def _clean_all_checkpoints(self, manager: CheckpointManager, dry_run: bool) -> None:
