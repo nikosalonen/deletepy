@@ -13,7 +13,7 @@ import os
 import signal
 import sys
 import threading
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from contextlib import contextmanager
 from types import FrameType
 from typing import Protocol
@@ -92,23 +92,55 @@ def shutdown_requested() -> bool:
     return _shutdown_requested
 
 
+def _write_notice(message: bytes) -> None:
+    """Write a notice to stderr from inside a signal handler.
+
+    os.write, not print or logging: the signal can land while the main thread
+    is writing to the same buffered stream, and a buffered write from here
+    would then raise "reentrant call" and turn the stop into a failure.
+    """
+    try:
+        os.write(2, message)
+    except OSError:
+        pass
+
+
 def _request_shutdown(signum: int, frame: FrameType | None) -> None:
     """Signal handler: the first signal asks to stop, the second stops now."""
     global _shutdown_requested
     if _shutdown_requested:
         raise KeyboardInterrupt
     _shutdown_requested = True
-    # os.write, not print or logging: the signal can land while the main
-    # thread is writing to the same buffered stream, and a buffered write from
-    # here would then raise "reentrant call" and turn the stop into a failure.
+    _write_notice(
+        b"\nShutdown requested. Finishing the current user, then saving the "
+        b"checkpoint. Press Ctrl-C again to stop immediately.\n"
+    )
+
+
+def _defer_shutdown(signum: int, frame: FrameType | None) -> None:
+    """Signal handler: note the signal and let the current step finish."""
+    _write_notice(
+        b"\nAll users are processed and saved. Finishing the summary, then exiting.\n"
+    )
+
+
+@contextmanager
+def _signal_handlers(
+    handler: Callable[[int, FrameType | None], None],
+) -> Generator[None, None, None]:
+    """Install handler for SIGINT and SIGTERM, and restore the previous ones."""
+    # signal.signal() only works in the main thread.
+    if threading.current_thread() is not threading.main_thread():
+        yield
+        return
+
+    previous_sigint = signal.signal(signal.SIGINT, handler)
+    previous_sigterm = signal.signal(signal.SIGTERM, handler)
     try:
-        os.write(
-            2,
-            b"\nShutdown requested. Finishing the current user, then saving "
-            b"the checkpoint. Press Ctrl-C again to stop immediately.\n",
-        )
-    except OSError:
-        pass
+        yield
+    finally:
+        signal.signal(signal.SIGINT, previous_sigint)
+        signal.signal(signal.SIGTERM, previous_sigterm)
 
 
 @contextmanager
@@ -122,20 +154,25 @@ def graceful_shutdown() -> Generator[None, None, None]:
     """
     global _shutdown_requested
 
-    # signal.signal() only works in the main thread.
-    if threading.current_thread() is not threading.main_thread():
-        yield
-        return
-
-    previous_sigint = signal.signal(signal.SIGINT, _request_shutdown)
-    previous_sigterm = signal.signal(signal.SIGTERM, _request_shutdown)
     _shutdown_requested = False
     try:
-        yield
+        with _signal_handlers(_request_shutdown):
+            yield
     finally:
-        signal.signal(signal.SIGINT, previous_sigint)
-        signal.signal(signal.SIGTERM, previous_sigterm)
         _shutdown_requested = False
+
+
+@contextmanager
+def deferred_shutdown() -> Generator[None, None, None]:
+    """Hold off Ctrl-C and SIGTERM until a short, must-finish step is done.
+
+    Use it for work that runs after everything is saved, such as the final
+    summary. Stopping there would only cut the report short, so a signal
+    inside the block prints a notice and the block runs to the end. The
+    caller then returns as normal, so the process still exits soon after.
+    """
+    with _signal_handlers(_defer_shutdown):
+        yield
 
 
 # =============================================================================
@@ -401,6 +438,7 @@ __all__ = [
     "setup_shutdown_handler",
     "shutdown_requested",
     "graceful_shutdown",
+    "deferred_shutdown",
     # Progress display
     "live_progress",
     # User confirmation

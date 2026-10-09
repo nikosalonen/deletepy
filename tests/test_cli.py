@@ -960,7 +960,9 @@ class TestStoppedRunExitCode:
             self._run_block("cp-123")
 
         assert exc_info.value.code == 1
-        assert "deletepy checkpoint resume cp-123" in capsys.readouterr().out
+        output = capsys.readouterr().out
+        assert "Operation stopped before completion" in output
+        assert "deletepy checkpoint resume cp-123" in output
 
     def test_completed_run_does_not_exit(self):
         self._run_block(None)

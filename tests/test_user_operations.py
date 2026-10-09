@@ -1343,3 +1343,41 @@ def test_ctrl_c_marks_skipped_and_failed_users_as_handled(tmp_path):
     assert checkpoint.results.failed_users == ["auth0|fail"]
     assert checkpoint.results.not_found_users == ["missing@example.com"]
     assert checkpoint.results.invalid_user_ids == ["not-a-valid-id"]
+
+
+def test_ctrl_c_during_summary_does_not_cancel_finished_run(tmp_path):
+    """Signals during finalizing are deferred, so a finished run stays finished.
+
+    Before, the summary ran inside graceful_shutdown(): a second Ctrl-C there
+    raised KeyboardInterrupt and marked the run CANCELLED with nothing to resume.
+    """
+    import signal
+
+    from src.deletepy.models.checkpoint import CheckpointStatus
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+
+    def press_ctrl_c_twice(*_args):
+        handler = signal.getsignal(signal.SIGINT)
+        handler(signal.SIGINT, None)
+        handler(signal.SIGINT, None)
+
+    with (
+        patch("src.deletepy.operations.user_ops.block_user", return_value=True),
+        patch(
+            "src.deletepy.operations.user_ops._print_user_operation_summary",
+            side_effect=press_ctrl_c_twice,
+        ),
+    ):
+        result = batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1"],
+            client=_make_client(),
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    assert result is None
+    checkpoint = manager.list_checkpoints()[0]
+    assert checkpoint.status == CheckpointStatus.COMPLETED

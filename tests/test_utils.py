@@ -214,6 +214,31 @@ class TestGracefulShutdown:
         assert signal.getsignal(signal.SIGTERM) is sentinel_term
         assert shutdown_requested() is False
 
+    def test_deferred_shutdown_lets_the_block_finish(self, capfd):
+        import signal
+
+        from src.deletepy.utils.display_utils import (
+            deferred_shutdown,
+            shutdown_requested,
+        )
+
+        def sentinel(signum, frame):
+            pass
+
+        signal.signal(signal.SIGINT, sentinel)
+        signal.signal(signal.SIGTERM, sentinel)
+
+        with deferred_shutdown():
+            handler = signal.getsignal(signal.SIGINT)
+            handler(signal.SIGINT, None)
+            handler(signal.SIGINT, None)  # A second signal does not raise.
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            assert shutdown_requested() is False
+
+        assert signal.getsignal(signal.SIGINT) is sentinel
+        assert signal.getsignal(signal.SIGTERM) is sentinel
+        assert "Finishing the summary" in capfd.readouterr().err
+
     def test_handler_does_not_write_through_buffered_output(self, capfd):
         """The handler must not print or log.
 

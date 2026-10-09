@@ -545,7 +545,9 @@ class OperationHandler:
         """
         if not checkpoint_id:
             return
-        click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+        click.echo(
+            f"\n{YELLOW}Operation stopped before completion. Resume with:{RESET}"
+        )
         click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
         sys.exit(1)
 
