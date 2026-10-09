@@ -164,3 +164,100 @@ class TestLiveProgress:
         with live_progress(10, "Step test") as advance:
             advance(5)
             advance(5)
+
+
+class TestGracefulShutdown:
+    """graceful_shutdown() turns the first Ctrl-C into a flag, the second into a stop."""
+
+    def test_first_signal_sets_flag_second_raises(self):
+        import signal
+
+        from src.deletepy.utils.display_utils import (
+            graceful_shutdown,
+            shutdown_requested,
+        )
+
+        with graceful_shutdown():
+            handler = signal.getsignal(signal.SIGINT)
+            assert shutdown_requested() is False
+
+            handler(signal.SIGINT, None)
+            assert shutdown_requested() is True
+
+            with pytest.raises(KeyboardInterrupt):
+                handler(signal.SIGINT, None)
+
+    def test_handlers_and_flag_are_restored_on_exit(self):
+        import signal
+
+        from src.deletepy.utils.display_utils import (
+            graceful_shutdown,
+            shutdown_requested,
+        )
+
+        # Handlers this test owns, so a leak from an earlier test cannot make
+        # "before" and "after" the same leaked handler.
+        def sentinel_int(signum, frame):
+            pass
+
+        def sentinel_term(signum, frame):
+            pass
+
+        signal.signal(signal.SIGINT, sentinel_int)
+        signal.signal(signal.SIGTERM, sentinel_term)
+
+        with graceful_shutdown():
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            assert shutdown_requested() is True
+
+        assert signal.getsignal(signal.SIGINT) is sentinel_int
+        assert signal.getsignal(signal.SIGTERM) is sentinel_term
+        assert shutdown_requested() is False
+
+    def test_deferred_shutdown_lets_the_block_finish(self, capfd):
+        import signal
+
+        from src.deletepy.utils.display_utils import (
+            deferred_shutdown,
+            shutdown_requested,
+        )
+
+        def sentinel(signum, frame):
+            pass
+
+        signal.signal(signal.SIGINT, sentinel)
+        signal.signal(signal.SIGTERM, sentinel)
+
+        with deferred_shutdown():
+            handler = signal.getsignal(signal.SIGINT)
+            handler(signal.SIGINT, None)
+            handler(signal.SIGINT, None)  # A second signal does not raise.
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            assert shutdown_requested() is False
+
+        assert signal.getsignal(signal.SIGINT) is sentinel
+        assert signal.getsignal(signal.SIGTERM) is sentinel
+        assert "Finishing the summary" in capfd.readouterr().err
+
+    def test_handler_does_not_write_through_buffered_output(self, capfd):
+        """The handler must not print or log.
+
+        The signal can land while the main thread is writing a line, and a
+        second buffered write from the handler raises "reentrant call".
+        """
+        import signal
+
+        from src.deletepy.utils.display_utils import graceful_shutdown
+
+        reentrant = RuntimeError("reentrant call inside <_io.BufferedWriter>")
+        with (
+            patch(
+                "src.deletepy.utils.display_utils.print_warning",
+                side_effect=reentrant,
+            ),
+            patch("src.deletepy.utils.output.print_warning", side_effect=reentrant),
+            graceful_shutdown(),
+        ):
+            signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+
+        assert "Shutdown requested" in capfd.readouterr().err

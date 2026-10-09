@@ -1,8 +1,25 @@
+import signal
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from src.deletepy.core.auth0_client import Auth0Client
+from src.deletepy.utils import display_utils
+
+
+@pytest.fixture(autouse=True)
+def restore_shutdown_state():
+    """Put back the signal handlers and the shutdown flag after each test.
+
+    A test that leaks a handler would otherwise hide that leak from every later
+    test, including the one that checks graceful_shutdown() restores them.
+    """
+    sigint = signal.getsignal(signal.SIGINT)
+    sigterm = signal.getsignal(signal.SIGTERM)
+    yield
+    signal.signal(signal.SIGINT, sigint)
+    signal.signal(signal.SIGTERM, sigterm)
+    display_utils._shutdown_requested = False
 
 
 @pytest.fixture

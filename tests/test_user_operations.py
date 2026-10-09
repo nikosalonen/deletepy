@@ -1003,7 +1003,7 @@ def test_summary_omits_force_otp_sections_when_clean():
 def test_failed_users_reach_checkpoint_and_retry_file(tmp_path, monkeypatch):
     """A failed primary operation is recorded, not just counted as skipped.
 
-    The whole batch is marked processed, so resume cannot retry these users.
+    Failed users are marked processed, so resume cannot retry them.
     The checkpoint and the retry file are the only record of who failed.
     """
     from src.deletepy.utils.checkpoint_manager import CheckpointManager
@@ -1113,8 +1113,18 @@ def test_process_and_update_batch_merges_failed_users_across_batches(tmp_path):
     manager, checkpoint = _failed_users_checkpoint(tmp_path, items)
     tracking_state = _initialize_batch_processing_state()
     batch_results = [
-        {"processed_count": 1, "skipped_count": 1, "failed_users": ["auth0|2"]},
-        {"processed_count": 1, "skipped_count": 1, "failed_users": ["auth0|3"]},
+        {
+            "processed_count": 1,
+            "skipped_count": 1,
+            "failed_users": ["auth0|2"],
+            "handled_items": items[:2],
+        },
+        {
+            "processed_count": 1,
+            "skipped_count": 1,
+            "failed_users": ["auth0|3"],
+            "handled_items": items[2:],
+        },
     ]
 
     with patch(
@@ -1152,3 +1162,222 @@ def test_checkpoint_details_omit_failed_users_when_clean(tmp_path, capsys):
     manager.display_checkpoint_details(checkpoint)
 
     assert "Failed Users" not in capsys.readouterr().out
+
+
+def _send_ctrl_c() -> None:
+    """Call the installed SIGINT handler as if the user pressed Ctrl-C."""
+    import signal
+
+    signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+
+
+def test_ctrl_c_mid_batch_keeps_unreached_users_for_resume(tmp_path):
+    """The first Ctrl-C finishes the current user and saves only reached users.
+
+    Before, the handler was never installed, and when the flag did fire the
+    whole batch was marked processed, so unreached users were lost.
+    """
+    from src.deletepy.models.checkpoint import CheckpointStatus
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    client = _make_client()
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+    blocked: list[str] = []
+
+    def block_then_interrupt(user_id, _client, _rotate):
+        blocked.append(user_id)
+        if user_id == "auth0|1":
+            _send_ctrl_c()
+        return True
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.block_user",
+            side_effect=block_then_interrupt,
+        ),
+        patch("src.deletepy.operations.user_ops._print_user_operation_summary"),
+    ):
+        checkpoint_id = batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1", "auth0|2", "auth0|3"],
+            client=client,
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    assert blocked == ["auth0|1"]
+    assert checkpoint_id is not None
+    checkpoint = manager.load_checkpoint(checkpoint_id)
+    assert checkpoint.status == CheckpointStatus.CANCELLED
+    assert checkpoint.processed_items == ["auth0|1"]
+    assert checkpoint.remaining_items == ["auth0|2", "auth0|3"]
+    assert checkpoint.results.processed_count == 1
+
+    # Resume picks up exactly the unreached users.
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.block_user", return_value=True
+        ) as mock_block,
+        patch("src.deletepy.operations.user_ops._print_user_operation_summary"),
+    ):
+        result = batch_user_operations_with_checkpoints(
+            user_ids=checkpoint.remaining_items,
+            client=client,
+            operation="block",
+            env="dev",
+            resume_checkpoint_id=checkpoint_id,
+            checkpoint_manager=manager,
+        )
+
+    assert result is None
+    assert [c.args[0] for c in mock_block.call_args_list] == ["auth0|2", "auth0|3"]
+    checkpoint = manager.load_checkpoint(checkpoint_id)
+    assert checkpoint.status == CheckpointStatus.COMPLETED
+    assert checkpoint.results.processed_count == 3
+
+
+def test_ctrl_c_during_last_batch_is_not_finalized_as_completed(tmp_path):
+    """A stop in the final batch must not reach _finalize_batch_processing."""
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+
+    def interrupt(user_id, _client, _rotate):
+        _send_ctrl_c()
+        return True
+
+    with (
+        patch("src.deletepy.operations.user_ops.block_user", side_effect=interrupt),
+        patch(
+            "src.deletepy.operations.user_ops._finalize_batch_processing"
+        ) as mock_finalize,
+    ):
+        checkpoint_id = batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1", "auth0|2"],
+            client=_make_client(),
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    mock_finalize.assert_not_called()
+    assert manager.load_checkpoint(checkpoint_id).remaining_items == ["auth0|2"]
+
+
+def test_ctrl_c_during_last_user_still_finalizes(tmp_path, monkeypatch):
+    """A stop that arrives during the final user leaves nothing to resume.
+
+    The run must finish as COMPLETED and write the failed-users file. Before,
+    it was marked CANCELLED with nothing left, so it could not be resumed and
+    the failed users were never reported.
+    """
+    from src.deletepy.models.checkpoint import CheckpointStatus
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    monkeypatch.chdir(tmp_path)
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path / "checkpoints"))
+
+    def fail_first_interrupt_last(user_id, _client, _rotate):
+        if user_id == "auth0|2":
+            _send_ctrl_c()
+        return user_id != "auth0|1"
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.block_user",
+            side_effect=fail_first_interrupt_last,
+        ),
+        patch("src.deletepy.operations.user_ops._print_user_operation_summary"),
+    ):
+        result = batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1", "auth0|2"],
+            client=_make_client(),
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    assert result is None
+    checkpoint_id = manager.list_checkpoints()[0].checkpoint_id
+    checkpoint = manager.load_checkpoint(checkpoint_id)
+    assert checkpoint.status == CheckpointStatus.COMPLETED
+    assert checkpoint.remaining_items == []
+    retry_file = tmp_path / f"failed_block_{checkpoint_id}.txt"
+    assert retry_file.read_text() == "auth0|1\n"
+
+
+def test_ctrl_c_marks_skipped_and_failed_users_as_handled(tmp_path):
+    """Users that were reached but not processed must not be retried on resume.
+
+    A failed operation, an email with no account and an invalid ID were all
+    reached before the stop, so none of them may stay in remaining_items.
+    """
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+    reached = ["auth0|fail", "missing@example.com", "not-a-valid-id", "auth0|ok"]
+
+    def block(user_id, _client, _rotate):
+        if user_id == "auth0|ok":
+            _send_ctrl_c()
+        return user_id != "auth0|fail"
+
+    with (
+        patch("src.deletepy.operations.user_ops.block_user", side_effect=block),
+        patch(
+            "src.deletepy.operations.user_ops.get_user_id_from_email",
+            return_value=[],
+        ),
+    ):
+        checkpoint_id = batch_user_operations_with_checkpoints(
+            user_ids=[*reached, "auth0|unreached"],
+            client=_make_client(),
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    checkpoint = manager.load_checkpoint(checkpoint_id)
+    assert checkpoint.processed_items == reached
+    assert checkpoint.remaining_items == ["auth0|unreached"]
+    assert checkpoint.results.failed_users == ["auth0|fail"]
+    assert checkpoint.results.not_found_users == ["missing@example.com"]
+    assert checkpoint.results.invalid_user_ids == ["not-a-valid-id"]
+
+
+def test_ctrl_c_during_summary_does_not_cancel_finished_run(tmp_path):
+    """Signals during finalizing are deferred, so a finished run stays finished.
+
+    Before, the summary ran inside graceful_shutdown(): a second Ctrl-C there
+    raised KeyboardInterrupt and marked the run CANCELLED with nothing to resume.
+    """
+    import signal
+
+    from src.deletepy.models.checkpoint import CheckpointStatus
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+
+    def press_ctrl_c_twice(*_args):
+        handler = signal.getsignal(signal.SIGINT)
+        handler(signal.SIGINT, None)
+        handler(signal.SIGINT, None)
+
+    with (
+        patch("src.deletepy.operations.user_ops.block_user", return_value=True),
+        patch(
+            "src.deletepy.operations.user_ops._print_user_operation_summary",
+            side_effect=press_ctrl_c_twice,
+        ),
+    ):
+        result = batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1"],
+            client=_make_client(),
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    assert result is None
+    checkpoint = manager.list_checkpoints()[0]
+    assert checkpoint.status == CheckpointStatus.COMPLETED
