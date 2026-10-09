@@ -1,5 +1,6 @@
 """Core user operations for Auth0 user management."""
 
+import os
 from dataclasses import dataclass
 from typing import Any, cast
 
@@ -926,6 +927,9 @@ def _finalize_batch_processing(
     # on every invocation, so a resumed run would pair cumulative counts with
     # this-session-only detail lists and under-report the earlier failures.
     results = checkpoint.results
+    # Report failures first: they are what the operator must act on, and the
+    # summary below makes API calls that could raise and skip this report.
+    _report_failed_users(results.failed_users, operation, checkpoint.checkpoint_id)
     _print_user_operation_summary(
         results.processed_count,
         results.skipped_count,
@@ -936,7 +940,6 @@ def _finalize_batch_processing(
         results.force_otp_failed,
         results.force_otp_orphaned,
     )
-    _report_failed_users(results.failed_users, operation, checkpoint.checkpoint_id)
 
     # Mark checkpoint as completed
     checkpoint.status = CheckpointStatus.COMPLETED
@@ -952,8 +955,11 @@ def _report_failed_users(
 ) -> None:
     """List users whose operation failed and write them to a retry file.
 
-    The file holds one resolved user ID per line, so it can be passed straight
-    back as the input file of the same command.
+    The file is written to the current directory as
+    failed_<operation>_<checkpoint_id>.txt, one resolved user ID per line.
+    Use it as the input file for a new run with the same env and flags.
+    IDs that the input validator rejects (for example Apple IDs with dots, or
+    SAML IDs with two pipes) will be skipped as invalid on that run.
 
     Args:
         failed_users: Resolved user IDs whose primary operation failed
@@ -965,10 +971,7 @@ def _report_failed_users(
     if not failed_users:
         return
 
-    print_warning(
-        f"\nFailed users ({len(failed_users)}): the {operation} operation did "
-        "not succeed for these users:"
-    )
+    print_warning(f"\nThe {operation} operation failed for {len(failed_users)} users:")
     for user_id in failed_users:
         print_warning(f"  {YELLOW}{user_id}{RESET}")
 
@@ -977,9 +980,16 @@ def _report_failed_users(
         with safe_file_write(retry_file) as f:
             f.write("\n".join(failed_users) + "\n")
     except FileOperationError as e:
-        print_error(f"Could not write retry file {retry_file}: {e}")
+        print_error(
+            f"Could not write retry file {retry_file}: {e}. The failed user IDs "
+            f"are still stored in checkpoint {checkpoint_id}."
+        )
         return
-    print_warning(f"Failed user IDs written to {retry_file} - use it to retry.")
+    print_warning(
+        f"Wrote {len(failed_users)} failed user IDs to "
+        f"{os.path.abspath(retry_file)}. To retry, run the same command with "
+        "this file as input (same env and flags)."
+    )
 
 
 def _process_users_in_batch(
@@ -1154,7 +1164,7 @@ def _execute_user_operation(
 
     # Both force_otp quadrants that leave the operator with something to act on
     # are recorded. The fourth (primary failed, flag also failed) mutates
-    # nothing, so the user's presence in skipped_count is the whole story.
+    # nothing, so the caller's failed_users entry is the whole story.
     if results is not None:
         if primary_ok and not force_otp_ok:
             results.setdefault("force_otp_failed", []).append(user_id)

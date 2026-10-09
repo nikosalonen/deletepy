@@ -924,6 +924,7 @@ def test_summary_reports_cumulative_lists_not_session_lists(tmp_path):
     checkpoint.results.multiple_users = {}
     checkpoint.results.force_otp_failed = ["auth0|earlier-run"]
     checkpoint.results.force_otp_orphaned = []
+    checkpoint.results.failed_users = ["auth0|earlier-failed"]
 
     # Empty tracking_state stands in for a resumed run whose own batches were clean.
     tracking_state = {
@@ -932,15 +933,22 @@ def test_summary_reports_cumulative_lists_not_session_lists(tmp_path):
         "invalid_user_ids": [],
         "force_otp_failed": [],
         "force_otp_orphaned": [],
+        "failed_users": [],
     }
 
-    with patch(
-        "src.deletepy.operations.user_ops._print_user_operation_summary"
-    ) as mock_summary:
+    with (
+        patch(
+            "src.deletepy.operations.user_ops._print_user_operation_summary"
+        ) as mock_summary,
+        patch("src.deletepy.operations.user_ops._report_failed_users") as mock_report,
+    ):
         _finalize_batch_processing(checkpoint, manager, "block", tracking_state, client)
 
     assert checkpoint.status == CheckpointStatus.COMPLETED
     assert mock_summary.call_args.args[6] == ["auth0|earlier-run"]
+    mock_report.assert_called_once_with(
+        ["auth0|earlier-failed"], "block", checkpoint.checkpoint_id
+    )
 
 
 def _summary_output(**kwargs) -> str:
@@ -1030,7 +1038,7 @@ def test_failed_users_reach_checkpoint_and_retry_file(tmp_path, monkeypatch):
 
 
 def test_failed_users_record_resolved_id_not_email():
-    """An email input is recorded as its resolved ID, ready for a retry run."""
+    """An email input is recorded as its resolved ID, not the email."""
     from src.deletepy.operations.user_ops import _process_user_batch
 
     client = _make_client()
