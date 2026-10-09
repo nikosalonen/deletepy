@@ -47,6 +47,7 @@ class ProcessingResults:
     multiple_users: dict[str, list[str]] = field(default_factory=dict)
     force_otp_failed: list[str] = field(default_factory=list)
     force_otp_orphaned: list[str] = field(default_factory=list)
+    failed_users: list[str] = field(default_factory=list)
     errors: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -62,6 +63,7 @@ class ProcessingResults:
             "multiple_users": self.multiple_users,
             "force_otp_failed": self.force_otp_failed,
             "force_otp_orphaned": self.force_otp_orphaned,
+            "failed_users": self.failed_users,
             "errors": self.errors,
         }
 
@@ -79,6 +81,7 @@ class ProcessingResults:
             multiple_users=data.get("multiple_users", {}),
             force_otp_failed=data.get("force_otp_failed", []),
             force_otp_orphaned=data.get("force_otp_orphaned", []),
+            failed_users=data.get("failed_users", []),
             errors=data.get("errors", []),
         )
 

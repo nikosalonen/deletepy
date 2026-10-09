@@ -990,3 +990,93 @@ def test_summary_omits_force_otp_sections_when_clean():
     output = _summary_output()
 
     assert "Force-OTP" not in output
+
+
+def test_failed_users_reach_checkpoint_and_retry_file(tmp_path, monkeypatch):
+    """A failed primary operation is recorded, not just counted as skipped.
+
+    The whole batch is marked processed, so resume cannot retry these users.
+    The checkpoint and the retry file are the only record of who failed.
+    """
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    monkeypatch.chdir(tmp_path)
+    client = _make_client()
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path / "checkpoints"))
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.delete_user",
+            side_effect=lambda user_id, _client: user_id != "auth0|2",
+        ),
+        patch("src.deletepy.operations.user_ops._print_user_operation_summary"),
+    ):
+        batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1", "auth0|2", "auth0|3"],
+            client=client,
+            operation="delete",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    checkpoint_id = manager.list_checkpoints()[0].checkpoint_id
+    checkpoint = manager.load_checkpoint(checkpoint_id)
+    assert checkpoint.results.processed_count == 2
+    assert checkpoint.results.skipped_count == 1
+    assert checkpoint.results.failed_users == ["auth0|2"]
+
+    retry_file = tmp_path / f"failed_delete_{checkpoint_id}.txt"
+    assert retry_file.read_text() == "auth0|2\n"
+
+
+def test_failed_users_record_resolved_id_not_email():
+    """An email input is recorded as its resolved ID, ready for a retry run."""
+    from src.deletepy.operations.user_ops import _process_user_batch
+
+    client = _make_client()
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.get_user_id_from_email",
+            return_value=["auth0|resolved"],
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=False),
+    ):
+        results = _process_user_batch(["user@example.com"], client, "block")
+
+    assert results["failed_users"] == ["auth0|resolved"]
+    assert results["skipped_count"] == 1
+
+
+def test_report_failed_users_does_nothing_when_clean(tmp_path, monkeypatch):
+    from src.deletepy.operations.user_ops import _report_failed_users
+
+    monkeypatch.chdir(tmp_path)
+    with patch("src.deletepy.operations.user_ops.print_warning") as mock_warning:
+        _report_failed_users([], "delete", "abc")
+
+    mock_warning.assert_not_called()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_report_failed_users_survives_unwritable_retry_file(tmp_path, monkeypatch):
+    """The failed IDs are still printed if the retry file cannot be written."""
+    from src.deletepy.core.exceptions import FileOperationError
+    from src.deletepy.operations.user_ops import _report_failed_users
+
+    monkeypatch.chdir(tmp_path)
+    lines: list[str] = []
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.safe_file_write",
+            side_effect=FileOperationError("read-only"),
+        ),
+        patch(
+            "src.deletepy.operations.user_ops.print_warning",
+            side_effect=lambda msg, *a, **kw: lines.append(str(msg)),
+        ),
+        patch("src.deletepy.operations.user_ops.print_error") as mock_error,
+    ):
+        _report_failed_users(["auth0|1"], "block", "abc")
+
+    assert any("auth0|1" in line for line in lines)
+    mock_error.assert_called_once()

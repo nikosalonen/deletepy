@@ -609,6 +609,10 @@ class CheckpointManager:
             print(f"  Force-OTP Orphaned: {len(results.force_otp_orphaned)}")
             for user_id in results.force_otp_orphaned:
                 print(f"    - {user_id}")
+        if results.failed_users:
+            print(f"  Failed Users: {len(results.failed_users)}")
+            for user_id in results.failed_users:
+                print(f"    - {user_id}")
 
         if results.errors:
             print("\nRecent Errors:")

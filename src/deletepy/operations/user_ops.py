@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from ..core.auth0_client import Auth0Client
+from ..core.exceptions import FileOperationError
 from ..models.checkpoint import (
     Checkpoint,
     CheckpointStatus,
@@ -22,6 +23,7 @@ from ..utils.checkpoint_utils import (
     handle_checkpoint_interruption as _checkpoint_interruption_handler,
 )
 from ..utils.display_utils import live_progress, shutdown_requested
+from ..utils.file_utils import safe_file_write
 from ..utils.output import print_error, print_info, print_success, print_warning
 from ..utils.url_utils import secure_url_encode
 from ..utils.validators import SecurityValidator
@@ -788,6 +790,7 @@ def _initialize_batch_processing_state() -> dict[str, Any]:
         "invalid_user_ids": [],
         "force_otp_failed": [],
         "force_otp_orphaned": [],
+        "failed_users": [],
     }
 
 
@@ -878,6 +881,7 @@ def _process_and_update_batch(
     tracking_state["force_otp_orphaned"].extend(
         batch_results.get("force_otp_orphaned", [])
     )
+    tracking_state["failed_users"].extend(batch_results.get("failed_users", []))
 
     # Update checkpoint progress
     results_update = {
@@ -888,6 +892,7 @@ def _process_and_update_batch(
         "invalid_user_ids": batch_results.get("invalid_user_ids", []),
         "force_otp_failed": batch_results.get("force_otp_failed", []),
         "force_otp_orphaned": batch_results.get("force_otp_orphaned", []),
+        "failed_users": batch_results.get("failed_users", []),
     }
 
     checkpoint_manager.update_checkpoint_progress(
@@ -931,6 +936,7 @@ def _finalize_batch_processing(
         results.force_otp_failed,
         results.force_otp_orphaned,
     )
+    _report_failed_users(results.failed_users, operation, checkpoint.checkpoint_id)
 
     # Mark checkpoint as completed
     checkpoint.status = CheckpointStatus.COMPLETED
@@ -939,6 +945,41 @@ def _finalize_batch_processing(
     print_success(
         f"{operation.title()} operation completed! Checkpoint: {checkpoint.checkpoint_id}"
     )
+
+
+def _report_failed_users(
+    failed_users: list[str], operation: str, checkpoint_id: str
+) -> None:
+    """List users whose operation failed and write them to a retry file.
+
+    The file holds one resolved user ID per line, so it can be passed straight
+    back as the input file of the same command.
+
+    Args:
+        failed_users: Resolved user IDs whose primary operation failed
+        operation: Operation that was performed
+        checkpoint_id: Checkpoint ID, used to give the retry file a unique name
+    """
+    from ..utils.display_utils import RESET, YELLOW
+
+    if not failed_users:
+        return
+
+    print_warning(
+        f"\nFailed users ({len(failed_users)}): the {operation} operation did "
+        "not succeed for these users:"
+    )
+    for user_id in failed_users:
+        print_warning(f"  {YELLOW}{user_id}{RESET}")
+
+    retry_file = f"failed_{operation}_{checkpoint_id}.txt"
+    try:
+        with safe_file_write(retry_file) as f:
+            f.write("\n".join(failed_users) + "\n")
+    except FileOperationError as e:
+        print_error(f"Could not write retry file {retry_file}: {e}")
+        return
+    print_warning(f"Failed user IDs written to {retry_file} - use it to retry.")
 
 
 def _process_users_in_batch(
@@ -989,6 +1030,9 @@ def _process_users_in_batch(
                 results["processed_count"] += 1
             else:
                 results["skipped_count"] += 1
+                # Recorded so the user is not lost: the whole batch is marked
+                # processed in the checkpoint, so resume will not retry it.
+                results["failed_users"].append(resolved_user_id)
 
             advance()
 
@@ -1020,6 +1064,7 @@ def _process_user_batch(
         "invalid_user_ids": [],
         "force_otp_failed": [],
         "force_otp_orphaned": [],
+        "failed_users": [],
     }
 
     # Process users using the extracted helper function
