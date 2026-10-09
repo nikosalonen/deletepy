@@ -685,3 +685,207 @@ class TestDryRunHandoff:
         handler._handle_dry_run_preview(["auth0|1"], MagicMock(), "block", None)
 
         mock_batch.assert_not_called()
+
+
+class TestProdConfirmationGaps:
+    """--dry-run and checkpoint resume must not weaken the prod confirmation."""
+
+    @patch("src.deletepy.cli.commands.confirm_action")
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_dry_run_in_prod_uses_prod_confirmation(
+        self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action
+    ):
+        mock_preview.return_value = MagicMock(success_count=3)
+        mock_prod_confirm.return_value = False
+        client = MagicMock()
+        client.context.env = "prod"
+        options = UserOperationOptions(force_otp=True)
+
+        OperationHandler()._handle_dry_run_preview(
+            ["auth0|1", "auth0|2", "auth0|3"], client, "block", options
+        )
+
+        mock_prod_confirm.assert_called_once_with("block", 3, False, True)
+        mock_confirm_action.assert_not_called()
+        mock_batch.assert_not_called()
+
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_dry_run_prompt_counts_every_input_user(
+        self, mock_batch, mock_preview, mock_prod_confirm
+    ):
+        # The preview could only resolve 1 of 3 users, but the real run
+        # processes all 3, so all 3 must be disclosed.
+        mock_preview.return_value = MagicMock(success_count=1)
+        mock_prod_confirm.return_value = False
+        client = MagicMock()
+        client.context.env = "prod"
+
+        OperationHandler()._handle_dry_run_preview(
+            ["auth0|1", "auth0|2", "auth0|3"], client, "delete", None
+        )
+
+        mock_prod_confirm.assert_called_once_with("delete", 3, False, False)
+
+    @patch("src.deletepy.cli.commands.confirm_action")
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_dry_run_in_prod_runs_after_prod_confirmation(
+        self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action
+    ):
+        mock_preview.return_value = MagicMock(success_count=1)
+        mock_prod_confirm.return_value = True
+        client = MagicMock()
+        client.context.env = "prod"
+        options = UserOperationOptions(rotate_password=True)
+
+        OperationHandler()._handle_dry_run_preview(
+            ["auth0|1"], client, "delete", options
+        )
+
+        mock_confirm_action.assert_not_called()
+        mock_batch.assert_called_once()
+        call_kwargs = mock_batch.call_args.kwargs
+        assert call_kwargs["user_ids"] == ["auth0|1"]
+        assert call_kwargs["options"] == options
+
+    @pytest.mark.parametrize("env", ["production", "Prod", ""])
+    @patch("src.deletepy.cli.commands.confirm_action")
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_dry_run_with_unknown_env_uses_prod_confirmation(
+        self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action, env
+    ):
+        # Any env other than "dev" gets prod credentials.
+        mock_preview.return_value = MagicMock(success_count=1)
+        mock_prod_confirm.return_value = False
+        client = MagicMock()
+        client.context.env = env
+
+        OperationHandler()._handle_dry_run_preview(["auth0|1"], client, "block", None)
+
+        mock_prod_confirm.assert_called_once()
+        mock_confirm_action.assert_not_called()
+        mock_batch.assert_not_called()
+
+    @patch("src.deletepy.cli.commands.confirm_action", return_value=False)
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_dry_run_in_dev_keeps_simple_confirmation(
+        self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action
+    ):
+        mock_preview.return_value = MagicMock(success_count=1)
+        client = MagicMock()
+        client.context.env = "dev"
+
+        OperationHandler()._handle_dry_run_preview(["auth0|1"], client, "block", None)
+
+        mock_confirm_action.assert_called_once()
+        mock_prod_confirm.assert_not_called()
+        mock_batch.assert_not_called()
+
+    @staticmethod
+    def _batch_checkpoint(env: str, additional_params: dict | None = None):
+        from src.deletepy.models.checkpoint import CheckpointStatus, OperationType
+
+        checkpoint = MagicMock()
+        checkpoint.checkpoint_id = "cp-test"
+        checkpoint.operation_type = OperationType.BATCH_BLOCK
+        checkpoint.status = CheckpointStatus.FAILED
+        checkpoint.is_resumable.return_value = True
+        checkpoint.config.environment = env
+        checkpoint.config.additional_params = additional_params or {
+            "operation": "block",
+            "rotate_password": True,
+            "force_otp": False,
+        }
+        checkpoint.remaining_items = ["auth0|1", "auth0|2"]
+        return checkpoint
+
+    def _resume(self, checkpoint):
+        """Resume through the real entry point with a mocked manager and client."""
+        handler = OperationHandler()
+        with (
+            patch("src.deletepy.cli.commands.CheckpointManager") as manager_cls,
+            patch.object(handler, "_create_client_for_env") as mock_client,
+        ):
+            manager = manager_cls.return_value
+            manager.load_checkpoint.return_value = checkpoint
+            handler.handle_resume_checkpoint(checkpoint.checkpoint_id, None)
+        return manager, mock_client
+
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_resume_in_prod_declined_does_nothing(self, mock_batch, mock_prod_confirm):
+        mock_prod_confirm.return_value = False
+
+        manager, mock_client = self._resume(self._batch_checkpoint("prod"))
+
+        # The persisted modifiers are the ones disclosed.
+        mock_prod_confirm.assert_called_once_with("block", 2, True, False)
+        # A declined resume leaves the failed checkpoint as it was.
+        manager.reactivate_checkpoint.assert_not_called()
+        mock_client.assert_not_called()
+        mock_batch.assert_not_called()
+
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_resume_in_prod_confirmed_runs(self, mock_batch, mock_prod_confirm):
+        mock_prod_confirm.return_value = True
+
+        manager, _ = self._resume(self._batch_checkpoint("prod"))
+
+        manager.reactivate_checkpoint.assert_called_once()
+        mock_batch.assert_called_once()
+
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_resume_in_dev_does_not_prompt(self, mock_batch, mock_prod_confirm):
+        self._resume(self._batch_checkpoint("dev"))
+
+        mock_prod_confirm.assert_not_called()
+        mock_batch.assert_called_once()
+
+    @pytest.mark.parametrize("env", ["production", "Prod", ""])
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_resume_with_unknown_env_is_refused(
+        self, mock_batch, mock_prod_confirm, env
+    ):
+        # Any env other than "dev" would get prod credentials.
+        manager, mock_client = self._resume(self._batch_checkpoint(env))
+
+        manager.reactivate_checkpoint.assert_not_called()
+        mock_client.assert_not_called()
+        mock_batch.assert_not_called()
+
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_resume_in_prod_without_saved_params_prompts_with_defaults(
+        self, mock_batch, mock_prod_confirm
+    ):
+        mock_prod_confirm.return_value = False
+        checkpoint = self._batch_checkpoint("prod")
+        checkpoint.config.additional_params = None
+
+        self._resume(checkpoint)
+
+        mock_prod_confirm.assert_called_once_with("block", 2, False, False)
+
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_resume_prompt_names_the_saved_operation(
+        self, mock_batch, mock_prod_confirm
+    ):
+        # The resumed run uses the saved operation, so the prompt must name it.
+        mock_prod_confirm.return_value = False
+
+        self._resume(self._batch_checkpoint("prod", {"operation": "delete"}))
+
+        mock_prod_confirm.assert_called_once_with("delete", 2, False, False)
