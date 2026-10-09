@@ -1262,3 +1262,84 @@ def test_ctrl_c_during_last_batch_is_not_finalized_as_completed(tmp_path):
 
     mock_finalize.assert_not_called()
     assert manager.load_checkpoint(checkpoint_id).remaining_items == ["auth0|2"]
+
+
+def test_ctrl_c_during_last_user_still_finalizes(tmp_path, monkeypatch):
+    """A stop that arrives during the final user leaves nothing to resume.
+
+    The run must finish as COMPLETED and write the failed-users file. Before,
+    it was marked CANCELLED with nothing left, so it could not be resumed and
+    the failed users were never reported.
+    """
+    from src.deletepy.models.checkpoint import CheckpointStatus
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    monkeypatch.chdir(tmp_path)
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path / "checkpoints"))
+
+    def fail_first_interrupt_last(user_id, _client, _rotate):
+        if user_id == "auth0|2":
+            _send_ctrl_c()
+        return user_id != "auth0|1"
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.block_user",
+            side_effect=fail_first_interrupt_last,
+        ),
+        patch("src.deletepy.operations.user_ops._print_user_operation_summary"),
+    ):
+        result = batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1", "auth0|2"],
+            client=_make_client(),
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    assert result is None
+    checkpoint_id = manager.list_checkpoints()[0].checkpoint_id
+    checkpoint = manager.load_checkpoint(checkpoint_id)
+    assert checkpoint.status == CheckpointStatus.COMPLETED
+    assert checkpoint.remaining_items == []
+    retry_file = tmp_path / f"failed_block_{checkpoint_id}.txt"
+    assert retry_file.read_text() == "auth0|1\n"
+
+
+def test_ctrl_c_marks_skipped_and_failed_users_as_handled(tmp_path):
+    """Users that were reached but not processed must not be retried on resume.
+
+    A failed operation, an email with no account and an invalid ID were all
+    reached before the stop, so none of them may stay in remaining_items.
+    """
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+    reached = ["auth0|fail", "missing@example.com", "not-a-valid-id", "auth0|ok"]
+
+    def block(user_id, _client, _rotate):
+        if user_id == "auth0|ok":
+            _send_ctrl_c()
+        return user_id != "auth0|fail"
+
+    with (
+        patch("src.deletepy.operations.user_ops.block_user", side_effect=block),
+        patch(
+            "src.deletepy.operations.user_ops.get_user_id_from_email",
+            return_value=[],
+        ),
+    ):
+        checkpoint_id = batch_user_operations_with_checkpoints(
+            user_ids=[*reached, "auth0|unreached"],
+            client=_make_client(),
+            operation="block",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    checkpoint = manager.load_checkpoint(checkpoint_id)
+    assert checkpoint.processed_items == reached
+    assert checkpoint.remaining_items == ["auth0|unreached"]
+    assert checkpoint.results.failed_users == ["auth0|fail"]
+    assert checkpoint.results.not_found_users == ["missing@example.com"]
+    assert checkpoint.results.invalid_user_ids == ["not-a-valid-id"]

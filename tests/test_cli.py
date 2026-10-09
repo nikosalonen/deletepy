@@ -614,7 +614,10 @@ class TestDryRunHandoff:
 
     @patch("src.deletepy.cli.commands.confirm_action", return_value=True)
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_both_modifiers_survive_the_handoff(
         self, mock_batch, mock_preview, _mock_confirm
     ):
@@ -636,7 +639,10 @@ class TestDryRunHandoff:
 
     @patch("src.deletepy.cli.commands.confirm_action", return_value=True)
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_both_modifier_side_effects_are_disclosed(
         self, _mock_batch, mock_preview, _mock_confirm, capsys
     ):
@@ -659,7 +665,10 @@ class TestDryRunHandoff:
 
     @patch("src.deletepy.cli.commands.confirm_action", return_value=True)
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_real_operation_failure_is_not_swallowed_as_a_preview_error(
         self, mock_batch, mock_preview, _mock_confirm
     ):
@@ -674,7 +683,10 @@ class TestDryRunHandoff:
             handler._handle_dry_run_preview(["auth0|1"], client, "block", None)
 
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_preview_failure_is_still_reported_and_stops(
         self, mock_batch, mock_preview
     ):
@@ -693,7 +705,10 @@ class TestProdConfirmationGaps:
     @patch("src.deletepy.cli.commands.confirm_action")
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_dry_run_in_prod_uses_prod_confirmation(
         self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action
     ):
@@ -713,7 +728,10 @@ class TestProdConfirmationGaps:
 
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_dry_run_prompt_counts_every_input_user(
         self, mock_batch, mock_preview, mock_prod_confirm
     ):
@@ -733,7 +751,10 @@ class TestProdConfirmationGaps:
     @patch("src.deletepy.cli.commands.confirm_action")
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_dry_run_in_prod_runs_after_prod_confirmation(
         self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action
     ):
@@ -757,7 +778,10 @@ class TestProdConfirmationGaps:
     @patch("src.deletepy.cli.commands.confirm_action")
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_dry_run_with_unknown_env_uses_prod_confirmation(
         self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action, env
     ):
@@ -776,7 +800,10 @@ class TestProdConfirmationGaps:
     @patch("src.deletepy.cli.commands.confirm_action", return_value=False)
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
     @patch("src.deletepy.cli.commands.preview_user_operations")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_dry_run_in_dev_keeps_simple_confirmation(
         self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action
     ):
@@ -821,7 +848,10 @@ class TestProdConfirmationGaps:
         return manager, mock_client
 
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_resume_in_prod_declined_does_nothing(self, mock_batch, mock_prod_confirm):
         mock_prod_confirm.return_value = False
 
@@ -835,7 +865,10 @@ class TestProdConfirmationGaps:
         mock_batch.assert_not_called()
 
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_resume_in_prod_confirmed_runs(self, mock_batch, mock_prod_confirm):
         mock_prod_confirm.return_value = True
 
@@ -845,7 +878,10 @@ class TestProdConfirmationGaps:
         mock_batch.assert_called_once()
 
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_resume_in_dev_does_not_prompt(self, mock_batch, mock_prod_confirm):
         self._resume(self._batch_checkpoint("dev"))
 
@@ -854,7 +890,10 @@ class TestProdConfirmationGaps:
 
     @pytest.mark.parametrize("env", ["production", "Prod", ""])
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_resume_with_unknown_env_is_refused(
         self, mock_batch, mock_prod_confirm, env
     ):
@@ -866,7 +905,10 @@ class TestProdConfirmationGaps:
         mock_batch.assert_not_called()
 
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_resume_in_prod_without_saved_params_prompts_with_defaults(
         self, mock_batch, mock_prod_confirm
     ):
@@ -879,7 +921,10 @@ class TestProdConfirmationGaps:
         mock_prod_confirm.assert_called_once_with("block", 2, False, False)
 
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
-    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    @patch(
+        "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+        return_value=None,
+    )
     def test_resume_prompt_names_the_saved_operation(
         self, mock_batch, mock_prod_confirm
     ):
@@ -889,3 +934,33 @@ class TestProdConfirmationGaps:
         self._resume(self._batch_checkpoint("prod", {"operation": "delete"}))
 
         mock_prod_confirm.assert_called_once_with("delete", 2, False, False)
+
+
+class TestStoppedRunExitCode:
+    """A batch user operation that stops before the end must not exit 0."""
+
+    def _run_block(self, batch_result):
+        handler = OperationHandler()
+        with (
+            patch.object(
+                handler,
+                "_setup_auth_and_files",
+                return_value=(MagicMock(), ["auth0|1", "auth0|2"]),
+            ),
+            patch(
+                "src.deletepy.cli.commands.batch_user_operations_with_checkpoints",
+                return_value=batch_result,
+            ),
+        ):
+            handler.handle_user_operations(Path("users.txt"), "dev", "block")
+
+    def test_stopped_run_exits_non_zero(self, capsys):
+        # SIGTERM from a supervisor or CI timeout used to look like success.
+        with pytest.raises(SystemExit) as exc_info:
+            self._run_block("cp-123")
+
+        assert exc_info.value.code == 1
+        assert "deletepy checkpoint resume cp-123" in capsys.readouterr().out
+
+    def test_completed_run_does_not_exit(self):
+        self._run_block(None)

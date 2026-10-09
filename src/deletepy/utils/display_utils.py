@@ -9,6 +9,7 @@ This module provides:
 """
 
 import logging
+import os
 import signal
 import sys
 import threading
@@ -97,12 +98,17 @@ def _request_shutdown(signum: int, frame: FrameType | None) -> None:
     if _shutdown_requested:
         raise KeyboardInterrupt
     _shutdown_requested = True
-    print_warning(
-        "\nShutdown requested. Finishing the current user, then saving the "
-        "checkpoint. Press Ctrl-C again to stop immediately.",
-        signal=signal.Signals(signum).name,
-        operation="shutdown",
-    )
+    # os.write, not print or logging: the signal can land while the main
+    # thread is writing to the same buffered stream, and a buffered write from
+    # here would then raise "reentrant call" and turn the stop into a failure.
+    try:
+        os.write(
+            2,
+            b"\nShutdown requested. Finishing the current user, then saving "
+            b"the checkpoint. Press Ctrl-C again to stop immediately.\n",
+        )
+    except OSError:
+        pass
 
 
 @contextmanager

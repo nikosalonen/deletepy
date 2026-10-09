@@ -849,8 +849,10 @@ def _process_batch_loop(
         )
 
         # Checked after the batch is saved, so a stop during the last batch
-        # is not finalized as COMPLETED with users still remaining.
-        if shutdown_requested():
+        # is not finalized as COMPLETED with users still remaining. A stop
+        # that came after the last user still finalizes: nothing is left to
+        # resume, and finalizing writes the failed-users file.
+        if shutdown_requested() and checkpoint.remaining_items:
             return _checkpoint_interruption_handler(
                 checkpoint, checkpoint_manager, f"{operation.title()} operation"
             )

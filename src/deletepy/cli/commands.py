@@ -528,13 +528,26 @@ class OperationHandler:
                 env=env,
                 options=options,
             )
-
-            if checkpoint_id:
-                click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
-                click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
+            self._exit_if_stopped(checkpoint_id)
 
         except Exception as e:
             self._handle_operation_error(e, f"User {operation}")
+
+    def _exit_if_stopped(self, checkpoint_id: str | None) -> None:
+        """Exit with code 1 when a batch user operation stopped before the end.
+
+        A stop (Ctrl-C or SIGTERM) or an error returns the checkpoint ID
+        instead of None. Exiting 0 then would let scripts and CI treat a run
+        that left users unprocessed as a success.
+
+        Args:
+            checkpoint_id: ID returned by batch_user_operations_with_checkpoints
+        """
+        if not checkpoint_id:
+            return
+        click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
+        click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
+        sys.exit(1)
 
     def handle_unlink_social_ids(
         self, input_file: Path, env: str, dry_run: bool = False
@@ -722,10 +735,7 @@ class OperationHandler:
             env=env,
             options=options or UserOperationOptions(),
         )
-
-        if checkpoint_id:
-            click.echo(f"\n{YELLOW}Operation was interrupted. Resume with:{RESET}")
-            click.echo(f"  deletepy checkpoint resume {checkpoint_id}")
+        self._exit_if_stopped(checkpoint_id)
 
     def _print_domain_results(self, results: dict[str, Any], emails: list[str]) -> None:
         """Print domain check results summary."""
@@ -1095,7 +1105,7 @@ class OperationHandler:
         checkpoint_id = checkpoint.checkpoint_id
 
         client = self._create_client_for_env(env)
-        batch_user_operations_with_checkpoints(
+        stopped_checkpoint_id = batch_user_operations_with_checkpoints(
             user_ids=checkpoint.remaining_items,
             client=client,
             operation=_BATCH_OPERATION_NAMES[checkpoint.operation_type],
@@ -1103,6 +1113,7 @@ class OperationHandler:
             resume_checkpoint_id=checkpoint_id,
             checkpoint_manager=checkpoint_manager,
         )
+        self._exit_if_stopped(stopped_checkpoint_id)
 
     def _confirm_resume_in_prod(self, checkpoint: Checkpoint) -> bool:
         """Ask for the prod confirmation before resuming a batch user operation.

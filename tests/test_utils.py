@@ -195,13 +195,44 @@ class TestGracefulShutdown:
             shutdown_requested,
         )
 
-        before_int = signal.getsignal(signal.SIGINT)
-        before_term = signal.getsignal(signal.SIGTERM)
+        # Handlers this test owns, so a leak from an earlier test cannot make
+        # "before" and "after" the same leaked handler.
+        def sentinel_int(signum, frame):
+            pass
+
+        def sentinel_term(signum, frame):
+            pass
+
+        signal.signal(signal.SIGINT, sentinel_int)
+        signal.signal(signal.SIGTERM, sentinel_term)
 
         with graceful_shutdown():
             signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
             assert shutdown_requested() is True
 
-        assert signal.getsignal(signal.SIGINT) is before_int
-        assert signal.getsignal(signal.SIGTERM) is before_term
+        assert signal.getsignal(signal.SIGINT) is sentinel_int
+        assert signal.getsignal(signal.SIGTERM) is sentinel_term
         assert shutdown_requested() is False
+
+    def test_handler_does_not_write_through_buffered_output(self, capfd):
+        """The handler must not print or log.
+
+        The signal can land while the main thread is writing a line, and a
+        second buffered write from the handler raises "reentrant call".
+        """
+        import signal
+
+        from src.deletepy.utils.display_utils import graceful_shutdown
+
+        reentrant = RuntimeError("reentrant call inside <_io.BufferedWriter>")
+        with (
+            patch(
+                "src.deletepy.utils.display_utils.print_warning",
+                side_effect=reentrant,
+            ),
+            patch("src.deletepy.utils.output.print_warning", side_effect=reentrant),
+            graceful_shutdown(),
+        ):
+            signal.getsignal(signal.SIGINT)(signal.SIGINT, None)
+
+        assert "Shutdown requested" in capfd.readouterr().err
