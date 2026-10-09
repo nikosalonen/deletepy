@@ -753,6 +753,26 @@ class TestProdConfirmationGaps:
         assert call_kwargs["user_ids"] == ["auth0|1"]
         assert call_kwargs["options"] == options
 
+    @pytest.mark.parametrize("env", ["production", "Prod", ""])
+    @patch("src.deletepy.cli.commands.confirm_action")
+    @patch("src.deletepy.utils.display_utils.confirm_production_operation")
+    @patch("src.deletepy.cli.commands.preview_user_operations")
+    @patch("src.deletepy.cli.commands.batch_user_operations_with_checkpoints")
+    def test_dry_run_with_unknown_env_uses_prod_confirmation(
+        self, mock_batch, mock_preview, mock_prod_confirm, mock_confirm_action, env
+    ):
+        # Any env other than "dev" gets prod credentials.
+        mock_preview.return_value = MagicMock(success_count=1)
+        mock_prod_confirm.return_value = False
+        client = MagicMock()
+        client.context.env = env
+
+        OperationHandler()._handle_dry_run_preview(["auth0|1"], client, "block", None)
+
+        mock_prod_confirm.assert_called_once()
+        mock_confirm_action.assert_not_called()
+        mock_batch.assert_not_called()
+
     @patch("src.deletepy.cli.commands.confirm_action", return_value=False)
     @patch("src.deletepy.utils.display_utils.confirm_production_operation")
     @patch("src.deletepy.cli.commands.preview_user_operations")

@@ -693,14 +693,16 @@ class OperationHandler:
         """Ask whether to run the real operation after a dry-run preview.
 
         Prod gets the same typed confirmation as a run without --dry-run, so
-        adding --dry-run cannot turn it into a single y/N keypress.
+        adding --dry-run cannot turn it into a single y/N keypress. Only "dev"
+        gets the y/N prompt, because every other environment gets prod
+        credentials.
         """
-        if env == "prod":
-            return self._confirm_production_operation(operation, user_count, options)
-        return confirm_action(
-            f"Do you want to proceed with {operation} operation on {user_count} users?",
-            default=False,
-        )
+        if env == "dev":
+            return confirm_action(
+                f"Do you want to proceed with {operation} operation on {user_count} users?",
+                default=False,
+            )
+        return self._confirm_production_operation(operation, user_count, options)
 
     def _execute_actual_operation(
         self,
