@@ -1088,3 +1088,67 @@ def test_report_failed_users_survives_unwritable_retry_file(tmp_path, monkeypatc
 
     assert any("auth0|1" in line for line in lines)
     mock_error.assert_called_once()
+
+
+def _failed_users_checkpoint(tmp_path, items):
+    """Create a real block checkpoint saved under tmp_path."""
+    from src.deletepy.models.checkpoint import OperationConfig, OperationType
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+    checkpoint = manager.create_checkpoint(
+        OperationType.BATCH_BLOCK, OperationConfig(environment="dev"), items
+    )
+    return manager, checkpoint
+
+
+def test_process_and_update_batch_merges_failed_users_across_batches(tmp_path):
+    """Failures from every batch end up in the saved checkpoint, in order."""
+    from src.deletepy.operations.user_ops import (
+        _initialize_batch_processing_state,
+        _process_and_update_batch,
+    )
+
+    items = ["auth0|1", "auth0|2", "auth0|3", "auth0|4"]
+    manager, checkpoint = _failed_users_checkpoint(tmp_path, items)
+    tracking_state = _initialize_batch_processing_state()
+    batch_results = [
+        {"processed_count": 1, "skipped_count": 1, "failed_users": ["auth0|2"]},
+        {"processed_count": 1, "skipped_count": 1, "failed_users": ["auth0|3"]},
+    ]
+
+    with patch(
+        "src.deletepy.operations.user_ops._process_user_batch",
+        side_effect=batch_results,
+    ):
+        for batch in (items[:2], items[2:]):
+            _process_and_update_batch(
+                batch, checkpoint, manager, _make_client(), "block", tracking_state
+            )
+
+    saved = manager.load_checkpoint(checkpoint.checkpoint_id)
+    assert saved.results.failed_users == ["auth0|2", "auth0|3"]
+    assert saved.results.processed_count == 2
+    assert saved.results.skipped_count == 2
+    assert saved.remaining_items == []
+    assert tracking_state["failed_users"] == ["auth0|2", "auth0|3"]
+
+
+def test_checkpoint_details_lists_failed_users(tmp_path, capsys):
+    """An interrupted run writes no retry file, so this view must show them."""
+    manager, checkpoint = _failed_users_checkpoint(tmp_path, ["auth0|x"])
+    checkpoint.results.failed_users = ["auth0|x"]
+
+    manager.display_checkpoint_details(checkpoint)
+
+    output = capsys.readouterr().out
+    assert "Failed Users: 1" in output
+    assert "    - auth0|x" in output
+
+
+def test_checkpoint_details_omit_failed_users_when_clean(tmp_path, capsys):
+    manager, checkpoint = _failed_users_checkpoint(tmp_path, ["auth0|x"])
+
+    manager.display_checkpoint_details(checkpoint)
+
+    assert "Failed Users" not in capsys.readouterr().out
