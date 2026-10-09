@@ -146,6 +146,22 @@ class TestProcessingResultsSerialization:
         assert restored.force_otp_orphaned == ["auth0|3"]
         assert restored.to_dict() == original.to_dict()
 
+    def test_failed_users_round_trip(self):
+        from src.deletepy.models.checkpoint import ProcessingResults
+
+        original = ProcessingResults(failed_users=["auth0|1"])
+
+        restored = ProcessingResults.from_dict(original.to_dict())
+
+        assert restored.failed_users == ["auth0|1"]
+
+    def test_legacy_checkpoint_without_failed_users_deserializes(self):
+        from src.deletepy.models.checkpoint import ProcessingResults
+
+        restored = ProcessingResults.from_dict({"processed_count": 7})
+
+        assert restored.failed_users == []
+
     def test_legacy_checkpoint_without_force_otp_keys_deserializes(self):
         """Checkpoints written before the flag existed still load."""
         from src.deletepy.models.checkpoint import ProcessingResults

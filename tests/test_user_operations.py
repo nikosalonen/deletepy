@@ -924,6 +924,7 @@ def test_summary_reports_cumulative_lists_not_session_lists(tmp_path):
     checkpoint.results.multiple_users = {}
     checkpoint.results.force_otp_failed = ["auth0|earlier-run"]
     checkpoint.results.force_otp_orphaned = []
+    checkpoint.results.failed_users = ["auth0|earlier-failed"]
 
     # Empty tracking_state stands in for a resumed run whose own batches were clean.
     tracking_state = {
@@ -932,15 +933,22 @@ def test_summary_reports_cumulative_lists_not_session_lists(tmp_path):
         "invalid_user_ids": [],
         "force_otp_failed": [],
         "force_otp_orphaned": [],
+        "failed_users": [],
     }
 
-    with patch(
-        "src.deletepy.operations.user_ops._print_user_operation_summary"
-    ) as mock_summary:
+    with (
+        patch(
+            "src.deletepy.operations.user_ops._print_user_operation_summary"
+        ) as mock_summary,
+        patch("src.deletepy.operations.user_ops._report_failed_users") as mock_report,
+    ):
         _finalize_batch_processing(checkpoint, manager, "block", tracking_state, client)
 
     assert checkpoint.status == CheckpointStatus.COMPLETED
     assert mock_summary.call_args.args[6] == ["auth0|earlier-run"]
+    mock_report.assert_called_once_with(
+        ["auth0|earlier-failed"], "block", checkpoint.checkpoint_id
+    )
 
 
 def _summary_output(**kwargs) -> str:
@@ -990,3 +998,157 @@ def test_summary_omits_force_otp_sections_when_clean():
     output = _summary_output()
 
     assert "Force-OTP" not in output
+
+
+def test_failed_users_reach_checkpoint_and_retry_file(tmp_path, monkeypatch):
+    """A failed primary operation is recorded, not just counted as skipped.
+
+    The whole batch is marked processed, so resume cannot retry these users.
+    The checkpoint and the retry file are the only record of who failed.
+    """
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    monkeypatch.chdir(tmp_path)
+    client = _make_client()
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path / "checkpoints"))
+
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.delete_user",
+            side_effect=lambda user_id, _client: user_id != "auth0|2",
+        ),
+        patch("src.deletepy.operations.user_ops._print_user_operation_summary"),
+    ):
+        batch_user_operations_with_checkpoints(
+            user_ids=["auth0|1", "auth0|2", "auth0|3"],
+            client=client,
+            operation="delete",
+            env="dev",
+            checkpoint_manager=manager,
+        )
+
+    checkpoint_id = manager.list_checkpoints()[0].checkpoint_id
+    checkpoint = manager.load_checkpoint(checkpoint_id)
+    assert checkpoint.results.processed_count == 2
+    assert checkpoint.results.skipped_count == 1
+    assert checkpoint.results.failed_users == ["auth0|2"]
+
+    retry_file = tmp_path / f"failed_delete_{checkpoint_id}.txt"
+    assert retry_file.read_text() == "auth0|2\n"
+
+
+def test_failed_users_record_resolved_id_not_email():
+    """An email input is recorded as its resolved ID, not the email."""
+    from src.deletepy.operations.user_ops import _process_user_batch
+
+    client = _make_client()
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.get_user_id_from_email",
+            return_value=["auth0|resolved"],
+        ),
+        patch("src.deletepy.operations.user_ops.block_user", return_value=False),
+    ):
+        results = _process_user_batch(["user@example.com"], client, "block")
+
+    assert results["failed_users"] == ["auth0|resolved"]
+    assert results["skipped_count"] == 1
+
+
+def test_report_failed_users_does_nothing_when_clean(tmp_path, monkeypatch):
+    from src.deletepy.operations.user_ops import _report_failed_users
+
+    monkeypatch.chdir(tmp_path)
+    with patch("src.deletepy.operations.user_ops.print_warning") as mock_warning:
+        _report_failed_users([], "delete", "abc")
+
+    mock_warning.assert_not_called()
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_report_failed_users_survives_unwritable_retry_file(tmp_path, monkeypatch):
+    """The failed IDs are still printed if the retry file cannot be written."""
+    from src.deletepy.core.exceptions import FileOperationError
+    from src.deletepy.operations.user_ops import _report_failed_users
+
+    monkeypatch.chdir(tmp_path)
+    lines: list[str] = []
+    with (
+        patch(
+            "src.deletepy.operations.user_ops.safe_file_write",
+            side_effect=FileOperationError("read-only"),
+        ),
+        patch(
+            "src.deletepy.operations.user_ops.print_warning",
+            side_effect=lambda msg, *a, **kw: lines.append(str(msg)),
+        ),
+        patch("src.deletepy.operations.user_ops.print_error") as mock_error,
+    ):
+        _report_failed_users(["auth0|1"], "block", "abc")
+
+    assert any("auth0|1" in line for line in lines)
+    mock_error.assert_called_once()
+
+
+def _failed_users_checkpoint(tmp_path, items):
+    """Create a real block checkpoint saved under tmp_path."""
+    from src.deletepy.models.checkpoint import OperationConfig, OperationType
+    from src.deletepy.utils.checkpoint_manager import CheckpointManager
+
+    manager = CheckpointManager(checkpoint_dir=str(tmp_path))
+    checkpoint = manager.create_checkpoint(
+        OperationType.BATCH_BLOCK, OperationConfig(environment="dev"), items
+    )
+    return manager, checkpoint
+
+
+def test_process_and_update_batch_merges_failed_users_across_batches(tmp_path):
+    """Failures from every batch end up in the saved checkpoint, in order."""
+    from src.deletepy.operations.user_ops import (
+        _initialize_batch_processing_state,
+        _process_and_update_batch,
+    )
+
+    items = ["auth0|1", "auth0|2", "auth0|3", "auth0|4"]
+    manager, checkpoint = _failed_users_checkpoint(tmp_path, items)
+    tracking_state = _initialize_batch_processing_state()
+    batch_results = [
+        {"processed_count": 1, "skipped_count": 1, "failed_users": ["auth0|2"]},
+        {"processed_count": 1, "skipped_count": 1, "failed_users": ["auth0|3"]},
+    ]
+
+    with patch(
+        "src.deletepy.operations.user_ops._process_user_batch",
+        side_effect=batch_results,
+    ):
+        for batch in (items[:2], items[2:]):
+            _process_and_update_batch(
+                batch, checkpoint, manager, _make_client(), "block", tracking_state
+            )
+
+    saved = manager.load_checkpoint(checkpoint.checkpoint_id)
+    assert saved.results.failed_users == ["auth0|2", "auth0|3"]
+    assert saved.results.processed_count == 2
+    assert saved.results.skipped_count == 2
+    assert saved.remaining_items == []
+    assert tracking_state["failed_users"] == ["auth0|2", "auth0|3"]
+
+
+def test_checkpoint_details_lists_failed_users(tmp_path, capsys):
+    """An interrupted run writes no retry file, so this view must show them."""
+    manager, checkpoint = _failed_users_checkpoint(tmp_path, ["auth0|x"])
+    checkpoint.results.failed_users = ["auth0|x"]
+
+    manager.display_checkpoint_details(checkpoint)
+
+    output = capsys.readouterr().out
+    assert "Failed Users: 1" in output
+    assert "    - auth0|x" in output
+
+
+def test_checkpoint_details_omit_failed_users_when_clean(tmp_path, capsys):
+    manager, checkpoint = _failed_users_checkpoint(tmp_path, ["auth0|x"])
+
+    manager.display_checkpoint_details(checkpoint)
+
+    assert "Failed Users" not in capsys.readouterr().out
