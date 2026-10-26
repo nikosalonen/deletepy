@@ -150,12 +150,15 @@ from deletepy.utils.logging_utils import get_logger
 logger = get_logger(__name__)
 
 # Log with context
-logger.info("User operation completed", extra={
-    "user_id": "auth0|123456",
-    "operation": "delete_user",
-    "duration": 1.234,
-    "status": "success"
-})
+logger.info(
+    "User operation completed",
+    extra={
+        "user_id": "auth0|123456",
+        "operation": "delete_user",
+        "duration": 1.234,
+        "status": "success",
+    },
+)
 ```
 
 ### Programmatic Configuration
@@ -164,10 +167,7 @@ from deletepy.utils.logging_utils import setup_logging
 
 # Configure logging programmatically
 logger = setup_logging(
-    level="DEBUG",
-    log_file="deletepy.log",
-    structured=True,
-    operation="batch_delete"
+    level="DEBUG", log_file="deletepy.log", structured=True, operation="batch_delete"
 )
 ```
 
